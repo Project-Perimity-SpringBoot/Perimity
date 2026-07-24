@@ -1,0 +1,98 @@
+version: "3.9"
+
+services:
+
+  # ---------- Infrastructure ----------
+
+  postgres:
+    image: postgres:16
+    container_name: perimity-postgres
+    environment:
+      POSTGRES_USER: perimity
+      POSTGRES_PASSWORD: perimity
+      # Creates one Postgres *server* — each service still connects to its
+      # own database name (authdb, userdb, gatepassdb, campusdb, qrdb) on it.
+      # Adjust to separate containers later if you want true DB-per-service
+      # isolation at the infra level.
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mongo:
+    image: mongo:7
+    container_name: perimity-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: perimity-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI: http://localhost:15672 (guest/guest)
+
+  redis:
+    image: redis:7
+    container_name: perimity-redis
+    ports:
+      - "6379:6379"
+
+  # ---------- Services (uncomment as each Dockerfile is ready) ----------
+
+  # auth-service:
+  #   build: ./auth-service
+  #   ports:
+  #     - "8081:8080"
+  #   depends_on:
+  #     - postgres
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+
+  # user-service:
+  #   build: ./user-service
+  #   ports:
+  #     - "8082:8080"
+  #   depends_on:
+  #     - postgres
+
+  # gatepass-service:
+  #   build: ./gatepass-service
+  #   ports:
+  #     - "8083:8080"
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+
+  # campus-service:
+  #   build: ./campus-service
+  #   ports:
+  #     - "8084:8080"
+  #   depends_on:
+  #     - postgres
+
+  # guard-service:
+  #   build: ./guard-service
+  #   ports:
+  #     - "8085:8080"
+  #   depends_on:
+  #     - mongo
+
+  # qr-service:
+  #   build: ./qr-service
+  #   ports:
+  #     - "8086:8080"
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"
+
+volumes:
+  postgres_data:
+  mongo_data:

@@ -1,0 +1,43 @@
+name: Build service Docker images
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth-service
+          - user-service
+          - gatepass-service
+          - campus-service
+          - guard-service
+          - qr-service
+          - frontend
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Check if this service has a Dockerfile yet
+        id: check
+        run: |
+          if [ -f "${{ matrix.service }}/Dockerfile" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build image for ${{ matrix.service }}
+        if: steps.check.outputs.exists == 'true'
+        run: docker build -t perimity/${{ matrix.service }}:${{ github.sha }} ./${{ matrix.service }}
+
+      - name: No Dockerfile yet, skipping
+        if: steps.check.outputs.exists == 'false'
+        run: echo "${{ matrix.service }} has no Dockerfile yet, nothing to build."
