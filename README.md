@@ -1,6 +1,6 @@
 # Perimity
 
-Smart Campus Access & Gate Pass Management System — CDAC Mumbai team project.
+Smart Campus Access & Gate Pass Management System 
 
 Replaces the paper gate register with a digital, forgery-proof, searchable system.
 Entry-only. Passwordless (email + OTP) login for everyone — visitors, students,
