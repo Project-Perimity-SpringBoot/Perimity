@@ -1,6 +1,6 @@
 # Campus Service
 
-Owner: TBD
+Owner: Arham
 
 Handles campuses, gates, and per-campus config. Owns CampusDB (PostgreSQL,
 port 5435). See `/docs` for the full schema and rules.

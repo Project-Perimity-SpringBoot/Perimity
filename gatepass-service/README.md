@@ -1,6 +1,6 @@
 # Gate Pass Service
 
-Owner: TBD
+Owner: Tushar
 
 Handles visitor requests, the gate pass lifecycle, and bulk upload batches.
 Owns GatePassDB (PostgreSQL, port 5434). See `/docs` for the full schema
