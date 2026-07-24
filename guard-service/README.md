@@ -1,6 +1,6 @@
 # Guard Service
 
-Owner: TBD
+Owner: Palash
 
 Handles gate scan events (entry logs). Owns EntryLogDB (MongoDB, port
 27017). See `/docs` for the full schema and rules, including the

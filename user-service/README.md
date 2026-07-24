@@ -1,6 +1,6 @@
 # User Service
 
-Owner: TBD
+Owner: Mukul
 
 Handles student/faculty profiles, departments, and documents. Owns UserDB
 (PostgreSQL, port 5433). See `/docs` for the full schema and rules.

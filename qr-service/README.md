@@ -1,6 +1,6 @@
 # QR Service
 
-Owner: TBD
+Owner: Sanjay
 
 Handles QR tokens and PDF generation jobs. Owns QRDB (PostgreSQL, port
 5436). See `/docs` for the full schema and rules.

@@ -1,6 +1,6 @@
 # Auth Service
 
-Owner: TBD
+Owner: Omkar
 
 Handles login, users, OTP, and audit logs. Owns AuthDB (PostgreSQL, port 5432).
 See `/docs` for the full schema and rules.
