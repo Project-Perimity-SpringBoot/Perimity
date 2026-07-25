@@ -1,4 +1,4 @@
-name: Build service Docker images
+name: Build and check
 
 on:
   push:
@@ -7,8 +7,37 @@ on:
     branches: [ "main" ]
 
 jobs:
+
+  # Fails the build if institution-specific branding or an obvious secret is
+  # committed. Perimity is campus-agnostic: campus names come from the database,
+  # never from code.
+  guard-rails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: No institution branding in source
+        run: |
+          if grep -rIn --exclude-dir=.git --exclude-dir=docs \
+               --exclude=docker-build.yml \
+               -iE 'c-?dac' . ; then
+            echo "::error::Institution-specific branding found. Perimity is campus-agnostic."
+            exit 1
+          fi
+          echo "Clean."
+
+      - name: No committed .env file
+        run: |
+          if [ -f .env ]; then
+            echo "::error::.env is committed. Remove it and keep only .env.example."
+            exit 1
+          fi
+          echo "Clean."
+
   build:
     runs-on: ubuntu-latest
+    needs: guard-rails
     strategy:
       fail-fast: false
       matrix:

@@ -1,4 +1,11 @@
-version: "3.9"
+# Perimity — local development stack.
+#
+# Reads values from .env in this folder. Copy .env.example to .env first.
+#
+#   cp .env.example .env
+#   docker compose up --build
+#
+# The `version:` key was removed — Compose v2 ignores it and warns about it.
 
 services:
 
@@ -7,92 +14,181 @@ services:
   postgres:
     image: postgres:16
     container_name: perimity-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: perimity
-      POSTGRES_PASSWORD: perimity
-      # Creates one Postgres *server* — each service still connects to its
-      # own database name (authdb, userdb, gatepassdb, campusdb, qrdb) on it.
-      # Adjust to separate containers later if you want true DB-per-service
-      # isolation at the infra level.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates authdb, userdb, gatepassdb, campusdb, qrdb on first startup.
+      # Without this, every service fails with "database ... does not exist".
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   mongo:
     image: mongo:7
     container_name: perimity-mongo
+    restart: unless-stopped
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: perimity-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
       - "5672:5672"   # AMQP
-      - "15672:15672" # Management UI: http://localhost:15672 (guest/guest)
+      - "15672:15672" # Management UI: http://localhost:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7
     container_name: perimity-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # ---------- Services (uncomment as each Dockerfile is ready) ----------
+  # ---------- Services ----------
+  #
+  # Uncomment your service's block once you have a Dockerfile in its folder.
+  # `condition: service_healthy` means the service waits until Postgres is
+  # actually accepting connections, not merely started. Without it, Spring Boot
+  # starts too early and crashes on the first connection attempt.
 
   # auth-service:
   #   build: ./auth-service
+  #   container_name: perimity-auth
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
   #   ports:
   #     - "8081:8080"
   #   depends_on:
-  #     - postgres
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
 
   # user-service:
   #   build: ./user-service
+  #   container_name: perimity-user
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/userdb
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
   #   ports:
   #     - "8082:8080"
   #   depends_on:
-  #     - postgres
+  #     postgres:
+  #       condition: service_healthy
 
   # gatepass-service:
   #   build: ./gatepass-service
+  #   container_name: perimity-gatepass
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gatepassdb
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
   #   ports:
   #     - "8083:8080"
   #   depends_on:
-  #     - postgres
-  #     - rabbitmq
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
 
   # campus-service:
   #   build: ./campus-service
+  #   container_name: perimity-campus
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/campusdb
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
   #   ports:
   #     - "8084:8080"
   #   depends_on:
-  #     - postgres
+  #     postgres:
+  #       condition: service_healthy
 
   # guard-service:
   #   build: ./guard-service
+  #   container_name: perimity-guard
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   environment:
+  #     SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/entrylogdb
   #   ports:
   #     - "8085:8080"
   #   depends_on:
-  #     - mongo
+  #     mongo:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
 
   # qr-service:
   #   build: ./qr-service
+  #   container_name: perimity-qr
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/qrdb
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
   #   ports:
   #     - "8086:8080"
   #   depends_on:
-  #     - postgres
-  #     - rabbitmq
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
 
   # frontend:
   #   build: ./frontend
+  #   container_name: perimity-frontend
+  #   restart: unless-stopped
+  #   environment:
+  #     VITE_API_BASE_URL: ${VITE_API_BASE_URL}
   #   ports:
   #     - "3000:3000"
 
 volumes:
   postgres_data:
   mongo_data:
+  rabbitmq_data:
