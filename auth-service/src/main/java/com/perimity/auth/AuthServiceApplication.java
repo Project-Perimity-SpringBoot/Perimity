@@ -1,4 +1,4 @@
-package com.perimity.auth_service;
+package com.perimity.auth;
 
 import java.util.TimeZone;
 
