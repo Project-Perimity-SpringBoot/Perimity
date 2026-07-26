@@ -11,6 +11,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import com.perimity.gatepass.validation.ValidDateRange;
+import com.perimity.gatepass.validation.ValidationPatterns;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
@@ -40,6 +44,8 @@ import org.hibernate.annotations.UpdateTimestamp;
                 @Index(name = "idx_gp_expiry_sweep", columnList = "status, valid_to")
         }
 )
+// endNullable = true: a standing DAILY pass legitimately has no end date.
+@ValidDateRange(from = "validFrom", to = "validTo", endNullable = true)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -61,6 +67,8 @@ public class GatePass {
      * need a live call into auth-service. Day 7's RabbitMQ payload requires it.
      */
     @NotBlank
+    @Size(min = 2, max = 120)
+    @Pattern(regexp = ValidationPatterns.PERSON_NAME, message = ValidationPatterns.PERSON_NAME_MESSAGE)
     @Column(name = "holder_name", nullable = false, length = 120)
     private String holderName;
 
@@ -99,6 +107,7 @@ public class GatePass {
     private PassStatus status = PassStatus.PENDING;
 
     /** Mandatory when status = REVOKED (FR-PASS-5, revoke with reason). */
+    @Size(max = 500)
     @Column(name = "revoked_reason", length = 500)
     private String revokedReason;
 
@@ -109,14 +118,17 @@ public class GatePass {
     private LocalDateTime revokedAt;
 
     /** Why the pass was paused - set when a sensitive profile field changed. */
+    @Size(max = 500)
     @Column(name = "paused_reason", length = 500)
     private String pausedReason;
 
     /** Object storage key for the QR PNG. Written by qr-service on activation. */
+    @Pattern(regexp = ValidationPatterns.OBJECT_KEY, message = ValidationPatterns.OBJECT_KEY_MESSAGE)
     @Column(name = "qr_key", length = 300)
     private String qrKey;
 
     /** Object storage key for the printable PDF pass. */
+    @Pattern(regexp = ValidationPatterns.OBJECT_KEY, message = ValidationPatterns.OBJECT_KEY_MESSAGE)
     @Column(name = "pdf_key", length = 300)
     private String pdfKey;
 

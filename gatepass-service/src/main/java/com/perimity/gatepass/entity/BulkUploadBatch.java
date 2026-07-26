@@ -11,6 +11,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import com.perimity.gatepass.validation.ValidationPatterns;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -68,25 +72,33 @@ public class BulkUploadBatch {
     private Long eventId;
 
     /** Object storage key of the uploaded spreadsheet. */
+    @NotBlank
+    @Pattern(regexp = ValidationPatterns.OBJECT_KEY, message = ValidationPatterns.OBJECT_KEY_MESSAGE)
     @Column(name = "object_key", nullable = false, length = 300)
     private String objectKey;
 
+    @Pattern(regexp = ValidationPatterns.SPREADSHEET_FILENAME,
+             message = ValidationPatterns.SPREADSHEET_FILENAME_MESSAGE)
     @Column(name = "original_filename", length = 260)
     private String originalFilename;
 
+    @Min(0)
     @Column(name = "total_rows", nullable = false)
     @Builder.Default
     private int totalRows = 0;
 
+    @Min(0)
     @Column(name = "valid_rows", nullable = false)
     @Builder.Default
     private int validRows = 0;
 
+    @Min(0)
     @Column(name = "invalid_rows", nullable = false)
     @Builder.Default
     private int invalidRows = 0;
 
     /** Rows already handed to the QR queue. Drives the progress screen. */
+    @Min(0)
     @Column(name = "processed_rows", nullable = false)
     @Builder.Default
     private int processedRows = 0;

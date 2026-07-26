@@ -7,6 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import com.perimity.gatepass.validation.ValidDateRange;
+import com.perimity.gatepass.validation.ValidationPatterns;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
@@ -31,6 +35,8 @@ import org.hibernate.annotations.UpdateTimestamp;
                 @Index(name = "idx_ev_created_by", columnList = "created_by")
         }
 )
+@ValidDateRange(from = "validFrom", to = "validTo",
+        message = "The event end date cannot be before the start date")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -47,9 +53,12 @@ public class Event {
     private Long campusId;
 
     @NotBlank
+    @Size(min = 3, max = 180)
+    @Pattern(regexp = ValidationPatterns.TITLE, message = ValidationPatterns.TITLE_MESSAGE)
     @Column(name = "name", nullable = false, length = 180)
     private String name;
 
+    @Size(max = 1000)
     @Column(name = "description", length = 1000)
     private String description;
 
