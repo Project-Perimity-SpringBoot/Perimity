@@ -34,3 +34,6 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 /.metadata/
+
+# Eclipse/STS
+.factorypath
