@@ -10,6 +10,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import com.perimity.gatepass.validation.ValidDateRange;
+import com.perimity.gatepass.validation.ValidationPatterns;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +40,8 @@ import org.hibernate.annotations.UpdateTimestamp;
                 @Index(name = "idx_vr_host", columnList = "host_user_id")
         }
 )
+@ValidDateRange(from = "visitFrom", to = "visitTo",
+        message = "The last day of the visit cannot be before the first day")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -53,19 +59,25 @@ public class VisitorRequest {
     private Long campusId;
 
     @NotBlank
+    @Size(min = 2, max = 120)
+    @Pattern(regexp = ValidationPatterns.PERSON_NAME, message = ValidationPatterns.PERSON_NAME_MESSAGE)
     @Column(name = "visitor_name", nullable = false, length = 120)
     private String visitorName;
 
     /** The universal key across the whole system. Identities are matched by email. */
     @NotBlank
     @Email
+    @Size(max = 180)
+    @Pattern(regexp = ValidationPatterns.EMAIL, message = ValidationPatterns.EMAIL_MESSAGE)
     @Column(name = "visitor_email", nullable = false, length = 180)
     private String visitorEmail;
 
+    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
     @Column(name = "visitor_phone", length = 20)
     private String visitorPhone;
 
     @NotBlank
+    @Size(min = 5, max = 500, message = "Describe the purpose of the visit in at least 5 characters")
     @Column(name = "purpose", nullable = false, length = 500)
     private String purpose;
 
@@ -104,6 +116,7 @@ public class VisitorRequest {
     private LocalDateTime reviewedAt;
 
     /** Mandatory when status = REJECTED. */
+    @Size(max = 500)
     @Column(name = "reject_reason", length = 500)
     private String rejectReason;
 
