@@ -38,3 +38,9 @@ auth-service/.factorypath
 campus-service/.factorypath
 qr-service/.factorypath
 user-service/.factorypath
+
+# Eclipse/STS
+.factorypath
+
+# Eclipse/STS
+.factorypath
