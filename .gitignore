@@ -34,6 +34,10 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 /.metadata/
+auth-service/.factorypath
+campus-service/.factorypath
+qr-service/.factorypath
+user-service/.factorypath
 
 # Eclipse/STS
 .factorypath
