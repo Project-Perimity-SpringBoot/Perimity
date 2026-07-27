@@ -42,7 +42,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/<service>")
+@RequestMapping("/api/qr")
 @Tag(name = "Health", description = "Service health and readiness")
 public class PingController {
 
@@ -51,7 +51,7 @@ public class PingController {
     public ApiResponse<Map<String, String>> ping() {
         return ApiResponse.ok(Map.of(
                 "status", "ok",
-                "service", "<service>-service"
+                "service", "qr-service"
         ));
     }
 }

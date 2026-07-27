@@ -31,6 +31,23 @@ public final class ValidationPatterns {
             + "(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.[A-Za-z]{2,24}$";
     public static final String EMAIL_MESSAGE = "Enter a valid email address";
 
+    /**
+     * The AES-256 token as it travels: URL-safe Base64, so it survives being
+     * put in a QR code and then posted back as JSON by guard-service.
+     *
+     * The lower bound of 24 matters. AES-256-GCM output for even a tiny
+     * payload is well over 24 Base64 characters, so anything shorter cannot
+     * be one of our tokens - it is a truncated scan or a hand-typed guess,
+     * and rejecting it here costs nothing instead of a pointless decrypt.
+     */
+    // The lookahead bounds the TOTAL length including any "=" padding. Written
+    // as [A-Za-z0-9_-]{24,512}={0,2} the bound would cover only the body, so a
+    // padded token could reach 514 and disagree with the @Size(max = 512) that
+    // guards it.
+    public static final String QR_TOKEN = "^(?=.{24,512}$)[A-Za-z0-9_-]+={0,2}$";
+    public static final String QR_TOKEN_MESSAGE =
+            "Token must be URL-safe Base64, 24 to 512 characters";
+
     /** Unicode-aware: Devanagari, Arabic and accented Latin names all pass. */
     public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M}\\s.'-]{1,119}$";
     public static final String PERSON_NAME_MESSAGE =
