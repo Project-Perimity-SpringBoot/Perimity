@@ -1,6 +1,6 @@
 # User Service
 
-**Owner: Mukul**
+**Owner: Sanjay**
 
 Handles student and faculty profiles, departments, and documents. Owns `userdb`
 (PostgreSQL). Runs on port 8082.
