@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Boot 3.3.5, matching every other Perimity service.
-         The roadmap pins the stack at "Spring Boot 3.x (Java 17)".
-         Boot 4.x has a different Spring Security API, so Omkar's shared
-         JwtAuthFilter on Day 4 will not drop into a Boot 4 service. -->
+    <!-- 3.3.5 exactly. Spring Initializr defaults to a newer version; override it.
+         Every Perimity service must be on the same Boot minor, or the shared
+         JwtAuthFilter from Day 4 will not drop into all six. -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -16,10 +15,10 @@
     </parent>
 
     <groupId>com.perimity</groupId>
-    <artifactId>qr-service</artifactId>
+    <artifactId>campus-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>qr-service</name>
-    <description>QR and PDF generation service</description>
+    <name>campus-service</name>
+    <description>Multi-tenant campus, gate and per-campus configuration</description>
 
     <properties>
         <java.version>17</java.version>
@@ -62,6 +61,21 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Day 3 onwards, uncomment when you get there. Adding
+             spring-boot-starter-security NOW will lock every endpoint behind
+             HTTP Basic and make your ping and Swagger appear broken.
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.11</version>
+        </dependency>
+        -->
     </dependencies>
 
     <build>
