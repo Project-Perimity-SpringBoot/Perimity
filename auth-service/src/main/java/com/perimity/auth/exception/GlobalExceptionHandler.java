@@ -1,7 +1,6 @@
-package com.perimity.qr.exception;
+package com.perimity.auth.exception;
 
-import com.perimity.qr.dto.ApiResponse;
-import jakarta.persistence.EntityNotFoundException;
+import com.perimity.auth.dto.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import java.util.ArrayList;
@@ -72,17 +71,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail("The request conflicts with existing data",
                         List.of("A record with these details already exists, or a required value was missing")));
-    }
-
-    /**
-     * Thrown deliberately by the service layer when a lookup by id finds
-     * nothing - e.g. GET /api/qr/{passId} for a passId with no QrRecord yet.
-     * Without this handler it would fall through and surface as a raw 500.
-     */
-    @org.springframework.web.bind.annotation.ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNotFound(EntityNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.fail(ex.getMessage(), List.of()));
     }
 
     /** Business-rule failures thrown deliberately by the service layer. */
