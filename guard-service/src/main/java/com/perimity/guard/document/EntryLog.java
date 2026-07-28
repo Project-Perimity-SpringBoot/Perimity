@@ -1,38 +1,44 @@
 package com.perimity.guard.document;
 
-import com.perimity.guard.document.enums.DenyReason;
+import com.perimity.guard.document.enums.DenialReason;
+import com.perimity.guard.document.enums.PassType;
 import com.perimity.guard.document.enums.ScanResult;
 import com.perimity.guard.validation.ValidationPatterns;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 /**
- * One document per scan. This is the digital gate register.
+ * One document per QR scan. This is the digital gate register.
  *
- * Append-only: a row is never updated or deleted. Denied attempts are recorded
- * exactly like successful ones - the refusals are half the value of the log.
+ * Append-only: a document is never updated or deleted. A wrong scan is
+ * corrected by a later document, not by an edit. Denied scans are logged too
+ * - a denial is exactly the event a security report needs.
  *
  * MongoDB rather than Postgres because this is write-heavy, needs no joins,
- * grows into millions of rows, and is queried by simple filters.
+ * grows into millions of rows, and is shardable by campusId as volume grows.
  *
- * Entry only. There is no exit scan and no in/out toggle anywhere in here.
+ * Entry only. There is no exit document, no in/out toggle, no occupancy
+ * counter anywhere in here.
  */
 @Document(collection = "entry_logs")
-@CompoundIndex(name = "idx_campus_scanned", def = "{'campusId': 1, 'scannedAt': -1}")
-@CompoundIndex(name = "idx_event_scanned", def = "{'eventId': 1, 'scannedAt': -1}")
+@CompoundIndexes({
+    @CompoundIndex(name = "idx_campus_scanned", def = "{'campusId': 1, 'scannedAt': -1}"),
+    @CompoundIndex(name = "idx_attributed_event_scandate", def = "{'attributedEventId': 1, 'scanDate': 1}")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -42,6 +48,29 @@ public class EntryLog {
 
     @Id
     private String id;
+
+    @NotNull
+    @Field("campusId")
+    private Long campusId;
+
+    @NotNull
+    @Field("gateId")
+    private Long gateId;
+
+    /** Denormalised so the report renders without a lookup. */
+    @NotNull
+    @Field("gateName")
+    private String gateName;
+
+    @NotNull
+    @Field("guardUserId")
+    private Long guardUserId;
+
+    /** Links back to the scan_sessions document for this shift. */
+    @NotNull
+    @Indexed(name = "idx_session")
+    @Field("sessionId")
+    private String sessionId;
 
     /** Null when the token could not be decoded at all (INVALID_TOKEN). */
     @Indexed(name = "idx_pass")
@@ -62,53 +91,49 @@ public class EntryLog {
     @Field("holderName")
     private String holderName;
 
-    @NotNull
-    @Field("guardId")
-    private Long guardId;
+    /** DAILY or EVENT - which QR was physically scanned. */
+    @Field("passType")
+    private PassType passType;
 
-    /** The gate this guard was bound to for the session. */
-    @NotNull
-    @Field("gateId")
-    private Long gateId;
-
-    @NotNull
-    @Indexed(name = "idx_campus")
-    @Field("campusId")
-    private Long campusId;
-
-    /**
-     * Set when the entry was attributed to a running event - either the person
-     * scanned an EVENT pass, or Behavior 2 attributed their DAILY scan to an
-     * event running that day. Null for a normal campus entry.
-     */
-    @Indexed(name = "idx_event")
+    /** The event the pass belongs to, if it was an EVENT pass. */
     @Field("eventId")
     private Long eventId;
 
-    @NotNull
-    @Field("result")
-    private ScanResult result;
+    /**
+     * Set when a DAILY scan was auto-credited to a running event (Behavior 2).
+     * Attendance is counted on this field, not on eventId.
+     */
+    @Field("attributedEventId")
+    private Long attributedEventId;
 
-    /** Required when result = RED, null otherwise. */
-    @Field("denyReason")
-    private DenyReason denyReason;
-
     @NotNull
-    @Indexed(name = "idx_scanned_at")
+    @Field("scanResult")
+    private ScanResult scanResult;
+
+    /** Populated only when scanResult is DENIED. */
+    @Field("denialReason")
+    private DenialReason denialReason;
+
+    /** First 12 characters of the token hash - enough to correlate with QRDB, useless if leaked. */
+    @Field("tokenFingerprint")
+    private String tokenFingerprint;
+
+    /** Server time of the scan, stored in UTC. */
+    @NotNull
     @Field("scannedAt")
     private LocalDateTime scannedAt;
 
-    @Size(max = 120)
-    @Pattern(regexp = ValidationPatterns.DEVICE_LABEL, message = ValidationPatterns.DEVICE_LABEL_MESSAGE)
-    @Field("device")
-    private String device;
+    /** yyyy-MM-dd in campus local time. Makes per-day event attendance a simple equality match. */
+    @NotNull
+    @Field("scanDate")
+    private String scanDate;
 
-    @CreatedDate
-    @Field("createdAt")
-    private LocalDateTime createdAt;
+    /** { userAgent, appVersion, ip } from the scanner device. */
+    @Field("deviceInfo")
+    private Map<String, Object> deviceInfo;
 
     /** True when this scan was attributed to an event rather than general entry. */
     public boolean isEventAttributed() {
-        return eventId != null;
+        return attributedEventId != null;
     }
 }
