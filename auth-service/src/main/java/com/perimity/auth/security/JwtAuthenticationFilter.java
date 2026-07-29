@@ -17,12 +17,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Reads the Bearer token and populates the security context.
  *
- * Deliberately silent on failure: a bad or missing token leaves the context
- * empty and Spring Security returns 401 from its own entry point. Writing an
- * error here would produce two different 401 bodies for the same situation.
+ * Silent on failure by design: a bad token leaves the context empty and Spring
+ * Security answers 401 from its own entry point. Writing an error here would
+ * produce two different 401 bodies for the same situation.
  *
- * The role is stored as ROLE_<NAME> so @PreAuthorize("hasRole('FACULTY')")
- * works without any extra mapping.
+ * The role is stored as ROLE_<NAME> so hasRole('FACULTY') works with no mapping.
+ *
+ * THIS FILE IS THE ONE THE OTHER FIVE SERVICES COPY. Only the package changes.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -40,15 +41,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7).trim();
             try {
-                Claims claims = jwtService.parse(token);
-                var authority = new SimpleGrantedAuthority("ROLE_" + jwtService.roleOf(claims));
+                Claims claims = jwtService.parse(header.substring(7).trim());
+                PerimityPrincipal principal = PerimityPrincipal.from(claims);
+
                 var auth = new UsernamePasswordAuthenticationToken(
-                        jwtService.userIdOf(claims), null, List.of(authority));
-                auth.setDetails(claims);
+                        principal, null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name())));
                 SecurityContextHolder.getContext().setAuthentication(auth);
-            } catch (JwtException | IllegalArgumentException ex) {
+
+            } catch (JwtException | IllegalArgumentException | NullPointerException ex) {
                 SecurityContextHolder.clearContext();
             }
         }
