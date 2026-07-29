@@ -5,6 +5,7 @@ import com.perimity.gatepass.dto.request.GatePassCreateDto;
 import com.perimity.gatepass.dto.request.GatePassStatusUpdateDto;
 import com.perimity.gatepass.dto.response.GatePassResponse;
 import com.perimity.gatepass.entity.enums.PassStatus;
+import com.perimity.gatepass.security.CurrentUser;
 import com.perimity.gatepass.service.GatePassService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,17 +15,16 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * Gate passes.
  *
- * Every request body carries @Valid. Without it none of the DTO constraints run
- * and the endpoint silently accepts anything.
- *
- * campusId and holderUserId are request parameters for now. They come from the
- * JWT once Omkar's filter lands on Day 7.
+ * Note /passes/mine below. A student reading their own wallet needs no id in
+ * the URL at all - the token already says who they are. Fewer parameters, fewer
+ * ways to read someone else's data.
  */
 @RestController
 @RequestMapping("/api/gatepass/passes")
@@ -33,69 +33,78 @@ import org.springframework.web.bind.annotation.*;
 public class GatePassController {
 
     private final GatePassService service;
+    private final CurrentUser currentUser;
 
-    public GatePassController(GatePassService service) {
+    public GatePassController(GatePassService service, CurrentUser currentUser) {
         this.service = service;
+        this.currentUser = currentUser;
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
     @Operation(summary = "Issue a pass. Created PENDING; the QR pipeline activates it.")
     public ResponseEntity<ApiResponse<GatePassResponse>> issue(
             @Valid @RequestBody GatePassCreateDto dto) {
 
+        dto.setCampusId(currentUser.campusId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Pass issued", service.issue(dto)));
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
     @Operation(summary = "Pause, resume or revoke. Checked against the state machine.")
     public ApiResponse<GatePassResponse> changeStatus(
             @PathVariable @Positive Long id,
-            @RequestParam @Positive Long campusId,
             @Valid @RequestBody GatePassStatusUpdateDto dto) {
 
-        return ApiResponse.ok("Pass updated", service.changeStatus(campusId, id, dto));
+        dto.setChangedBy(currentUser.userId());
+        return ApiResponse.ok("Pass updated", service.changeStatus(currentUser.campusId(), id, dto));
+    }
+
+    @GetMapping("/mine")
+    @Operation(summary = "Your own wallet. No id needed - the token says who you are.")
+    public ApiResponse<List<GatePassResponse>> mine() {
+        return ApiResponse.ok(service.byHolder(currentUser.userId()));
+    }
+
+    @GetMapping("/mine/active")
+    @Operation(summary = "Only your passes that would open a gate right now")
+    public ApiResponse<List<GatePassResponse>> mineActive() {
+        return ApiResponse.ok(service.activeByHolder(currentUser.userId()));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "One pass")
-    public ApiResponse<GatePassResponse> getOne(
-            @PathVariable @Positive Long id,
-            @RequestParam @Positive Long campusId) {
-
-        return ApiResponse.ok(service.getOne(campusId, id));
+    @Operation(summary = "One pass on your campus")
+    public ApiResponse<GatePassResponse> getOne(@PathVariable @Positive Long id) {
+        return ApiResponse.ok(service.getOne(currentUser.campusId(), id));
     }
 
     @GetMapping("/holder/{holderUserId}")
-    @Operation(summary = "Every pass this person holds. The wallet screen.")
+    @Operation(summary = "Someone's passes. Staff only, or your own.")
     public ApiResponse<List<GatePassResponse>> byHolder(
             @PathVariable @Positive Long holderUserId) {
 
+        // The check a role annotation cannot express. hasRole('STUDENT') says a
+        // student may call this; it cannot say WHOSE passes they may read.
+        currentUser.requireSelfOrStaff(holderUserId);
         return ApiResponse.ok(service.byHolder(holderUserId));
     }
 
-    @GetMapping("/holder/{holderUserId}/active")
-    @Operation(summary = "Only the passes that would open a gate right now")
-    public ApiResponse<List<GatePassResponse>> activeByHolder(
-            @PathVariable @Positive Long holderUserId) {
-
-        return ApiResponse.ok(service.activeByHolder(holderUserId));
-    }
-
     @GetMapping("/event/{eventId}")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
     @Operation(summary = "Every pass issued for one event")
-    public ApiResponse<List<GatePassResponse>> byEvent(
-            @PathVariable @Positive Long eventId) {
-
+    public ApiResponse<List<GatePassResponse>> byEvent(@PathVariable @Positive Long eventId) {
         return ApiResponse.ok(service.byEvent(eventId));
     }
 
     @GetMapping("/count")
-    @Operation(summary = "How many passes a campus holds in one status")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
+    @Operation(summary = "How many passes your campus holds in one status")
     public ApiResponse<Map<String, Long>> count(
-            @RequestParam @Positive Long campusId,
             @RequestParam(defaultValue = "ACTIVE") PassStatus status) {
 
-        return ApiResponse.ok(Map.of(status.name(), service.countByStatus(campusId, status)));
+        return ApiResponse.ok(Map.of(status.name(),
+                service.countByStatus(currentUser.campusId(), status)));
     }
 }

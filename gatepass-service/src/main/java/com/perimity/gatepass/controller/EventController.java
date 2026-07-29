@@ -5,6 +5,7 @@ import com.perimity.gatepass.dto.request.EventCreateDto;
 import com.perimity.gatepass.dto.request.EventUpdateDto;
 import com.perimity.gatepass.dto.response.EventResponse;
 import com.perimity.gatepass.dto.response.PageResponse;
+import com.perimity.gatepass.security.CurrentUser;
 import com.perimity.gatepass.service.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,19 +17,18 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * Events.
  *
- * Every request body carries @Valid. Without it none of the constraints on the
- * DTOs run at all, and the failure is silent - the endpoint simply accepts
- * everything. @Validated on the class does the same job for path variables and
- * request parameters.
+ * campusId is no longer a request parameter. It comes from the JWT, so a caller
+ * cannot read or write another institution's events by editing a query string.
  *
- * campusId is a request parameter for now. Once Omkar's JWT filter lands it
- * comes from the token instead, and these parameters disappear.
+ * Reads are open to any authenticated user - a student needs to see what is on.
+ * Writes are staff only.
  */
 @RestController
 @RequestMapping("/api/gatepass/events")
@@ -37,64 +37,63 @@ import org.springframework.web.bind.annotation.*;
 public class EventController {
 
     private final EventService eventService;
+    private final CurrentUser currentUser;
 
-    public EventController(EventService eventService) {
+    public EventController(EventService eventService, CurrentUser currentUser) {
         this.eventService = eventService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
     @Operation(summary = "Create an event")
     public ResponseEntity<ApiResponse<EventResponse>> create(
             @Valid @RequestBody EventCreateDto dto) {
 
-        EventResponse created = eventService.create(dto);
+        // Overwrite whatever the body claimed. The token is the authority on
+        // campus and on who is creating this.
+        dto.setCampusId(currentUser.campusId());
+        dto.setCreatedBy(currentUser.userId());
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Event created", created));
+                .body(ApiResponse.ok("Event created", eventService.create(dto)));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Get one event")
-    public ApiResponse<EventResponse> getOne(
-            @PathVariable @Positive Long id,
-            @RequestParam @Positive Long campusId) {
-
-        return ApiResponse.ok(eventService.getOne(campusId, id));
+    public ApiResponse<EventResponse> getOne(@PathVariable @Positive Long id) {
+        return ApiResponse.ok(eventService.getOne(currentUser.campusId(), id));
     }
 
     @GetMapping
-    @Operation(summary = "List events for a campus, newest first")
+    @Operation(summary = "List events on your campus, newest first")
     public ApiResponse<PageResponse<EventResponse>> list(
-            @RequestParam @Positive Long campusId,
             @PageableDefault(size = 20, sort = "validFrom", direction = Sort.Direction.DESC)
             Pageable pageable) {
 
-        return ApiResponse.ok(eventService.list(campusId, pageable));
+        return ApiResponse.ok(eventService.list(currentUser.campusId(), pageable));
     }
 
     @GetMapping("/running")
-    @Operation(summary = "Events live today on this campus")
-    public ApiResponse<List<EventResponse>> runningToday(
-            @RequestParam @Positive Long campusId) {
-
-        return ApiResponse.ok(eventService.runningToday(campusId));
+    @Operation(summary = "Events live today on your campus")
+    public ApiResponse<List<EventResponse>> runningToday() {
+        return ApiResponse.ok(eventService.runningToday(currentUser.campusId()));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
     @Operation(summary = "Edit an event")
     public ApiResponse<EventResponse> update(
             @PathVariable @Positive Long id,
-            @RequestParam @Positive Long campusId,
             @Valid @RequestBody EventUpdateDto dto) {
 
-        return ApiResponse.ok("Event updated", eventService.update(campusId, id, dto));
+        return ApiResponse.ok("Event updated", eventService.update(currentUser.campusId(), id, dto));
     }
 
     @PatchMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
     @Operation(summary = "Cancel an event. Never deletes it.")
-    public ApiResponse<EventResponse> cancel(
-            @PathVariable @Positive Long id,
-            @RequestParam @Positive Long campusId) {
-
-        return ApiResponse.ok("Event cancelled", eventService.cancel(campusId, id));
+    public ApiResponse<EventResponse> cancel(@PathVariable @Positive Long id) {
+        return ApiResponse.ok("Event cancelled", eventService.cancel(currentUser.campusId(), id));
     }
 }
