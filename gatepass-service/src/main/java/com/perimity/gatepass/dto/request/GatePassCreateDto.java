@@ -47,9 +47,20 @@ public class GatePassCreateDto {
             example = "Rohit Kulkarni")
     private String holderName;
 
-    @NotNull(message = "Campus is required")
-    @Positive(message = "Campus id must be a positive number")
-    @Schema(example = "1")
+    /**
+     * SERVER-OWNED since Day 7. Taken from the JWT by the controller, never
+     * from the request body.
+     *
+     * @JsonIgnore is the important part: without it a caller could put their
+     * own value here and the controller's overwrite would be the only thing
+     * stopping them. With it, Jackson discards the key and the field cannot be
+     * injected at all.
+     *
+     * No @NotNull either - validation runs BEFORE the controller sets it, so a
+     * constraint here would reject every request.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
     private Long campusId;
 
     @Positive(message = "Visitor request id must be a positive number")
