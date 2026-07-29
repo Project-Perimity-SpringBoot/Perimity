@@ -82,13 +82,13 @@
              ADD THESE LATER, NOT NOW. Uncommenting them before the
              matching config exists will break startup.
 
-        Day 3 - Redis (login attempt counters, lockout TTL):
+        Day 3 - Redis (login attempt counters, lockout TTL): -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-        Day 3 - JWT:
+        <!-- Day 3 - JWT:-->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
@@ -107,12 +107,13 @@
             <scope>runtime</scope>
         </dependency>
 
-        Day 4 - Spring Security (bcrypt + the shared JwtAuthFilter):
+        <!--Day 4 - Spring Security (bcrypt + the shared JwtAuthFilter):-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- ==========================================================
         Day 5 - Mail (real OTP emails):
         <dependency>
             <groupId>org.springframework.boot</groupId>
