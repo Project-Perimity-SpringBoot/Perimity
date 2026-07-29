@@ -5,6 +5,7 @@ import com.perimity.qr.dto.QrInvalidateRequest;
 import com.perimity.qr.dto.QrRecordResponse;
 import com.perimity.qr.entity.QrRecord;
 import com.perimity.qr.repository.QrRecordRepository;
+import com.perimity.qr.storage.StorageService;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,13 +16,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class QrRecordService {
 
+    private static final String PNG_CONTENT_TYPE = "image/png";
+    private static final String PDF_CONTENT_TYPE = "application/pdf";
+
     private final QrRecordRepository qrRecordRepository;
     private final QrTokenService qrTokenService;
+    private final QrImageService qrImageService;
+    private final PdfDocumentService pdfDocumentService;
+    private final StorageService storageService;
 
     public QrRecordService(QrRecordRepository qrRecordRepository,
-                           QrTokenService qrTokenService) {
+                           QrTokenService qrTokenService,
+                           QrImageService qrImageService,
+                           PdfDocumentService pdfDocumentService,
+                           StorageService storageService) {
         this.qrRecordRepository = qrRecordRepository;
         this.qrTokenService = qrTokenService;
+        this.qrImageService = qrImageService;
+        this.pdfDocumentService = pdfDocumentService;
+        this.storageService = storageService;
     }
 
     /**
@@ -90,7 +103,55 @@ public class QrRecordService {
                 .active(true)
                 .build());
 
-        return new GeneratedToken(token, toResponse(saved));
+        /*
+         * Saved first, without keys, because the keys embed the row id and a
+         * re-issue must not overwrite the previous pass's objects. The second
+         * save runs inside the same transaction, so a failure while rendering
+         * rolls the row back rather than leaving a QrRecord whose PNG was
+         * never written - a pass that exists in the database and nowhere else
+         * is worse than no pass at all.
+         */
+        byte[] qrPng = qrImageService.render(token);
+        byte[] pdf = pdfDocumentService.render(request, qrPng);
+
+        saved.setQrKey(storageService.put(
+                objectKey(saved, "qr", "png"), qrPng, PNG_CONTENT_TYPE));
+        saved.setPdfKey(storageService.put(
+                objectKey(saved, "pdf", "pdf"), pdf, PDF_CONTENT_TYPE));
+
+        return new GeneratedToken(token, toResponse(qrRecordRepository.save(saved)));
+    }
+
+    /**
+     * Campus-prefixed object key: {campusId}/{kind}/{passId}/{recordId}.{ext}
+     *
+     * Campus first because Day 22 puts these in S3 under a campus prefix, and
+     * a prefix that leads with the tenant is what makes a per-campus lifecycle
+     * rule, access policy or bulk delete expressible at all. Record id last so
+     * a re-issue writes a new object rather than overwriting the QR someone is
+     * still carrying.
+     *
+     * Starts with a digit and contains no "..", so it satisfies
+     * ValidationPatterns.OBJECT_KEY. Well under the 300-character column.
+     */
+    private String objectKey(QrRecord record, String kind, String extension) {
+        return record.getCampusId() + "/" + kind + "/" + record.getPassId()
+                + "/" + record.getId() + "." + extension;
+    }
+
+    /** Reads a stored object back. Backs the Day 6 download endpoint. */
+    @Transactional(readOnly = true)
+    public byte[] download(Long passId, boolean pdf) {
+        QrRecord record = qrRecordRepository.findByPassIdAndActiveTrue(passId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "No active QR record for passId " + passId));
+
+        String key = pdf ? record.getPdfKey() : record.getQrKey();
+        if (key == null) {
+            throw new EntityNotFoundException(
+                    "QR generation has not finished for passId " + passId);
+        }
+        return storageService.get(key);
     }
 
     /**
