@@ -73,6 +73,13 @@ public class GlobalExceptionHandler {
                         List.of("A record with these details already exists, or a required value was missing")));
     }
 
+    /** A row the caller named does not exist. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
     /** Business-rule failures thrown deliberately by the service layer. */
     @org.springframework.web.bind.annotation.ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(RuntimeException ex) {
