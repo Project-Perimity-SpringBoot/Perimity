@@ -13,7 +13,7 @@ public final class ValidationPatterns {
     }
 
     /** Unicode-aware: Devanagari, Arabic and accented Latin names all pass. */
-    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M}\\s.'-]{1,119}$";
+    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]{1,119}$";
     public static final String PERSON_NAME_MESSAGE =
             "Name may contain letters, spaces, apostrophes, hyphens and full stops only";
 
@@ -22,7 +22,7 @@ public final class ValidationPatterns {
      * Deliberately permissive but bounded - it is written to a log, so it must
      * not carry control characters or newlines that could forge a log line.
      */
-    public static final String DEVICE_LABEL = "^[\\p{L}\\p{N}][\\p{L}\\p{N}\\s._/()+-]{0,119}$";
+    public static final String DEVICE_LABEL = "^[\\p{L}\\p{N}][\\p{L}\\p{N} ._/()+-]{0,119}$";
     public static final String DEVICE_LABEL_MESSAGE = "Invalid device label";
 
     /** Stricter than the built-in @Email, which accepts "a@b". */
