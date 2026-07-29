@@ -62,6 +62,14 @@ public class GatePassController {
         return ApiResponse.ok("Pass updated", service.changeStatus(currentUser.campusId(), id, dto));
     }
 
+    @PostMapping("/{id}/republish")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
+    @Operation(summary = "Re-queue QR generation for a pass stuck at PENDING")
+    public ApiResponse<GatePassResponse> republish(@PathVariable @Positive Long id) {
+        return ApiResponse.ok("Generation job re-queued",
+                service.republishGenerationJob(currentUser.campusId(), id));
+    }
+
     @GetMapping("/mine")
     @Operation(summary = "Your own wallet. No id needed - the token says who you are.")
     public ApiResponse<List<GatePassResponse>> mine() {
