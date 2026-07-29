@@ -73,6 +73,13 @@ public class GlobalExceptionHandler {
                         List.of("A record with these details already exists, or a required value was missing")));
     }
 
+    /** Any failed authentication attempt. Generic on purpose - see the exception. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(AuthenticationFailedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthFailure(AuthenticationFailedException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
     /** Business-rule failures thrown deliberately by the service layer. */
     @org.springframework.web.bind.annotation.ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(RuntimeException ex) {
