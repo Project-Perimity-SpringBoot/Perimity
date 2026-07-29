@@ -14,16 +14,25 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Issues and reads JWTs. jjwt 0.12.x API.
+ * Issues and verifies JWTs. auth-service is the ONLY service that issues; the
+ * other five only read.
  *
- * The secret comes from the JWT_SECRET environment variable with no fallback,
- * on purpose. A default value here is how the old committed secret ended up in
- * production-shaped config in the first place - if the variable is missing the
- * service must refuse to start, loudly, rather than silently signing tokens
- * with a string that is public on GitHub.
+ * THE CLAIM CONTRACT - the other five services depend on these exact names:
  *
- * The same secret must be set for all six services or tokens issued here will
- * not validate anywhere else.
+ *     sub        user id, as a string
+ *     email      login email
+ *     name       display name
+ *     role       SUPER_ADMIN | CAMPUS_ADMIN | FACULTY | STUDENT | GUARD | VISITOR
+ *     campusId   null for SUPER_ADMIN only
+ *     iss        "perimity-auth"
+ *
+ * Renaming any of these breaks every other service silently - they will simply
+ * see a null and treat the caller as unauthenticated. Announce a change before
+ * making it.
+ *
+ * The secret has no default. If JWT_SECRET is missing the service refuses to
+ * start, which is correct: a service that falls back to a known string will
+ * happily accept forged tokens.
  */
 @Service
 public class JwtService {
@@ -48,7 +57,6 @@ public class JwtService {
         this.key = Keys.hmacShaKeyFor(bytes);
     }
 
-    /** Everything downstream services need, so they never call back here to ask. */
     public String issue(User user) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expiryHours * 3_600_000L);
@@ -71,7 +79,7 @@ public class JwtService {
                 .toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
     }
 
-    /** Throws JwtException on anything wrong: bad signature, expired, malformed. */
+    /** Throws JwtException on a bad signature, an expired token, or a wrong issuer. */
     public Claims parse(String token) {
         return Jwts.parser()
                 .verifyWith(key)
@@ -79,13 +87,5 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-    }
-
-    public Long userIdOf(Claims claims) {
-        return Long.valueOf(claims.getSubject());
-    }
-
-    public String roleOf(Claims claims) {
-        return claims.get("role", String.class);
     }
 }

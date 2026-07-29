@@ -1,6 +1,7 @@
 package com.perimity.auth.config;
 
 import com.perimity.auth.security.JwtAuthenticationFilter;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,22 +15,34 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import java.util.List;
 
 /**
- * Security for auth-service.
+ * ============================================================
+ *  THIS IS THE FILE THE OTHER FIVE SERVICES COPY. Post it today.
+ * ============================================================
  *
- * IMPORTANT for the team: spring-boot-starter-security is on the classpath, so
- * without this class Spring Boot secures EVERY endpoint behind generated basic
- * auth - including /ping and Swagger. That is why /ping and the springdoc paths
- * are explicitly permitted below.
+ * Adding spring-boot-starter-security secures EVERY endpoint by default,
+ * including /ping and Swagger. This class is what re-opens them.
  *
- * Leaving /ping out is a real production failure, not a nuisance: Docker polls
- * it as a healthcheck, gets 401, marks the container unhealthy and restarts it
- * forever.
+ * Leaving /ping locked is a real production failure, not a nuisance: Docker
+ * polls it as a healthcheck, gets 401, marks the container unhealthy and
+ * restarts it forever.
  *
- * Copy the permit list into the other five services on Day 7. The endpoints
- * differ, but /ping and the three springdoc paths must be public everywhere.
+ * FOUR PATHS MUST BE PUBLIC IN EVERY SERVICE. Only the service name changes:
+ *
+ *     /api/<service>/ping
+ *     /swagger-ui.html
+ *     /swagger-ui/**
+ *     /v3/api-docs/**        and /api-docs/** where that path is configured
+ *
+ * Note the api-docs split: four services set springdoc.api-docs.path=/api-docs
+ * while this one uses /v3/api-docs. Both are permitted below, but the team
+ * should agree one value.
+ *
+ * auth-service additionally opens login, OTP, visitor registration and the two
+ * password-reset endpoints - you cannot obtain a token without reaching them.
+ * They are listed ONE BY ONE rather than as /api/auth/**, so a new endpoint
+ * added under that path does not become public by accident.
  */
 @Configuration
 @EnableMethodSecurity
@@ -49,14 +62,30 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .formLogin(f -> f.disable())
             .httpBasic(b -> b.disable())
+            .exceptionHandling(e -> e
+                    // Without these, Spring answers 403 to a caller with NO
+                    // token, which says "you are logged in but not allowed"
+                    // when the truth is "you are not logged in".
+                    // 401 means bring a token. 403 means your token is not enough.
+                    .authenticationEntryPoint((req, res, ex) -> {
+                        res.setStatus(401);
+                        res.setContentType("application/json");
+                        res.getWriter().write("{\"success\":false,\"message\":"
+                                + "\"Authentication required\",\"data\":null,\"errors\":[]}");
+                    })
+                    .accessDeniedHandler((req, res, ex) -> {
+                        res.setStatus(403);
+                        res.setContentType("application/json");
+                        res.getWriter().write("{\"success\":false,\"message\":"
+                                + "\"Your role is not permitted to perform this action\","
+                                + "\"data\":null,\"errors\":[]}");
+                    }))
             .authorizeHttpRequests(auth -> auth
-                    // health and docs - public in every service, always
                     .requestMatchers("/api/auth/ping").permitAll()
                     .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
-                                     "/v3/api-docs", "/v3/api-docs/**").permitAll()
+                                     "/v3/api-docs", "/v3/api-docs/**",
+                                     "/api-docs", "/api-docs/**").permitAll()
 
-                    // the endpoints you must be able to reach without a token,
-                    // because reaching them is how you get one
                     .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/auth/otp/request").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/auth/otp/verify").permitAll()
@@ -83,7 +112,7 @@ public class SecurityConfig {
         return source;
     }
 
-    /** bcrypt. Strength 10 is the Spring default and is fine here. */
+    /** bcrypt. Strength 10 is the Spring default and is right here. */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
