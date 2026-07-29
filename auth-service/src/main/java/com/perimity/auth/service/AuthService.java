@@ -8,7 +8,9 @@ import com.perimity.auth.dto.response.OtpChallengeResponse;
 import com.perimity.auth.dto.response.UserResponse;
 import com.perimity.auth.entity.OtpVerification;
 import com.perimity.auth.entity.User;
+import com.perimity.auth.entity.enums.AuditAction;
 import com.perimity.auth.exception.AuthenticationFailedException;
+import com.perimity.auth.exception.RateLimitedException;
 import com.perimity.auth.repository.OtpVerificationRepository;
 import com.perimity.auth.repository.UserRepository;
 import com.perimity.auth.security.JwtService;
@@ -16,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.Optional;
@@ -27,10 +30,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Login and OTP.
+ * Login and one-time codes.
  *
  * The DTOs already proved the input is well formed. Everything here needs the
- * database or the clock.
+ * database, Redis or the clock.
  */
 @Service
 public class AuthService {
@@ -42,37 +45,46 @@ public class AuthService {
     private final OtpVerificationRepository otpRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RateLimiter rateLimiter;
+    private final AuditService audit;
+    private final LoginAttemptService loginAttempts;
 
     private final int maxFailedAttempts;
     private final int lockoutMinutes;
     private final int otpLength;
     private final int otpExpiryMinutes;
     private final int otpMaxAttempts;
-    private final int otpMaxRequests;
-    private final int otpRequestWindowMinutes;
+    private final int otpPerEmailPerHour;
+    private final int otpPerIpPerHour;
 
     public AuthService(UserRepository userRepository,
                        OtpVerificationRepository otpRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
+                       RateLimiter rateLimiter,
+                       AuditService audit,
+                       LoginAttemptService loginAttempts,
                        @Value("${perimity.password.max-failed-attempts}") int maxFailedAttempts,
                        @Value("${perimity.password.lockout-minutes}") int lockoutMinutes,
                        @Value("${perimity.otp.length}") int otpLength,
                        @Value("${perimity.otp.expiry-minutes}") int otpExpiryMinutes,
                        @Value("${perimity.otp.max-attempts}") int otpMaxAttempts,
-                       @Value("${perimity.otp.max-requests}") int otpMaxRequests,
-                       @Value("${perimity.otp.request-window-minutes}") int otpRequestWindowMinutes) {
+                       @Value("${perimity.ratelimit.otp.per-email-per-hour}") int otpPerEmailPerHour,
+                       @Value("${perimity.ratelimit.otp.per-ip-per-hour}") int otpPerIpPerHour) {
         this.userRepository = userRepository;
         this.otpRepository = otpRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.rateLimiter = rateLimiter;
+        this.audit = audit;
+        this.loginAttempts = loginAttempts;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutMinutes = lockoutMinutes;
         this.otpLength = otpLength;
         this.otpExpiryMinutes = otpExpiryMinutes;
         this.otpMaxAttempts = otpMaxAttempts;
-        this.otpMaxRequests = otpMaxRequests;
-        this.otpRequestWindowMinutes = otpRequestWindowMinutes;
+        this.otpPerEmailPerHour = otpPerEmailPerHour;
+        this.otpPerIpPerHour = otpPerIpPerHour;
     }
 
     // ------------------------------------------------------------ login
@@ -80,23 +92,28 @@ public class AuthService {
     /**
      * Password login.
      *
-     * Every failure path except lockout returns the same message. An unknown
-     * email and a wrong password must be indistinguishable, or the endpoint
-     * tells an attacker which addresses are registered.
+     * Every failure except lockout returns the same message. An unknown email
+     * and a wrong password must be indistinguishable.
      */
     @Transactional
-    public AuthResponse login(LoginRequestDto dto) {
+    public AuthResponse login(LoginRequestDto dto, String clientIp) {
         LocalDateTime now = LocalDateTime.now();
 
         User user = userRepository.findByEmailIgnoreCase(dto.getEmail())
-                .orElseThrow(AuthenticationFailedException::invalidCredentials);
+                .orElseThrow(() -> {
+                    audit.recordAnonymous(AuditAction.LOGIN_FAILED,
+                            "user:" + dto.getEmail(), "No such account");
+                    return AuthenticationFailedException.invalidCredentials();
+                });
 
         if (!user.isActive()) {
+            audit.record(AuditAction.LOGIN_FAILED, user.getId(), user.getRole(),
+                    user.getCampusId(), "user:" + user.getId(), "Account is inactive");
             throw AuthenticationFailedException.invalidCredentials();
         }
 
-        // A visitor has no password at all, so this endpoint is not for them.
-        // Same generic message - do not reveal that the account exists as a visitor.
+        // A visitor has no password at all. Same generic refusal - saying
+        // "visitors cannot log in here" would confirm the account exists.
         if (!user.getRole().canLoginWithPassword() || user.getPasswordHash() == null) {
             throw AuthenticationFailedException.invalidCredentials();
         }
@@ -108,27 +125,20 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
-            registerFailedAttempt(user, now);
+            // Separate transaction. See LoginAttemptService for why - doing this
+            // inline meant the increment was rolled back by the exception below,
+            // and the account could never lock.
+            loginAttempts.recordFailure(user.getId());
             throw AuthenticationFailedException.invalidCredentials();
         }
 
-        user.setFailedLoginCount(0);
-        user.setLockedUntil(null);
-        user.setLastLoginAt(now);
-        userRepository.save(user);
+        loginAttempts.recordSuccess(user.getId());
+
+        rateLimiter.reset("login-ip", clientIp);
+        audit.record(AuditAction.LOGIN_SUCCESS, user.getId(), user.getRole(),
+                user.getCampusId(), "user:" + user.getId(), null);
 
         return tokenFor(user);
-    }
-
-    /** Counts the miss and locks the account once the budget is spent. */
-    private void registerFailedAttempt(User user, LocalDateTime now) {
-        int failures = user.getFailedLoginCount() + 1;
-        user.setFailedLoginCount(failures);
-        if (failures >= maxFailedAttempts) {
-            user.setLockedUntil(now.plusMinutes(lockoutMinutes));
-            user.setFailedLoginCount(0);
-        }
-        userRepository.save(user);
     }
 
     // -------------------------------------------------------------- otp
@@ -137,26 +147,20 @@ public class AuthService {
      * Issue a one-time code.
      *
      * Returns the SAME response whether or not the email belongs to an account.
-     * A different answer for an unknown address makes this an enumeration tool.
-     *
-     * Rate limited per email using the existing repository count. The per-IP
-     * limit lands tomorrow with Redis - this one alone does not stop a bot
-     * cycling through addresses.
+     * Rate limited on both the email and the caller's IP - the email limit
+     * alone does not stop a bot cycling through a thousand addresses.
      */
     @Transactional
-    public OtpChallengeResponse requestOtp(OtpRequestDto dto) {
+    public OtpChallengeResponse requestOtp(OtpRequestDto dto, String clientIp) {
+        enforce("otp-email", dto.getEmail(), otpPerEmailPerHour, Duration.ofHours(1),
+                "Too many codes requested for this address.");
+        enforce("otp-ip", clientIp, otpPerIpPerHour, Duration.ofHours(1),
+                "Too many codes requested from this device.");
+
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime windowStart = now.minusMinutes(otpRequestWindowMinutes);
 
-        long recent = otpRepository.countByEmailIgnoreCaseAndCreatedAtAfter(dto.getEmail(), windowStart);
-        if (recent >= otpMaxRequests) {
-            throw new IllegalStateException(
-                    "Too many codes requested. Please wait " + otpRequestWindowMinutes
-                            + " minutes before trying again.");
-        }
-
-        // Any older unused code for this email stops working the moment a new
-        // one is issued, so two live codes never exist at once.
+        // Any older unused code stops working the moment a new one is issued,
+        // so two live codes never exist for the same email and purpose.
         otpRepository.consumeOutstanding(dto.getEmail(), dto.getPurpose(), now);
 
         String plainCode = generateNumericCode(otpLength);
@@ -168,23 +172,23 @@ public class AuthService {
                 .purpose(dto.getPurpose())
                 .campusId(dto.getCampusId())
                 .expiresAt(expiresAt)
-                .attempts(0)
-                .consumed(false)
                 .build());
 
-        // Day 9 replaces this with SES. Until then the code is logged so the
-        // team can test. This log line MUST be deleted before deployment.
+        audit.recordAnonymous(AuditAction.OTP_REQUESTED,
+                "email:" + dto.getEmail(), "Purpose " + dto.getPurpose());
+
+        // Day 9 replaces this with SES. DELETE THIS LINE BEFORE DEPLOYMENT.
         log.warn("DEV ONLY - OTP for {} ({}) is {}", dto.getEmail(), dto.getPurpose(), plainCode);
 
         return OtpChallengeResponse.of(dto.getEmail(), dto.getPurpose(), expiresAt, otpMaxAttempts);
     }
 
     /**
-     * Verify a code and, if it belongs to a real account, issue a token.
+     * Verify a code and issue a token.
      *
-     * A wrong code burns an attempt. Once the attempt budget is gone the code
-     * is dead even if the right one is typed next - otherwise a six-digit code
-     * is brute-forceable in about a minute.
+     * A wrong code burns an attempt. Once the budget is gone the code is dead
+     * even if the right one is typed next - a six-digit code is otherwise
+     * brute-forceable in about a minute.
      */
     @Transactional
     public AuthResponse verifyOtp(OtpVerifyDto dto) {
@@ -198,12 +202,14 @@ public class AuthService {
 
         if (!otp.isUsableAt(now, otpMaxAttempts)) {
             throw new AuthenticationFailedException(
-                    "That code has expired or has been tried too many times. Please request a new one.");
+                    "That code has expired or has been tried too many times. Request a new one.");
         }
 
         if (!constantTimeEquals(sha256(dto.getCode()), otp.getOtpHash())) {
             otp.setAttempts(otp.getAttempts() + 1);
             otpRepository.save(otp);
+            audit.recordAnonymous(AuditAction.OTP_FAILED, "email:" + dto.getEmail(),
+                    "Attempt " + otp.getAttempts() + " of " + otpMaxAttempts);
             throw new AuthenticationFailedException("That code is not correct.");
         }
 
@@ -213,8 +219,6 @@ public class AuthService {
 
         Optional<User> maybeUser = userRepository.findByEmailIgnoreCaseAndActiveTrue(dto.getEmail());
         if (maybeUser.isEmpty()) {
-            // The code was right but no account exists yet. Registration is a
-            // separate endpoint - this one does not create accounts.
             throw new AuthenticationFailedException(
                     "Verified, but there is no active account for this email yet.");
         }
@@ -225,10 +229,19 @@ public class AuthService {
         user.setLockedUntil(null);
         userRepository.save(user);
 
+        audit.record(AuditAction.LOGIN_SUCCESS, user.getId(), user.getRole(),
+                user.getCampusId(), "user:" + user.getId(), "Signed in with a one-time code");
+
         return tokenFor(user);
     }
 
-    // ----------------------------------------------------------- helpers
+    // ---------------------------------------------------------- helpers
+
+    private void enforce(String bucket, String subject, int limit, Duration window, String message) {
+        if (!rateLimiter.allow(bucket, subject, limit, window)) {
+            throw new RateLimitedException(message, rateLimiter.secondsUntilReset(bucket, subject));
+        }
+    }
 
     private AuthResponse tokenFor(User user) {
         String token = jwtService.issue(user);
@@ -244,7 +257,7 @@ public class AuthService {
         return sb.toString();
     }
 
-    private String sha256(String value) {
+    static String sha256(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
