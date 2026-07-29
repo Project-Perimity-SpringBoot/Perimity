@@ -7,10 +7,7 @@ import com.perimity.gatepass.dto.response.GatePassResponse;
 import com.perimity.gatepass.dto.response.PageResponse;
 import com.perimity.gatepass.dto.response.VisitorRequestResponse;
 import com.perimity.gatepass.entity.Event;
-import com.perimity.gatepass.entity.GatePass;
 import com.perimity.gatepass.entity.VisitorRequest;
-import com.perimity.gatepass.entity.enums.PassStatus;
-import com.perimity.gatepass.entity.enums.PassType;
 import com.perimity.gatepass.entity.enums.RequestStatus;
 import com.perimity.gatepass.exception.ResourceNotFoundException;
 import com.perimity.gatepass.repository.EventRepository;
@@ -19,7 +16,6 @@ import com.perimity.gatepass.repository.VisitorRequestRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,13 +33,16 @@ public class VisitorRequestService {
     private final VisitorRequestRepository requestRepository;
     private final GatePassRepository gatePassRepository;
     private final EventRepository eventRepository;
+    private final GatePassService gatePassService;
 
     public VisitorRequestService(VisitorRequestRepository requestRepository,
                                  GatePassRepository gatePassRepository,
-                                 EventRepository eventRepository) {
+                                 EventRepository eventRepository,
+                                 GatePassService gatePassService) {
         this.requestRepository = requestRepository;
         this.gatePassRepository = gatePassRepository;
         this.eventRepository = eventRepository;
+        this.gatePassService = gatePassService;
     }
 
     // ------------------------------------------------------------- submit
@@ -161,41 +160,9 @@ public class VisitorRequestService {
         request.setRejectReason(null);
         requestRepository.save(request);
 
-        issuePassFor(request);
+        gatePassService.issueForApprovedRequest(request);
 
         return VisitorRequestResponse.from(request);
-    }
-
-    /**
-     * Creates the pass for an approved request.
-     *
-     * Guarded against producing a second pass, because a retried request or a
-     * double-click must not put two live QRs in one visitor's inbox.
-     *
-     * TODO Day 6: move this into GatePassService once it exists. Issuance
-     * belongs there, not here - this is the temporary home, not the design.
-     */
-    private GatePass issuePassFor(VisitorRequest request) {
-        Optional<GatePass> existing = gatePassRepository.findByVisitorRequestId(request.getId());
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-
-        boolean forEvent = request.getEventId() != null;
-
-        GatePass pass = GatePass.builder()
-                .holderUserId(request.getVisitorUserId())
-                .holderName(request.getVisitorName())
-                .campusId(request.getCampusId())
-                .visitorRequestId(request.getId())
-                .passType(forEvent ? PassType.EVENT : PassType.DAILY)
-                .eventId(request.getEventId())
-                .validFrom(request.getVisitFrom())
-                .validTo(request.getVisitTo())
-                .status(PassStatus.PENDING)
-                .build();
-
-        return gatePassRepository.save(pass);
     }
 
     /** The pass produced by an approved request, if there is one yet. */
