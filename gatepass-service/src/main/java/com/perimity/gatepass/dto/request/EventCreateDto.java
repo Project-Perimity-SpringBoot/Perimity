@@ -33,9 +33,20 @@ import lombok.Setter;
 @Builder
 public class EventCreateDto {
 
-    @NotNull(message = "Campus is required")
-    @Positive(message = "Campus id must be a positive number")
-    @Schema(example = "1")
+    /**
+     * SERVER-OWNED since Day 7. Taken from the JWT by the controller, never
+     * from the request body.
+     *
+     * @JsonIgnore is the important part: without it a caller could put their
+     * own value here and the controller's overwrite would be the only thing
+     * stopping them. With it, Jackson discards the key and the field cannot be
+     * injected at all.
+     *
+     * No @NotNull either - validation runs BEFORE the controller sets it, so a
+     * constraint here would reject every request.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
     private Long campusId;
 
     @NotBlank(message = "Event name is required")
@@ -57,8 +68,19 @@ public class EventCreateDto {
     @Schema(example = "2026-08-12")
     private LocalDate validTo;
 
-    @NotNull(message = "Creator is required")
-    @Positive(message = "Creator user id must be a positive number")
-    @Schema(description = "Faculty or Campus Admin creating the event", example = "42")
+    /**
+     * SERVER-OWNED since Day 7. Taken from the JWT by the controller, never
+     * from the request body.
+     *
+     * @JsonIgnore is the important part: without it a caller could put their
+     * own value here and the controller's overwrite would be the only thing
+     * stopping them. With it, Jackson discards the key and the field cannot be
+     * injected at all.
+     *
+     * No @NotNull either - validation runs BEFORE the controller sets it, so a
+     * constraint here would reject every request.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
     private Long createdBy;
 }
