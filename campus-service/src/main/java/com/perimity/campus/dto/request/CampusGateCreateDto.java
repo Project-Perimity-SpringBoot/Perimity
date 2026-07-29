@@ -30,9 +30,15 @@ import lombok.Setter;
 @Builder
 public class CampusGateCreateDto {
 
-    @NotNull(message = "Campus is required")
-    @Positive(message = "Campus id must be a positive number")
-    @Schema(example = "1")
+    /**
+     * SERVER-OWNED. Taken from the path, never from the body.
+     *
+     * @JsonIgnore so a caller cannot POST to /campuses/1/gates while claiming
+     * campusId 2 in the body. No @NotNull either: validation runs BEFORE the
+     * controller sets it, so a constraint here would reject every request.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
     private Long campusId;
 
     @NotBlank(message = "Gate name is required")
