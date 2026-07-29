@@ -11,6 +11,7 @@ import com.perimity.gatepass.entity.VisitorRequest;
 import com.perimity.gatepass.entity.enums.PassStatus;
 import com.perimity.gatepass.entity.enums.PassType;
 import com.perimity.gatepass.exception.ResourceNotFoundException;
+import com.perimity.gatepass.messaging.QrJobPublisher;
 import com.perimity.gatepass.repository.EventRepository;
 import com.perimity.gatepass.repository.GatePassRepository;
 import java.time.LocalDate;
@@ -44,10 +45,13 @@ public class GatePassService {
 
     private final GatePassRepository passRepository;
     private final EventRepository eventRepository;
+    private final QrJobPublisher qrJobPublisher;
 
-    public GatePassService(GatePassRepository passRepository, EventRepository eventRepository) {
+    public GatePassService(GatePassRepository passRepository, EventRepository eventRepository,
+                           QrJobPublisher qrJobPublisher) {
         this.passRepository = passRepository;
         this.eventRepository = eventRepository;
+        this.qrJobPublisher = qrJobPublisher;
     }
 
     // ------------------------------------------------------------- issue
@@ -104,8 +108,10 @@ public class GatePassService {
 
         GatePass saved = passRepository.save(pass);
 
-        // TODO Day 8: publish the QR generation job to RabbitMQ here.
-        // Until then the pass sits at PENDING until someone calls /activate.
+        // Published AFTER this transaction commits, so qr-service cannot read
+        // the pass before the INSERT is visible. See QrJobPublisher.
+        qrJobPublisher.publishAfterCommit(saved);
+
         return GatePassResponse.from(saved);
     }
 
@@ -139,7 +145,29 @@ public class GatePassService {
                 .status(PassStatus.PENDING)
                 .build();
 
-        return passRepository.save(pass);
+        GatePass saved = passRepository.save(pass);
+        qrJobPublisher.publishAfterCommit(saved);
+        return saved;
+    }
+
+    /**
+     * Re-queue a pass whose generation never finished.
+     *
+     * A broker outage at the wrong moment leaves a pass at PENDING with nobody
+     * coming back for it. Without this the only fix is a database edit.
+     */
+    @Transactional
+    public GatePassResponse republishGenerationJob(Long campusId, Long id) {
+        GatePass pass = require(campusId, id);
+
+        if (pass.getStatus() != PassStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Only a pending pass can be re-queued. This one is "
+                            + pass.getStatus().name().toLowerCase() + ".");
+        }
+
+        qrJobPublisher.publishAfterCommit(pass);
+        return GatePassResponse.from(pass);
     }
 
     // ---------------------------------------------------- state changes
