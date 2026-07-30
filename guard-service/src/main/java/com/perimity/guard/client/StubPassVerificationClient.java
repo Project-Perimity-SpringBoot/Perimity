@@ -53,7 +53,7 @@ import org.springframework.stereotype.Component;
  * endpoints and the integration tests pass against the real thing.
  */
 @Component
-@ConditionalOnProperty(name = "perimity.guard.clients", havingValue = "stub")
+@ConditionalOnProperty(name = "perimity.guard.clients.verification", havingValue = "stub")
 public class StubPassVerificationClient implements PassVerificationClient {
 
     private static final Logger log = LoggerFactory.getLogger(StubPassVerificationClient.class);

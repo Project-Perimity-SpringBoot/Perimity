@@ -113,7 +113,11 @@ public class ScanSessionService {
      */
     void recordScan(ScanSession session, ScanResult result) {
         session.setTotalScans(nz(session.getTotalScans()) + 1);
-        if (result == ScanResult.ALLOWED) {
+
+        // permitsEntry(), not == ALLOWED. An AMBER scan is a person walking
+        // through the gate; counting it as denied would make the handover
+        // summary disagree with the register it is meant to summarise.
+        if (result.permitsEntry()) {
             session.setAllowedCount(nz(session.getAllowedCount()) + 1);
         } else {
             session.setDeniedCount(nz(session.getDeniedCount()) + 1);

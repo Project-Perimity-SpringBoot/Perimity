@@ -48,7 +48,7 @@ import org.springframework.web.client.RestClient;
  * can be deployed in any order.
  */
 @Component
-@ConditionalOnProperty(name = "perimity.guard.clients", havingValue = "http", matchIfMissing = true)
+@ConditionalOnProperty(name = "perimity.guard.clients.verification", havingValue = "http", matchIfMissing = true)
 public class HttpPassVerificationClient implements PassVerificationClient {
 
     private static final Logger log = LoggerFactory.getLogger(HttpPassVerificationClient.class);
