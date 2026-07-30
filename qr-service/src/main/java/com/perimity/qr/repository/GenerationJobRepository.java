@@ -12,7 +12,29 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface GenerationJobRepository extends JpaRepository<GenerationJob, Long> {
 
+    /**
+     * DEPRECATED for new code as of Day 8. A re-issued pass has more than one
+     * job row, and this returns an Optional, so it throws
+     * IncorrectResultSizeDataAccessException as soon as a second row exists.
+     * Kept because Days 1-6 already reference it. Use
+     * findFirstByPassIdOrderByIdDesc instead.
+     */
     Optional<GenerationJob> findByPassId(Long passId);
+
+    /**
+     * The newest job for a pass. Safe when a pass has been re-issued.
+     * Ordered by id rather than createdAt: ids are a monotonic IDENTITY
+     * sequence, while two rows created inside the same millisecond share a
+     * createdAt and their order becomes undefined - which under bulk load on
+     * Day 10 is common, not theoretical.
+     */
+    Optional<GenerationJob> findFirstByPassIdOrderByIdDesc(Long passId);
+
+    /**
+     * Day 8 idempotency lookup: has this exact job from gatepass-service been
+     * seen before? jobRef holds Tushar's QrGenerationJob.jobId.
+     */
+    Optional<GenerationJob> findByJobRef(String jobRef);
 
     List<GenerationJob> findByStatus(JobStatus status);
 

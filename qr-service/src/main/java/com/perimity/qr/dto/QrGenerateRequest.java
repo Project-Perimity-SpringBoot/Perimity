@@ -11,17 +11,22 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * The pass.generate message payload dropped on RabbitMQ by gatepass-service.
+ * The internal input to QR generation.
+ *
+ * NO LONGER the wire payload. As of Day 8 the queue carries Tushar's
+ * QrGenerationJob record, and QrGenerationListener maps it onto this class -
+ * partly because his contract is much wider than generation needs, and partly
+ * because the constraints below are the only validation a queue message gets.
+ * Keeping them on the narrow type means the mapping step is the checkpoint.
  *
  * This is the single most important DTO in qr-service to validate hard,
  * because it is the only thing that ever causes a QrRecord to exist. A bad
  * message here becomes a bad QR, which becomes a guard staring at a RED
  * result while a real student stands at the gate.
  *
- * @NoArgsConstructor and @Setter are required, not stylistic: Jackson
- * deserialises into this class and needs a no-arg constructor plus mutators.
- * The response DTOs in this package are outbound only and correctly have
- * neither.
+ * @NoArgsConstructor and @Setter are retained even though Jackson no longer
+ * deserialises into this class: the HTTP generate path still binds a body to it,
+ * and QrGenerationListenerTest mutates an instance to build an invalid case.
  */
 @Getter
 @Setter

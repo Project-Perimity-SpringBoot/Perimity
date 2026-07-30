@@ -55,6 +55,22 @@ public class QrRecordService {
     }
 
     /**
+     * The active QR for a pass, or empty. Day 8's retry path.
+     *
+     * A second, non-throwing form of getActiveByPassId rather than a change to
+     * it. getActiveByPassId backs an HTTP GET, where "no QR yet" must be a 404,
+     * and the queue consumer needs the same lookup where "no QR yet" is the
+     * normal first-attempt state and not an error. Making one method serve both
+     * would mean throwing an exception on the happy path of a retry and catching
+     * it to decide what to do - control flow by exception, in the one place that
+     * is already handling real failures.
+     */
+    @Transactional(readOnly = true)
+    public Optional<QrRecordResponse> findActiveByPassId(Long passId) {
+        return qrRecordRepository.findByPassIdAndActiveTrue(passId).map(this::toResponse);
+    }
+
+    /**
      * Creates the QR record for a pass and returns the plain token.
      *
      * The token is returned, never stored. Only sha256(token) reaches the
