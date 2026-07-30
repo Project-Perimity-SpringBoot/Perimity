@@ -117,6 +117,10 @@ public class QrJobPublisher {
                 pass.getPassType().name(),
                 pass.getEventId(),
                 eventName,
+                // Day 10. The pass carries its own batch, so the bulk engine
+                // needs no separate publish path and this method needs no new
+                // parameter. Null on a single approval, which is correct.
+                pass.getBatchId(),
                 pass.getValidFrom(),
                 pass.getValidTo(),
                 null,
