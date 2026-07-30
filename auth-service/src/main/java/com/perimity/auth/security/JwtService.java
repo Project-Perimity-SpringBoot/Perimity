@@ -8,7 +8,9 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,12 @@ import org.springframework.stereotype.Service;
  *     role       SUPER_ADMIN | CAMPUS_ADMIN | FACULTY | STUDENT | GUARD | VISITOR
  *     campusId   null for SUPER_ADMIN only
  *     iss        "perimity-auth"
+ *     jti        a random id for this one token
+ *
+ * jti was added for logout (FR-SESS-2). A JWT cannot be un-signed, so logging
+ * out means remembering that one token id until it would have expired - see
+ * TokenDenylistService. Adding a claim is backward compatible: a service that
+ * does not read it is unaffected.
  *
  * Renaming any of these breaks every other service silently - they will simply
  * see a null and treat the caller as unauthenticated. Announce a change before
@@ -62,6 +70,10 @@ public class JwtService {
         Date exp = new Date(now.getTime() + expiryHours * 3_600_000L);
 
         return Jwts.builder()
+                // Random per token, so two logins by the same person can be
+                // logged out independently - which is the point on a shared
+                // machine.
+                .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(user.getId()))
                 .claim("email", user.getEmail())
                 .claim("name", user.getName())
@@ -72,6 +84,11 @@ public class JwtService {
                 .expiration(exp)
                 .signWith(key)
                 .compact();
+    }
+
+    /** When this token dies, for the denylist TTL. */
+    public Instant expiryInstantOf(String token) {
+        return parse(token).getExpiration().toInstant();
     }
 
     public LocalDateTime expiryOf(String token) {

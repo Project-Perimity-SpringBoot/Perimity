@@ -6,8 +6,12 @@ import com.perimity.auth.dto.response.AuthResponse;
 import com.perimity.auth.dto.response.OtpChallengeResponse;
 import com.perimity.auth.dto.response.UserResponse;
 import com.perimity.auth.security.CurrentUser;
+import com.perimity.auth.security.JwtService;
 import com.perimity.auth.service.AuthService;
+import com.perimity.auth.service.AuditService;
+import com.perimity.auth.service.TokenDenylistService;
 import com.perimity.auth.service.UserAccountService;
+import com.perimity.auth.entity.enums.AuditAction;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,12 +37,21 @@ public class AuthController {
     private final AuthService authService;
     private final UserAccountService accountService;
     private final CurrentUser currentUser;
+    private final JwtService jwtService;
+    private final TokenDenylistService denylist;
+    private final AuditService audit;
 
     public AuthController(AuthService authService, UserAccountService accountService,
-                          CurrentUser currentUser) {
+                          CurrentUser currentUser,
+                          JwtService jwtService,
+                          TokenDenylistService denylist,
+                          AuditService audit) {
         this.authService = authService;
         this.accountService = accountService;
         this.currentUser = currentUser;
+        this.jwtService = jwtService;
+        this.denylist = denylist;
+        this.audit = audit;
     }
 
     @PostMapping("/login")
@@ -91,6 +104,41 @@ public class AuthController {
     public ApiResponse<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmDto dto) {
         accountService.confirmPasswordReset(dto);
         return ApiResponse.ok("Password reset", null);
+    }
+
+
+    /**
+     * FR-SESS-2. Ends this session and writes the audit row.
+     *
+     * A JWT cannot be withdrawn once signed, so "logout" here means remembering
+     * this one token's id until it would have expired anyway - see
+     * TokenDenylistService. Deleting the copy in the browser is not enough: the
+     * token would still work from anywhere else it had been captured.
+     *
+     * Idempotent, and answers 200 even for a token already logged out. Logout
+     * that can fail is logout people learn to distrust, and there is nothing a
+     * caller could usefully do about the failure.
+     */
+    @PostMapping("/logout")
+    @Operation(summary = "End this session. The presented token stops working immediately.")
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7).trim();
+            try {
+                denylist.deny(jwtService.parse(token).getId(), jwtService.expiryInstantOf(token));
+            } catch (RuntimeException ex) {
+                // Already expired, or malformed. Either way the caller is
+                // logged out - there is nothing left to invalidate.
+            }
+        }
+
+        var actor = currentUser.require();
+        audit.record(AuditAction.LOGOUT, actor.userId(), actor.role(), actor.campusId(),
+                "user:" + actor.userId(), null);
+
+        return ApiResponse.ok("Signed out", null);
     }
 
     @GetMapping("/me")
