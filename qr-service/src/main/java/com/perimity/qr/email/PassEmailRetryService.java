@@ -1,7 +1,9 @@
 package com.perimity.qr.email;
 
 import com.perimity.qr.entity.GenerationJob;
+import com.perimity.qr.dto.UndeliveredEmailResponse;
 import com.perimity.qr.entity.enums.EmailStatus;
+import com.perimity.qr.entity.enums.JobStatus;
 import com.perimity.qr.messaging.contract.QrGenerationJob;
 import com.perimity.qr.repository.GenerationJobRepository;
 import com.perimity.qr.repository.QrRecordRepository;
@@ -104,5 +106,39 @@ public class PassEmailRetryService {
     /** Every job whose email failed, oldest first. Backs the Day 10 bulk resend. */
     public List<GenerationJob> failedEmails() {
         return generationJobRepository.findByEmailStatusOrderByIdAsc(EmailStatus.FAILED);
+    }
+
+    /**
+     * DAY 10. Everything a holder was never told about: FAILED, plus PENDING on
+     * a job that already finished.
+     *
+     * PENDING is included because it is just as invisible to the visitor. It
+     * means the async dispatch never ran - a crash mid-batch, or a shutdown
+     * that cut the executor off - and nothing else in the system will notice.
+     *
+     * The JobStatus.DONE filter keeps live work out of the list: a job still
+     * generating has a PENDING email because its turn has not come yet, and
+     * reporting that as undelivered would put a red number on the Bulk Progress
+     * screen for work that is proceeding perfectly normally.
+     */
+    public List<UndeliveredEmailResponse> undelivered() {
+        List<GenerationJob> failed =
+                generationJobRepository.findByEmailStatusOrderByIdAsc(EmailStatus.FAILED);
+
+        List<GenerationJob> pending =
+                generationJobRepository.findByEmailStatusOrderByIdAsc(EmailStatus.PENDING).stream()
+                        .filter(job -> job.getStatus() == JobStatus.DONE)
+                        .toList();
+
+        return java.util.stream.Stream.concat(failed.stream(), pending.stream())
+                .map(job -> UndeliveredEmailResponse.builder()
+                        .jobId(job.getId())
+                        .passId(job.getPassId())
+                        .batchId(job.getBatchId())
+                        .emailStatus(job.getEmailStatus())
+                        .emailError(job.getEmailError())
+                        .jobCompletedAt(job.getCompletedAt())
+                        .build())
+                .toList();
     }
 }
