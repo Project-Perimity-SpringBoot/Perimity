@@ -6,7 +6,7 @@ Student and faculty profiles, per-campus departments, and document records.
 The login account itself lives in auth-service; this service holds the identity
 information attached to it.
 
-Complete through **Day 9** of the plan.
+Complete through **Day 11** of the plan.
 
 ---
 
@@ -73,8 +73,35 @@ through a shared key.
 
 | Method | Path | Called by |
 |---|---|---|
-| GET | `/profiles/{userId}/summary` | gatepass-service when issuing a pass |
-| GET | `/profiles/{userId}/exists` | the bulk engine, Day 10 |
+| GET | `/profiles/{userId}/summary` | gatepass when issuing a pass; guard for the scanner |
+| POST | `/profiles/summaries` (`?withPhotoUrl=`) | the bulk engine — up to 1000 ids in one call |
+| GET | `/profiles/{userId}/exists` | a caller that only needs yes or no |
+
+**Day 10 — the batch lookup.** A bulk upload is up to a thousand rows.
+Enriching each through the single endpoint is a thousand round trips for
+something two queries answer. It is a POST because a thousand ids in a query
+string is roughly 8 KB — Tomcat's default header limit — so a GET would fail on
+exactly the large batches that matter. Accounts with no profile come back in
+`missing` rather than as an error: the bulk engine creates lightweight VISITOR
+identities for attendees nobody has seen before, so a mixed sheet is *supposed*
+to return fewer than it asked about.
+
+**Day 11 — the scanner photo.** `summary` returns a short-lived signed
+`photoUrl` alongside `photoS3Key`. A key is not displayable, and guard-service
+holds an internal API key rather than a user token, so it cannot reach the
+JWT-guarded `/photo-url` endpoint — without this there is no path from a scan to
+a face at all. It is on the summary rather than behind a second endpoint because
+the scan happens with someone standing at a gate and the plan targets a result
+in under two seconds.
+
+Storage being unreachable degrades the face to `null`; it never fails the scan.
+A scanner showing a name and no photo is degraded, one returning 500 because S3
+was slow is broken — at a barrier, with a queue behind it.
+
+There is deliberately **no name field**. A person's name lives in auth-service
+and gatepass already copies it onto the pass as `holderName`. A second copy here
+could disagree with the first, and the gate would have two answers to "who is
+this".
 
 **The summary shape is a fixed contract.** gatepass-service's
 `InternalServiceClient` reads `userId`, `identifierCode` and `photoS3Key` out of
@@ -219,9 +246,18 @@ mvn test
 
 | Item | Day |
 |---|---|
-| Per-row identity resolution by email for the bulk engine | 10 |
-| Holder name and photo for the scanner result screen | 11 |
+| Profile view/edit screen with the sensitive-field warning | 14 |
+| Department management and account-to-profile linking screen | 15 |
+| Student profile and document upload screens | 16 |
 | `Dockerfile`, then uncomment this service's block in the root compose file | — |
+
+**Day 10 note.** The plan assigns "per-row identity resolution by email" to this
+service, but identity is keyed by email and email lives in `authdb`. Neither
+profile table here has an email column, so user-service structurally cannot own
+that lookup without breaking database-per-service. auth-service ships
+`POST /api/internal/auth/users` (resolve-or-create, idempotent) and gatepass's
+bulk engine calls it directly. What was left for this service was the batch
+profile lookup above, so a 600-row batch is one call rather than 600.
 
 **Known drift:** `docs/Perimity_Team_Guide.md` §4.2 lists these paths as
 `/api/users/...` (plural). The code uses `/api/user/...` (singular), matching
