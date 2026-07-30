@@ -75,4 +75,49 @@ public interface GatePassRepository extends JpaRepository<GatePass, Long> {
     boolean existsByHolderUserIdAndEventIdAndStatusNot(Long holderUserId, Long eventId, PassStatus status);
 
     long countByCampusIdAndStatus(Long campusId, PassStatus status);
+
+    // ------------------------------------------------------- Day 10, bulk
+
+    /**
+     * Everyone who already holds a live pass for this event.
+     *
+     * ONE QUERY FOR THE WHOLE SHEET, and that is the entire point of it.
+     *
+     * The obvious way to write the "already has a pass for this event" check
+     * is to call existsByHolderUserIdAndEventIdAndStatusNot inside the
+     * validation loop. For a 600-row sheet that is 600 round trips, and it
+     * turns a two-second validation - which a faculty member is sitting there
+     * waiting for - into a two-minute one.
+     *
+     * This is the classic N+1 and it is very easy to reintroduce by
+     * "simplifying" BulkValidationService. Do not.
+     *
+     * REVOKED is excluded: a revoked pass is dead and must not stop the same
+     * person being issued a fresh one.
+     */
+    @Query("""
+           SELECT DISTINCT p.holderUserId FROM GatePass p
+            WHERE p.eventId = :eventId
+              AND p.status <> :excluded
+           """)
+    List<Long> findHolderUserIdsWithLivePassForEvent(@Param("eventId") Long eventId,
+                                                     @Param("excluded") PassStatus excluded);
+
+    /**
+     * Same bridge-method style as findExpiredPasses above, so the enum
+     * constant stays in Java rather than being written into JPQL, where it
+     * would need fully-qualifying and would silently rot if the enum moved.
+     */
+    default List<Long> findHolderUserIdsWithLivePassForEvent(Long eventId) {
+        return findHolderUserIdsWithLivePassForEvent(eventId, PassStatus.REVOKED);
+    }
+
+    /** Drives the progress bar: how many of this batch's passes are live yet. */
+    long countByBatchIdAndStatus(Long batchId, PassStatus status);
+
+    /**
+     * Every pass from one batch in a given state. The retry-failed-rows path
+     * asks for PENDING - those are the rows whose generation never came back.
+     */
+    List<GatePass> findByBatchIdAndStatus(Long batchId, PassStatus status);
 }

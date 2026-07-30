@@ -92,8 +92,10 @@ public class EventController {
 
     @PatchMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
-    @Operation(summary = "Cancel an event. Never deletes it.")
+    @Operation(summary = "Cancel an event. Never deletes it. Revokes every pass issued for it.")
     public ApiResponse<EventResponse> cancel(@PathVariable @Positive Long id) {
-        return ApiResponse.ok("Event cancelled", eventService.cancel(currentUser.campusId(), id));
+        // The token is the authority on who cancelled this, for the
+        // revokedBy audit field on every pass this revokes.
+        return ApiResponse.ok("Event cancelled", eventService.cancel(currentUser.campusId(), id, currentUser.userId()));
     }
 }

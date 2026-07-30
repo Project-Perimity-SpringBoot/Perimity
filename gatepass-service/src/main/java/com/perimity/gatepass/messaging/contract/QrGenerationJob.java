@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
  * THE CONTRACT between gatepass-service and qr-service. Sanjay codes against
  * this exact shape - agree any change with him before making it.
  *
+ * Day 10: batchId added, so the two copies now match. Sanjay had already added
+ * it on his side and left a note asking for it here.
+ *
  * Everything qr-service needs to generate the QR, render the PDF and send the
  * email is here. That is deliberate: the consumer must not have to call back
  * into gatepass, user or campus to finish its work. A job that needs three
@@ -32,6 +35,20 @@ public record QrGenerationJob(
         String passType,
         Long eventId,
         String eventName,
+
+        /*
+         * Null for a single approval, set for every row of a bulk upload.
+         *
+         * Sanjay's consumer has read this field since Day 8 and has been
+         * receiving null, because it was missing HERE. That is what kept
+         * generation_jobs.batch_id empty, countByBatchId returning zero, and
+         * the Bulk Progress screen with nothing to bind to.
+         *
+         * Field ORDER is irrelevant - Jackson matches records by property
+         * name, not position - but keeping it beside eventId keeps the two
+         * copies of this contract readable side by side.
+         */
+        Long batchId,
 
         LocalDate validFrom,
         LocalDate validTo,

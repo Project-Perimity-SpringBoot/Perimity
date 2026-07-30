@@ -281,6 +281,39 @@ public class GatePassService {
     }
 
     /**
+     * Revoke every live pass issued for an event. Called by EventService when
+     * an event is cancelled.
+     *
+     * This closes the TODO that has sat in EventService.cancel since Day 6,
+     * and it is a real gate defect rather than housekeeping: without it,
+     * cancelling an event leaves every pass ACTIVE and the gate opens for all
+     * of them.
+     *
+     * PENDING passes are revoked too, and that is the part worth thinking
+     * about. A PENDING pass is one whose QR is still being generated. Leave it
+     * alone and qr-service finishes the job, calls activate, and the pass goes
+     * GREEN minutes after the event was called off. activate() already refuses
+     * to move a REVOKED pass - revoking now is what makes that refusal fire.
+     *
+     * EXPIRED and REVOKED are skipped; both are terminal and canTransitionTo
+     * would reject them anyway.
+     */
+    @Transactional
+    public int revokeAllForEvent(Long eventId, String reason, Long actorUserId) {
+        List<GatePass> live = passRepository.findByEventId(eventId).stream()
+                .filter(p -> p.getStatus() == PassStatus.ACTIVE
+                          || p.getStatus() == PassStatus.PENDING
+                          || p.getStatus() == PassStatus.PAUSED)
+                .toList();
+
+        live.forEach(p -> applyTransition(p, PassStatus.REVOKED, reason, actorUserId));
+        passRepository.saveAll(live);
+
+        log.info("Revoked {} pass(es) for cancelled event {}", live.size(), eventId);
+        return live.size();
+    }
+
+    /**
      * The nightly sweep. ACTIVE passes whose validTo is in the past become
      * EXPIRED.
      *
