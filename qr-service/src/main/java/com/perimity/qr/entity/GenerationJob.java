@@ -23,7 +23,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 /**
- * One QR/PDF generation job, consumed from the pass.generate RabbitMQ queue.
+ * One QR/PDF generation job, consumed from the qr.generate.request RabbitMQ queue.
  *
  * batchId groups the jobs from one bulk upload so the Bulk Progress screen can
  * report "412 of 580 done" without gatepass-service polling every pass.
@@ -35,7 +35,8 @@ import org.hibernate.annotations.UpdateTimestamp;
                 @Index(name = "idx_gj_status", columnList = "status"),
                 @Index(name = "idx_gj_batch", columnList = "batch_id"),
                 @Index(name = "idx_gj_batch_status", columnList = "batch_id, status"),
-                @Index(name = "idx_gj_pass", columnList = "pass_id")
+                @Index(name = "idx_gj_pass", columnList = "pass_id"),
+                @Index(name = "idx_gj_job_ref", columnList = "job_ref")
         }
 )
 @Getter
@@ -56,6 +57,27 @@ public class GenerationJob {
     /** Null for a single approval. Set for every row of a bulk upload. */
     @Column(name = "batch_id")
     private Long batchId;
+
+    /**
+     * Tushar's QrGenerationJob.jobId - the UUID he generates at publish time.
+     * This is the idempotency key.
+     *
+     * Named jobRef rather than jobId on purpose: this entity's own primary key
+     * is already surfaced as "jobId" by JobStatusResponse, and two different
+     * values called jobId in one service is how the wrong one ends up in a log
+     * line at 1am. Column job_ref, field jobRef, and the Javadoc says whose it
+     * is.
+     *
+     * Nullable, not unique. Nullable because the column is added to rows that
+     * already exist under ddl-auto=update. NOT unique because a UNIQUE column
+     * turns a redelivery into a DataIntegrityViolationException - so the
+     * duplicate would surface as a crash rather than as the normal, expected
+     * event it is. The index gives the lookup speed; the decision belongs in
+     * GenerationJobService.claim.
+     */
+    @Size(max = 64)
+    @Column(name = "job_ref", length = 64)
+    private String jobRef;
 
     @NotNull
     @Column(name = "campus_id", nullable = false)
