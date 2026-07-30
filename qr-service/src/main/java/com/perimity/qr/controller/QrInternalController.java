@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
  * the endpoint quietly accepts anything.
  */
 @RestController
-@RequestMapping("/api/internal/qr")
+@RequestMapping("/api/qr/internal")
 @Validated
 @Tag(name = "QR Internal", description = "Service-to-service QR operations")
 public class QrInternalController {

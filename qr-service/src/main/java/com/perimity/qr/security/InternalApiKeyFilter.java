@@ -40,7 +40,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class InternalApiKeyFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Internal-Api-Key";
-    private static final String PROTECTED_PREFIX = "/api/internal/";
+    private static final String PROTECTED_PREFIX = "/api/qr/internal/";
 
     private final byte[] expectedKey;
     private final ObjectMapper objectMapper;
