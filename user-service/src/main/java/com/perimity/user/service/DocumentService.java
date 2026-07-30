@@ -1,8 +1,8 @@
 package com.perimity.user.service;
 
-import com.perimity.user.dto.request.DocumentCreateDto;
 import com.perimity.user.dto.request.DocumentVerificationDto;
 import com.perimity.user.dto.response.DocumentResponse;
+import com.perimity.user.dto.response.PresignedUrlResponse;
 import com.perimity.user.entity.Document;
 import com.perimity.user.entity.enums.DocumentType;
 import com.perimity.user.exception.ForbiddenException;
@@ -11,111 +11,155 @@ import com.perimity.user.repository.DocumentRepository;
 import com.perimity.user.repository.FacultyProfileRepository;
 import com.perimity.user.repository.StudentProfileRepository;
 import com.perimity.user.security.CurrentUser;
+import com.perimity.user.storage.StorageException;
+import com.perimity.user.storage.StorageKeys;
+import com.perimity.user.storage.StorageService;
+import com.perimity.user.storage.StoredObject;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Documents - a photo, an id proof, a certificate.
  *
  * =========================================================
- *  KEYS ONLY. NO BYTES. Not one method here takes a byte[].
+ *  KEYS ONLY IN THE DATABASE. NO BYTES. That has not changed.
  * =========================================================
  *
- * The file is uploaded to object storage first; this service records that it
- * exists, who it belongs to, and whether an admin has since checked it. Putting
- * file bytes in Postgres would put a scanned ID proof in every database backup,
- * every replica and every developer's laptop dump, and would grow the row size
- * of the table every profile screen reads.
+ * What changed on Day 9 is where the bytes go. Before, the file was assumed to
+ * be in storage already and the caller told us its key. Now this service takes
+ * the file itself, puts it in storage, and GENERATES the key.
+ *
+ * ==================================================================
+ *  WHY THE CLIENT-SUPPLIED s3Key HAD TO GO (SRS v1.1)
+ * ==================================================================
+ *
+ * The old endpoint accepted { "userId": 108, "s3Key": "..." }. Nothing stopped
+ * a caller naming a path in someone else's folder, so a student could register
+ * a row that points at another student's ID proof and then read it back through
+ * a perfectly legitimate download. The OBJECT_KEY regex blocked "..", which
+ * made the key well formed - it never made it theirs.
+ *
+ * Server-generated keys close that outright: the key is built from the profile
+ * row we just loaded, so it can only ever land under that person's prefix.
+ * DocumentCreateDto is deleted rather than deprecated, because a DTO whose
+ * whole purpose is a client-supplied storage path should not be one import
+ * away from being used again.
  *
  * ============================================
- *  WHY VERIFICATION IS A SEPARATE ACT
+ *  WHY VERIFICATION IS STILL A SEPARATE ACT
  * ============================================
  *
- * DocumentCreateDto has no "verified" field, on purpose: if a client could send
- * verified = true it would approve its own id proof and the verification step
- * would exist only as decoration. So a document is always born unverified, and
- * only an administrator can change that.
+ * Nothing here lets a caller mark their own upload verified. A document is born
+ * unverified and only an administrator - and never the owner - can change that.
  */
 @Service
 public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
 
-    /**
-     * What a document is allowed to claim to be.
-     *
-     * This checks the CLIENT-DECLARED type only. Renaming a file takes one
-     * second, so on Day 9 - when the upload path exists - the real content type
-     * of the stored object must be read back and checked against this same set
-     * before the row is trusted. Until then this stops the honest mistakes
-     * (a .docx CV, a 40 MB video) and nothing more. It is not a security
-     * control yet, and this comment is here so nobody mistakes it for one.
-     */
-    private static final Set<String> ALLOWED_DOCUMENT_TYPES =
-            Set.of("application/pdf", "image/jpeg", "image/png");
-
-    /** A profile photo is an image. A PDF headshot helps nobody. */
-    private static final Set<String> ALLOWED_PHOTO_TYPES =
-            Set.of("image/jpeg", "image/png");
-
     private final DocumentRepository documentRepository;
     private final StudentProfileRepository studentRepository;
     private final FacultyProfileRepository facultyRepository;
+    private final StorageService storage;
+    private final UploadValidator uploadValidator;
     private final CurrentUser currentUser;
+
+    private final long maxDocumentBytes;
+    private final int presignMinutes;
 
     public DocumentService(DocumentRepository documentRepository,
                            StudentProfileRepository studentRepository,
                            FacultyProfileRepository facultyRepository,
-                           CurrentUser currentUser) {
+                           StorageService storage,
+                           UploadValidator uploadValidator,
+                           CurrentUser currentUser,
+                           @Value("${perimity.storage.max-document-mb}") long maxDocumentMb,
+                           @Value("${perimity.storage.presign-minutes}") int presignMinutes) {
         this.documentRepository = documentRepository;
         this.studentRepository = studentRepository;
         this.facultyRepository = facultyRepository;
+        this.storage = storage;
+        this.uploadValidator = uploadValidator;
         this.currentUser = currentUser;
+        this.maxDocumentBytes = maxDocumentMb * 1024 * 1024;
+        this.presignMinutes = presignMinutes;
     }
 
-    // ---------------------------------------------------------- register
+    // ------------------------------------------------------------ upload
 
     /**
-     * Record a file that has already been uploaded to object storage.
+     * Take a file, store it, and record it against a person.
      *
      * The person must have a profile in this service first. That is not
      * bureaucracy: Document has no campus_id of its own, so the profile is the
-     * only thing that says which campus this file belongs to. Without the
-     * lookup there would be no way to stop one campus's admin from reading
-     * another campus's id proofs.
+     * only thing that says which campus this file belongs to - and now also the
+     * only thing that says where in storage it may be written.
      */
     @Transactional
-    public DocumentResponse register(DocumentCreateDto dto) {
-        currentUser.requireSelfOrStaff(dto.getUserId());
-        requireVisibleHolder(dto.getUserId());
+    public DocumentResponse upload(Long userId, DocumentType docType, MultipartFile file) {
+        currentUser.requireSelfOrStaff(userId);
+        Long campusId = requireVisibleHolder(userId);
 
-        String mimeType = trimToNull(dto.getMimeType());
-        requireAcceptableType(dto.getDocType(), mimeType);
+        // Real type, checked against the file's leading bytes - not the one the
+        // browser claimed. See UploadValidator.
+        String contentType = uploadValidator.validateDocument(file, maxDocumentBytes);
+
+        String key = StorageKeys.document(campusId, userId, file.getOriginalFilename());
+        StoredObject stored = store(key, file, contentType);
 
         Document document = Document.builder()
-                .userId(dto.getUserId())
-                .docType(dto.getDocType())
-                .s3Key(dto.getS3Key().trim())
-                .fileName(dto.getFileName().trim())
-                .mimeType(mimeType)
+                .userId(userId)
+                .docType(docType)
+                .s3Key(stored.key())
+                .fileName(safeFileName(file.getOriginalFilename()))
+                .mimeType(contentType)
                 .verified(false)
                 .build();
 
         Document saved = documentRepository.save(document);
-        log.info("Document {} registered for account {} as {}",
-                saved.getId(), saved.getUserId(), saved.getDocType());
+        log.info("Document {} stored for account {} as {} ({} bytes)",
+                saved.getId(), userId, docType, stored.sizeBytes());
 
         return DocumentResponse.from(saved);
     }
 
+    /**
+     * A short-lived link to the file itself.
+     *
+     * Generated per request and never persisted. The bucket is private and
+     * stays private: a permanent public URL cannot be un-shared once it leaks,
+     * and what leaks here is somebody's identity document.
+     */
+    @Transactional(readOnly = true)
+    public PresignedUrlResponse downloadUrl(Long id) {
+        Document document = require(id);
+        currentUser.requireSelfOrStaff(document.getUserId());
+        requireVisibleHolder(document.getUserId());
+
+        if (!storage.exists(document.getS3Key())) {
+            // The row survived but the object did not - a failed migration, or
+            // a bucket wiped in development. Say so plainly rather than handing
+            // back a URL that 404s somewhere else.
+            throw new ResourceNotFoundException(
+                    "Document " + id + " is recorded but its file is missing from storage.");
+        }
+
+        return PresignedUrlResponse.of(
+                storage.presignedReadUrl(document.getS3Key(), Duration.ofMinutes(presignMinutes)),
+                presignMinutes);
+    }
+
     // -------------------------------------------------------------- read
 
-    /** Everything this person has uploaded, newest first. */
     @Transactional(readOnly = true)
     public List<DocumentResponse> listForUser(Long userId) {
         currentUser.requireSelfOrStaff(userId);
@@ -203,17 +247,16 @@ public class DocumentService {
     }
 
     /**
-     * Remove a document record.
+     * Remove a document record and the file behind it.
      *
      * Only an administrator, and only while it is unverified. A verified
      * document is evidence that somebody checked this person's identity, and
      * deleting it would erase the audit trail that made their pass legitimate.
-     * Replace it instead - register the new file and reject the old one.
+     * Replace it instead - upload the new file and reject the old one.
      *
-     * The object in storage is NOT deleted here. Storage cleanup arrives with
-     * the upload path on Day 9; deleting the row now and the object later is
-     * the right order, because an orphaned object costs pennies and an orphaned
-     * row breaks a screen.
+     * The object goes AFTER the row is gone. The other order would leave a row
+     * pointing at nothing if the transaction then rolled back, and a broken row
+     * breaks a screen while an orphaned object costs pennies.
      */
     @Transactional
     public void delete(Long id) {
@@ -224,54 +267,62 @@ public class DocumentService {
 
         if (document.isVerified()) {
             throw new IllegalStateException(
-                    "A verified document cannot be deleted. Register a replacement instead.");
+                    "A verified document cannot be deleted. Upload a replacement instead.");
         }
+
+        String key = document.getS3Key();
         documentRepository.delete(document);
+        storage.delete(key);
+
         log.info("Unverified document {} for account {} deleted by {}",
                 id, document.getUserId(), currentUser.userId());
     }
 
     // ----------------------------------------------------------- helpers
 
-    private void requireAcceptableType(DocumentType docType, String mimeType) {
-        if (mimeType == null) {
-            // Tolerated for now: the client may genuinely not know. Day 9 reads
-            // the real type off the stored object, and this becomes mandatory.
-            return;
+    private StoredObject store(String key, MultipartFile file, String contentType) {
+        try (InputStream in = file.getInputStream()) {
+            return storage.put(key, in, file.getSize(), contentType);
+        } catch (IOException e) {
+            throw new StorageException("Could not read the uploaded file", e);
         }
-        Set<String> allowed = docType == DocumentType.PHOTO
-                ? ALLOWED_PHOTO_TYPES
-                : ALLOWED_DOCUMENT_TYPES;
+    }
 
-        if (!allowed.contains(mimeType.toLowerCase())) {
-            throw new IllegalArgumentException(
-                    "A " + docType.name().toLowerCase().replace('_', ' ')
-                            + " must be one of " + String.join(", ", allowed)
-                            + ", not " + mimeType + ".");
+    /**
+     * The original name is kept only so the person recognises their own file in
+     * a list. It is never used to build the storage key - StorageKeys does that
+     * - so it cannot influence where anything is written.
+     */
+    private String safeFileName(String original) {
+        if (original == null || original.isBlank()) {
+            return "upload";
         }
+        String cleaned = original.replaceAll("[\\\\/:*?\"<>|\\r\\n]", "-").trim();
+        return cleaned.length() > 255 ? cleaned.substring(cleaned.length() - 255) : cleaned;
     }
 
     /**
      * A document has no campus of its own, so the holder's profile supplies it.
      *
-     * An account with no profile in this service is refused rather than allowed
-     * through: there would be nothing to scope the file to, and "no profile
-     * yet" is the correct answer to give.
+     * @return the campus the holder belongs to, used to build the storage key
      */
-    private void requireVisibleHolder(Long userId) {
+    private Long requireVisibleHolder(Long userId) {
         Long campusId = studentRepository.findByUserId(userId)
                 .map(p -> p.getCampusId())
                 .or(() -> facultyRepository.findByUserId(userId).map(p -> p.getCampusId()))
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Account " + userId + " has no profile in this service yet. "
-                                + "Create the student or faculty profile first."));
+                .orElseThrow(() -> noProfile(userId));
 
         if (!currentUser.canSeeCampus(campusId)) {
             // 404, not 403 - a 403 would confirm the person exists on another campus.
-            throw new ResourceNotFoundException(
-                    "Account " + userId + " has no profile in this service yet. "
-                            + "Create the student or faculty profile first.");
+            throw noProfile(userId);
         }
+        return campusId;
+    }
+
+    private ResourceNotFoundException noProfile(Long userId) {
+        return new ResourceNotFoundException(
+                "Account " + userId + " has no profile in this service yet. "
+                        + "Create the student or faculty profile first.");
     }
 
     private Document require(Long id) {

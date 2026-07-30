@@ -6,7 +6,10 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.perimity.user.storage.StorageException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -112,6 +115,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.fail(
                         "Your role is not permitted to perform this action", List.of()));
+    }
+
+    /**
+     * The file was bigger than spring.servlet.multipart.max-file-size.
+     *
+     * Spring rejects it before any controller method runs, so the friendly
+     * size message in UploadValidator never gets the chance to fire. Without
+     * this handler the caller sees a bare 500 and has no idea what went wrong.
+     *
+     * 413, not 400: the request was well formed, there was simply too much of it.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTooLarge(MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.fail("That file is too large.",
+                        List.of("Photos must be under 2 MB and documents under 5 MB.")));
+    }
+
+    /** A multipart request with no file part - usually a client sending JSON by mistake. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingPart(MissingServletRequestPartException ex) {
+        return badRequest("No file was uploaded",
+                List.of("Send this as multipart/form-data with a part named \"" + ex.getRequestPartName() + "\""));
+    }
+
+    /**
+     * Object storage failed - the disk, the bucket, the network. 500, because
+     * the caller did nothing wrong and retrying the same request is reasonable.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(StorageException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStorage(StorageException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.fail("The file could not be stored. Please try again.",
+                        List.of()));
     }
 
     /**
