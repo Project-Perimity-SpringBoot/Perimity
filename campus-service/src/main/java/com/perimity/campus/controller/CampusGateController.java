@@ -12,6 +12,8 @@ import jakarta.validation.constraints.Positive;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.perimity.campus.security.CurrentUser;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,6 +37,7 @@ public class CampusGateController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
     @Operation(summary = "Add a gate")
     public ResponseEntity<ApiResponse<CampusGateResponse>> create(
             @PathVariable @Positive Long campusId,
@@ -46,6 +49,7 @@ public class CampusGateController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
     @Operation(summary = "Edit a gate, or take it out of service")
     public ApiResponse<CampusGateResponse> update(
             @PathVariable @Positive Long campusId,
