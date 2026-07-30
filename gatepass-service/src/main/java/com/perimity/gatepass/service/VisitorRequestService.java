@@ -1,5 +1,6 @@
 package com.perimity.gatepass.service;
 
+import com.perimity.gatepass.client.InternalServiceClient;
 import com.perimity.gatepass.dto.request.VisitorEmailVerifiedDto;
 import com.perimity.gatepass.dto.request.VisitorRequestCreateDto;
 import com.perimity.gatepass.dto.request.VisitorRequestDecisionDto;
@@ -16,6 +17,8 @@ import com.perimity.gatepass.repository.VisitorRequestRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,19 +33,44 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class VisitorRequestService {
 
+    private static final Logger log = LoggerFactory.getLogger(VisitorRequestService.class);
+
+    /*
+     * Campus policy keys. These names are Arham's, seeded by
+     * CampusConfigDefaults - they are NOT invented here, and a typo means this
+     * service silently falls back to its default forever. Keep them as
+     * constants so there is one spelling per key in the whole service.
+     */
+    private static final String CONFIG_APPROVAL_REQUIRED = "approval.required";
+    private static final String CONFIG_DEFAULT_VALIDITY_DAYS = "pass.default.validity.days";
+
+    /*
+     * Fallbacks used only when campus-service is unreachable.
+     *
+     * approval.required defaults to TRUE and that direction matters: if the
+     * policy cannot be read, the safe assumption is that a human must approve.
+     * Defaulting to false would mean a campus-service outage silently turns
+     * every campus into open self-registration.
+     */
+    private static final boolean APPROVAL_REQUIRED_FALLBACK = true;
+    private static final int DEFAULT_VALIDITY_DAYS_FALLBACK = 1;
+
     private final VisitorRequestRepository requestRepository;
     private final GatePassRepository gatePassRepository;
     private final EventRepository eventRepository;
     private final GatePassService gatePassService;
+    private final InternalServiceClient internal;
 
     public VisitorRequestService(VisitorRequestRepository requestRepository,
                                  GatePassRepository gatePassRepository,
                                  EventRepository eventRepository,
-                                 GatePassService gatePassService) {
+                                 GatePassService gatePassService,
+                                 InternalServiceClient internal) {
         this.requestRepository = requestRepository;
         this.gatePassRepository = gatePassRepository;
         this.eventRepository = eventRepository;
         this.gatePassService = gatePassService;
+        this.internal = internal;
     }
 
     // ------------------------------------------------------------- submit
@@ -89,7 +117,31 @@ public class VisitorRequestService {
                 .status(RequestStatus.PENDING)
                 .build();
 
-        return VisitorRequestResponse.from(requestRepository.save(request));
+        VisitorRequest saved = requestRepository.save(request);
+
+        // Day 12 - campus policy. A campus that does not require host approval
+        // gets its requests approved the moment the email is verified, with no
+        // human in the loop. The pass is still not issued here: markEmailVerified
+        // is what triggers it, because a pass needs a holder identity and there
+        // is not one until the OTP is confirmed.
+        if (!approvalRequired(dto.getCampusId())) {
+            log.info("Campus {} does not require approval - request {} will auto-approve "
+                    + "once the email is verified", dto.getCampusId(), saved.getId());
+        }
+
+        return VisitorRequestResponse.from(saved);
+    }
+
+    /**
+     * Reads approval.required for this campus.
+     *
+     * Fails CLOSED. If campus-service cannot be reached the answer is "yes,
+     * approval is required" - an outage must never silently downgrade a campus
+     * to open self-registration.
+     */
+    private boolean approvalRequired(Long campusId) {
+        return internal.configBoolean(campusId, CONFIG_APPROVAL_REQUIRED,
+                APPROVAL_REQUIRED_FALLBACK);
     }
 
     /**
@@ -105,8 +157,32 @@ public class VisitorRequestService {
 
         request.setOtpVerified(true);
         request.setVisitorUserId(dto.getVisitorUserId());
+        requestRepository.save(request);
 
-        return VisitorRequestResponse.from(requestRepository.save(request));
+        // Day 12 - the auto-approve path.
+        //
+        // Guarded on status == PENDING so a redelivered verification message
+        // cannot approve an already-rejected request or issue a second pass.
+        // issueForApprovedRequest is itself idempotent on visitorRequestId, so
+        // this is belt and braces - which is the right amount for a path that
+        // ends in an open gate.
+        if (request.getStatus() == RequestStatus.PENDING
+                && !approvalRequired(request.getCampusId())) {
+
+            request.setStatus(RequestStatus.APPROVED);
+            request.setReviewedAt(LocalDateTime.now());
+            // reviewedBy stays NULL on purpose. Nobody reviewed this. Writing a
+            // system id here would put a fake approver in the audit trail, and
+            // the whole point of the trail is that it is true.
+            requestRepository.save(request);
+
+            gatePassService.issueForApprovedRequest(request);
+
+            log.info("Request {} auto-approved - campus {} has approval.required=false",
+                    request.getId(), request.getCampusId());
+        }
+
+        return VisitorRequestResponse.from(request);
     }
 
     // ------------------------------------------------------------- decide
