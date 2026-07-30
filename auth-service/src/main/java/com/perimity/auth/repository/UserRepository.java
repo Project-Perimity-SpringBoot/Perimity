@@ -2,6 +2,7 @@ package com.perimity.auth.repository;
 
 import com.perimity.auth.entity.User;
 import com.perimity.auth.entity.enums.Role;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -29,4 +30,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByCampusIdAndRoleAndActiveTrue(Long campusId, Role role);
 
     long countByRole(Role role);
+
+    // ------------------------------------------------------ Day 10, bulk
+
+    /**
+     * Every identity that already exists among a sheet's worth of emails, in
+     * one query.
+     *
+     * This is the mixed-attendee problem from Event_Bulk_Design.md turned into
+     * a single round trip: 600 rows of which roughly 100 are already members,
+     * and the faculty does not know which. One query answers it for the whole
+     * sheet.
+     *
+     * NOT IgnoreCase, deliberately. Every write path in this service lowercases
+     * the address before saving (create, registerVisitor, resolveOrCreate), so
+     * the column only ever holds lowercase. The caller lowercases its side once
+     * and this stays a plain indexed IN lookup. A case-insensitive variant here
+     * would force lower(email) on every row and lose the unique index.
+     */
+    List<User> findByEmailIn(Collection<String> emails);
 }
