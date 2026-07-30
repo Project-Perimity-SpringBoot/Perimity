@@ -57,9 +57,28 @@ public class AuditLog {
     @Column(name = "actor_role", length = 20)
     private Role actorRole;
 
+    /**
+     * columnDefinition is load-bearing, not decoration.
+     *
+     * Hibernate 6 generates a CHECK constraint for an @Enumerated(STRING)
+     * column listing every value the enum had WHEN THE TABLE WAS CREATED:
+     *
+     *     check (action in ('LOGIN_SUCCESS','LOGIN_FAILED',...))
+     *
+     * ddl-auto=update never revisits it. So adding SHIFT_STARTED to the Java
+     * enum compiles, deploys, and then fails at insert time with
+     * "violates check constraint audit_logs_action_check" - months later, on
+     * whichever value happened to be added last.
+     *
+     * Giving the column an explicit definition makes Hibernate use it verbatim
+     * and generate no check. The enum stays the single source of truth for
+     * which actions exist, which is where that rule belongs: an append-only
+     * audit table that rejects a new kind of event is worse than useless,
+     * because the event still happened and now nothing records it.
+     */
     @NotNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "action", nullable = false, length = 40)
+    @Column(name = "action", nullable = false, length = 40, columnDefinition = "varchar(40)")
     private AuditAction action;
 
     /** What was acted on, e.g. "USER:42" or "GATE_PASS:118". */
