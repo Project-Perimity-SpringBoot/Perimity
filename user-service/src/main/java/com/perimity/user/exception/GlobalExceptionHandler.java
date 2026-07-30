@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -86,10 +87,57 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ex.getMessage(), List.of()));
     }
 
-    /** Business-rule failures thrown deliberately by the service layer. */
-    @org.springframework.web.bind.annotation.ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    public ResponseEntity<ApiResponse<Void>> handleBusinessRule(RuntimeException ex) {
+    /**
+     * The caller is signed in but may not touch THIS record - a student reading
+     * another student's profile, or a Campus Admin reaching across campuses.
+     *
+     * 403, not 404 and not 401. 401 would tell them to log in again when they
+     * already are, and they would keep trying.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /**
+     * @PreAuthorize refused the call - the wrong ROLE, rather than the wrong
+     * record. Handled here as well as in SecurityConfig because method security
+     * throws after the filter chain has already let the request through, so the
+     * access-denied handler never sees it and Spring would return its own error
+     * body instead of ApiResponse.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail(
+                        "Your role is not permitted to perform this action", List.of()));
+    }
+
+    /**
+     * The caller asked for something that cannot be done with the data they
+     * sent - a Super Admin listing with no campus named, a photo declared as a
+     * PDF. Their request is wrong, so 400.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(IllegalArgumentException ex) {
         return badRequest(ex.getMessage(), List.of());
+    }
+
+    /**
+     * The request was well formed but collides with the state of the data - a
+     * roll number already in use, an account that already has a profile, a
+     * department that still has students attached.
+     *
+     * 409, not 400. The client sent nothing wrong and retrying the identical
+     * request will not help; something in the database has to change first, and
+     * a 400 would send the frontend hunting for a field to highlight that does
+     * not exist.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConflict(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
     }
 
     private ResponseEntity<ApiResponse<Void>> badRequest(String message, List<String> errors) {
