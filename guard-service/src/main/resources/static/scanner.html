@@ -173,7 +173,7 @@
 
 <!-- Full-screen verdict -->
 <div id="result" onclick="hideResult()">
-  <div class="photo" id="photo">photo<br>(Mukul, Day 11)</div>
+  <div class="photo" id="photo">no photo</div>
   <div class="verdict" id="verdict"></div>
   <div class="message" id="message"></div>
   <div class="who" id="who"></div>
@@ -339,7 +339,20 @@ function render(d) {
   // The reason is always shown on a refusal. "No" with no reason forces the
   // guard to improvise, which is what the paper register did badly.
   $('why').textContent = d.denialReason ? d.denialReason.replaceAll('_', ' ').toLowerCase() : '';
-  $('photo').style.display = colour === 'green' ? 'flex' : 'none';
+
+  // The photo is shown on any permitted entry, green or amber - the guard needs
+  // to check the face either way. Never on a refusal: the server does not even
+  // fetch it, because a face to compare against would only invite second-guessing
+  // a decision made on better evidence.
+  //
+  // holderPhotoKey is an object-storage KEY, not a URL, so there is nothing to
+  // render yet. It becomes an <img> the moment user-service exposes
+  // GET /api/user/internal/profiles/{id}/photo-url returning a presigned URL.
+  // Until then a guard sees the name and no face, which is FR-SCAN-9 unfinished
+  // and should look unfinished rather than quietly absent.
+  const permitted = colour === 'green' || colour === 'amber';
+  $('photo').style.display = permitted ? 'flex' : 'none';
+  $('photo').textContent = d.holderPhotoKey ? 'photo pending URL' : 'no photo';
 
   // Auto-reset so the next person can walk up without the guard touching it.
   clearTimeout(window.__reset);
