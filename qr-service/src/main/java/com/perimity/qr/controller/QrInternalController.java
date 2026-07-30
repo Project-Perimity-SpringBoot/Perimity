@@ -2,6 +2,10 @@ package com.perimity.qr.controller;
 
 import com.perimity.qr.dto.ApiResponse;
 import com.perimity.qr.dto.QrInvalidateRequest;
+import com.perimity.qr.dto.ResendEmailRequest;
+import com.perimity.qr.email.PassEmailRetryService;
+import com.perimity.qr.entity.enums.EmailStatus;
+import java.util.Map;
 import com.perimity.qr.dto.QrRecordResponse;
 import com.perimity.qr.service.QrRecordService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,9 +41,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class QrInternalController {
 
     private final QrRecordService qrRecordService;
+    private final PassEmailRetryService passEmailRetryService;
 
-    public QrInternalController(QrRecordService qrRecordService) {
+    public QrInternalController(QrRecordService qrRecordService,
+                                PassEmailRetryService passEmailRetryService) {
         this.qrRecordService = qrRecordService;
+        this.passEmailRetryService = passEmailRetryService;
     }
 
     /**
@@ -57,5 +64,28 @@ public class QrInternalController {
             @Valid @RequestBody QrInvalidateRequest request) {
 
         return ApiResponse.ok("QR invalidated", qrRecordService.invalidate(passId, request));
+    }
+
+    /**
+     * DAY 9. Resends the pass email without regenerating the QR.
+     *
+     * The repair for a mail server that was down while passes were being
+     * issued. Regenerating instead would mint a new token and invalidate the QR
+     * the holder may already be carrying - the wrong fix for a problem that was
+     * never in the pass.
+     *
+     * Internal, like everything else in this controller. A holder who could
+     * call it would be able to post a pass PDF to any address they chose.
+     */
+    @PostMapping("/{passId}/resend-email")
+    @Operation(summary = "Resend the pass email for an existing pass. Does not regenerate.")
+    public ApiResponse<Map<String, String>> resendEmail(
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId,
+            @Valid @RequestBody ResendEmailRequest request) {
+
+        EmailStatus status = passEmailRetryService.resend(
+                passId, request.getEmail(), request.getSubject(), request.getBody());
+
+        return ApiResponse.ok("Resend attempted", Map.of("emailStatus", status.name()));
     }
 }
