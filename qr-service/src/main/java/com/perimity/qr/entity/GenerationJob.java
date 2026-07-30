@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -32,6 +33,20 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Entity
 @Table(
         name = "generation_jobs",
+        /*
+         * DAY 10. job_ref is UNIQUE as of today, reversing the Day 8 comment
+         * below that argued against it.
+         *
+         * At concurrency 1 an index was enough: one consumer meant claim()
+         * could read-then-insert without anyone racing it. Above 1, two threads
+         * handling a redelivery of the same message both find nothing and both
+         * insert, so the same pass generates twice. Only the database can
+         * arbitrate that, and a unique constraint is how it does.
+         *
+         * NULLs are still allowed and Postgres permits many of them, which is
+         * what keeps the pre-Day-8 rows valid.
+         */
+        uniqueConstraints = @UniqueConstraint(name = "uk_gj_job_ref", columnNames = "job_ref"),
         indexes = {
                 @Index(name = "idx_gj_status", columnList = "status"),
                 @Index(name = "idx_gj_batch", columnList = "batch_id"),

@@ -2,6 +2,8 @@ package com.perimity.qr.controller;
 
 import com.perimity.qr.dto.ApiResponse;
 import com.perimity.qr.dto.QrDecryptRequest;
+import com.perimity.qr.dto.UndeliveredEmailResponse;
+import java.util.List;
 import com.perimity.qr.dto.QrDecryptResponse;
 import com.perimity.qr.dto.QrInvalidateRequest;
 import com.perimity.qr.dto.ResendEmailRequest;
@@ -17,6 +19,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -133,5 +136,24 @@ public class QrInternalController {
                 passId, request.getEmail(), request.getSubject(), request.getBody());
 
         return ApiResponse.ok("Resend attempted", Map.of("emailStatus", status.name()));
+    }
+
+    /**
+     * DAY 10. Passes whose holder was never told.
+     *
+     * The repair hook for a mail server that was down during a bulk upload:
+     * the passes are fine, the QRs are in storage, and several hundred people
+     * simply have not heard. Without this the only record is a log line nobody
+     * greps.
+     *
+     * Returns pass ids, NOT email addresses - see UndeliveredEmailResponse.
+     * gatepass-service holds the addresses and drives the resends through
+     * POST /{passId}/resend-email.
+     */
+    @GetMapping("/emails/undelivered")
+    @Operation(summary = "Passes whose email failed or never went out. No addresses returned.")
+    public ApiResponse<List<UndeliveredEmailResponse>> undeliveredEmails() {
+        List<UndeliveredEmailResponse> undelivered = passEmailRetryService.undelivered();
+        return ApiResponse.ok(undelivered.size() + " pass email(s) undelivered", undelivered);
     }
 }
