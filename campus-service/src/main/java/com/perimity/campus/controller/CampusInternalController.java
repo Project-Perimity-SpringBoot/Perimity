@@ -8,6 +8,7 @@ import com.perimity.campus.service.CampusConfigService;
 import com.perimity.campus.service.CampusGateService;
 import com.perimity.campus.service.CampusService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -35,6 +36,9 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/campus/internal")
 @Validated
+// Overrides the global bearerAuth default. These paths take the shared
+// key, not a JWT - so Swagger must offer a field for it.
+@SecurityRequirement(name = "internalApiKey")
 @Tag(name = "Internal", description = "Service-to-service reads. Not for browsers.")
 public class CampusInternalController {
 
