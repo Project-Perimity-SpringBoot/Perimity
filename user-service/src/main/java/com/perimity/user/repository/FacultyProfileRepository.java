@@ -1,6 +1,7 @@
 package com.perimity.user.repository;
 
 import com.perimity.user.entity.FacultyProfile;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,9 @@ import org.springframework.stereotype.Repository;
 public interface FacultyProfileRepository extends JpaRepository<FacultyProfile, Long> {
 
     Optional<FacultyProfile> findByUserId(Long userId);
+
+    /** Many accounts at once, for the batch summary lookup. See the student repository. */
+    List<FacultyProfile> findByUserIdIn(Collection<Long> userIds);
 
     boolean existsByUserId(Long userId);
 
