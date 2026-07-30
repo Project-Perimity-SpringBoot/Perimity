@@ -11,6 +11,8 @@ import com.perimity.gatepass.repository.GatePassRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,13 +29,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class EventService {
 
+    private static final Logger log = LoggerFactory.getLogger(EventService.class);
+
     private final EventRepository eventRepository;
     private final GatePassRepository gatePassRepository;
 
+    /*
+     * NO CIRCULAR DEPENDENCY, and it is worth knowing why: GatePassService
+     * does not inject EventService - it talks to EventRepository directly. If
+     * anyone later adds EventService to GatePassService, Spring fails at
+     * startup with an unsatisfied-dependency loop. The fix at that point is
+     * @Lazy on one side, not a redesign.
+     */
+    private final GatePassService gatePassService;
+
     public EventService(EventRepository eventRepository,
-                        GatePassRepository gatePassRepository) {
+                        GatePassRepository gatePassRepository,
+                        GatePassService gatePassService) {
         this.eventRepository = eventRepository;
         this.gatePassRepository = gatePassRepository;
+        this.gatePassService = gatePassService;
     }
 
     /** Create an event. Rejects a duplicate name on the same campus. */
@@ -125,7 +140,7 @@ public class EventService {
      * and passes already issued still need something to point at.
      */
     @Transactional
-    public EventResponse cancel(Long campusId, Long id) {
+    public EventResponse cancel(Long campusId, Long id, Long cancelledBy) {
         Event event = require(campusId, id);
 
         if (event.isCancelled()) {
@@ -136,8 +151,19 @@ public class EventService {
         event.setCancelledAt(LocalDateTime.now());
         eventRepository.save(event);
 
-        // TODO Day 6: revoke the EVENT passes issued for this event, once
-        // GatePassService owns the revoke path. Do not do it here by hand.
+        // Day 10: the Day 6 TODO is closed.
+        //
+        // GatePassService owns the revoke path so that revocation goes through
+        // the state machine and writes revokedReason, revokedBy and revokedAt
+        // exactly once, in one place. Setting status by hand here would be a
+        // second place that can forget one of those three fields - which is
+        // the same reasoning as applyTransition existing at all.
+        int revoked = gatePassService.revokeAllForEvent(
+                id, "Event cancelled: " + event.getName(), cancelledBy);
+
+        log.info("Event {} cancelled by user {}, {} pass(es) revoked",
+                id, cancelledBy, revoked);
+
         return EventResponse.from(event, gatePassRepository.countByEventId(id));
     }
 
