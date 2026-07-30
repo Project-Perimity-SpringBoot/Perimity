@@ -10,6 +10,7 @@ import com.perimity.auth.service.UserAccountService;
 import com.perimity.auth.service.UserAccountService.IdentityResolution;
 import com.perimity.auth.validation.ValidationPatterns;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -39,6 +40,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/internal/auth/users")
 @Validated
+// Overrides the global bearerAuth default: these paths take the shared key,
+// not a JWT. Without this Swagger sends an Authorization header and no
+// X-Internal-Api-Key, which is exactly the 401 that looks like a bug.
+@SecurityRequirement(name = "internalApiKey")
 @Tag(name = "Internal - Accounts", description = "Service-to-service identity lookup")
 public class InternalUserController {
 
