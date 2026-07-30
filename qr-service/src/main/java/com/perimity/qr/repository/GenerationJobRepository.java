@@ -3,6 +3,7 @@ package com.perimity.qr.repository;
 import com.perimity.qr.entity.GenerationJob;
 import com.perimity.qr.entity.enums.EmailStatus;
 import com.perimity.qr.entity.enums.JobStatus;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -73,6 +74,16 @@ public interface GenerationJobRepository extends JpaRepository<GenerationJob, Lo
     default List<GenerationJob> findRetryableJobs(Long batchId, int maxRetries) {
         return findRetryableJobs(batchId, JobStatus.FAILED, maxRetries);
     }
+
+    /**
+     * DAY 10. Jobs that started and never settled.
+     *
+     * The gap nothing covered until today: a job whose consumer died between
+     * claim() and markDone stays PROCESSING forever. One row is a curiosity;
+     * across a 600-row batch it is a progress bar frozen at 97% with no failure
+     * count, because a PROCESSING job is neither done nor failed.
+     */
+    List<GenerationJob> findByStatusAndStartedAtBefore(JobStatus status, LocalDateTime before);
 
     /** Jobs stuck in PROCESSING because the service died mid-job. */
     List<GenerationJob> findByStatusAndRetryCountLessThan(JobStatus status, int maxRetries);

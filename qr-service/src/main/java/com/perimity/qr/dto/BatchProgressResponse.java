@@ -28,4 +28,17 @@ public class BatchProgressResponse {
 
     /** True when nothing is left in QUEUED or PROCESSING. */
     private boolean finished;
+
+    /**
+     * DAY 10. How many of this batch's holders have actually been told.
+     *
+     * Separate from done/failed on purpose: a batch can be 100% generated and
+     * still have three hundred people who never received anything, and a
+     * progress bar that reads "600 of 600 complete" while that is true is
+     * lying by omission. Generating a pass and delivering it are different
+     * facts, and only one of them gets somebody through a gate.
+     */
+    private long emailsSent;
+    private long emailsFailed;
+    private long emailsPending;
 }

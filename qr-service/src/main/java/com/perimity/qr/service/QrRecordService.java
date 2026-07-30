@@ -87,7 +87,7 @@ public class QrRecordService {
      */
     @Transactional
     public GeneratedToken generate(QrGenerateRequest request) {
-        qrRecordRepository.findByPassIdAndActiveTrue(request.getPassId())
+        qrRecordRepository.findActiveByPassIdForUpdate(request.getPassId())
                 .ifPresent(existing -> {
                     existing.setActive(false);
                     existing.setInvalidatedAt(LocalDateTime.now());

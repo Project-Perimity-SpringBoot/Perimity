@@ -8,6 +8,7 @@ import com.perimity.qr.entity.enums.EmailStatus;
 import com.perimity.qr.entity.enums.JobStatus;
 import com.perimity.qr.repository.GenerationJobRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class GenerationJobService {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(GenerationJobService.class);
 
     /** generation_jobs.error_message is 1000 characters. */
     private static final int ERROR_MESSAGE_MAX = 1000;
@@ -83,6 +87,12 @@ public class GenerationJobService {
                 .failed(failed)
                 .percentComplete(percent)
                 .finished(settled == total)
+                .emailsSent(generationJobRepository
+                        .countByBatchIdAndEmailStatus(batchId, EmailStatus.SENT))
+                .emailsFailed(generationJobRepository
+                        .countByBatchIdAndEmailStatus(batchId, EmailStatus.FAILED))
+                .emailsPending(generationJobRepository
+                        .countByBatchIdAndEmailStatus(batchId, EmailStatus.PENDING))
                 .build();
     }
 
@@ -128,14 +138,37 @@ public class GenerationJobService {
             return generationJobRepository.save(job);
         }
 
-        return generationJobRepository.save(GenerationJob.builder()
-                .passId(message.passId())
-                .batchId(message.batchId())
-                .campusId(message.campusId())
-                .jobRef(message.jobId())
-                .status(JobStatus.PROCESSING)
-                .startedAt(LocalDateTime.now())
-                .build());
+        try {
+            return generationJobRepository.saveAndFlush(GenerationJob.builder()
+                    .passId(message.passId())
+                    .batchId(message.batchId())
+                    .campusId(message.campusId())
+                    .jobRef(message.jobId())
+                    .status(JobStatus.PROCESSING)
+                    .startedAt(LocalDateTime.now())
+                    .build());
+
+        } catch (DataIntegrityViolationException ex) {
+            /*
+             * DAY 10. Another thread inserted this jobRef between our lookup
+             * and our insert.
+             *
+             * Only reachable at concurrency above 1, and only for a genuine
+             * redelivery - a normal event, not an error, which is why it is
+             * caught rather than allowed to become a failed message. The other
+             * thread is already generating this pass; the correct thing to do
+             * is nothing at all. Returning null makes this an acknowledged
+             * skip, exactly like a redelivery of finished work.
+             *
+             * saveAndFlush above rather than save is what makes this catchable
+             * here: with save, the insert is deferred to transaction commit and
+             * the violation surfaces outside this method, where it looks like an
+             * unrelated crash.
+             */
+            log.info("Job {} for pass {} was claimed concurrently by another consumer - skipping",
+                    message.jobId(), message.passId());
+            return null;
+        }
     }
 
     /**
