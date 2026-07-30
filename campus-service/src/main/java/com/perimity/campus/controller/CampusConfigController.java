@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
+import com.perimity.campus.security.CurrentUser;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -48,6 +50,7 @@ public class CampusConfigController {
     }
 
     @PutMapping("/{key}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
     @Operation(summary = "Create or replace one setting")
     public ApiResponse<CampusConfigResponse> upsert(
             @PathVariable @Positive Long campusId,
@@ -62,13 +65,14 @@ public class CampusConfigController {
         // endpoint below legitimately needs configKey in the body.
         if (!key.equals(dto.getConfigKey())) {
             throw new IllegalArgumentException(
-                    "The setting key in the path (\"" + key + "\") does not match the body (\""
-                            + dto.getConfigKey() + "\").");
+                    "The setting key in the path (" + key
+                            + ") does not match the body (" + dto.getConfigKey() + ").");
         }
         return ApiResponse.ok("Setting saved", service.upsert(campusId, dto));
     }
 
     @PutMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
     @Operation(summary = "Save the whole settings screen at once. All or nothing.")
     public ApiResponse<List<CampusConfigResponse>> upsertAll(
             @PathVariable @Positive Long campusId,
@@ -78,6 +82,7 @@ public class CampusConfigController {
     }
 
     @PostMapping("/restore-defaults")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
     @Operation(summary = "Add back any missing default. Existing settings are untouched.")
     public ApiResponse<List<CampusConfigResponse>> restoreDefaults(
             @PathVariable @Positive Long campusId) {

@@ -6,6 +6,7 @@ import com.perimity.campus.dto.request.CampusStatusUpdateDto;
 import com.perimity.campus.dto.request.CampusUpdateDto;
 import com.perimity.campus.dto.response.CampusResponse;
 import com.perimity.campus.dto.response.CampusStatsResponse;
+import com.perimity.campus.security.CurrentUser;
 import com.perimity.campus.service.CampusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,7 @@ import jakarta.validation.constraints.Positive;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,12 +38,15 @@ import org.springframework.web.bind.annotation.*;
 public class CampusController {
 
     private final CampusService service;
+    private final CurrentUser currentUser;
 
-    public CampusController(CampusService service) {
+    public CampusController(CampusService service, CurrentUser currentUser) {
         this.service = service;
+        this.currentUser = currentUser;
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Onboard an institution. Seeds its default settings.")
     public ResponseEntity<ApiResponse<CampusResponse>> create(
             @Valid @RequestBody CampusCreateDto dto) {
@@ -51,15 +56,19 @@ public class CampusController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
     @Operation(summary = "Edit a campus. The code cannot be changed.")
     public ApiResponse<CampusResponse> update(
             @PathVariable @Positive Long id,
             @Valid @RequestBody CampusUpdateDto dto) {
 
+        // A Campus Admin edits their own campus only. A Super Admin edits any.
+        currentUser.requireSameCampus(id);
         return ApiResponse.ok("Campus updated", service.update(id, dto));
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Activate or deactivate an entire campus. Requires a reason.")
     public ApiResponse<CampusResponse> changeStatus(
             @PathVariable @Positive Long id,
@@ -89,6 +98,7 @@ public class CampusController {
     }
 
     @GetMapping("/stats")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Platform counts for the Super Admin dashboard")
     public ApiResponse<CampusStatsResponse> stats() {
         return ApiResponse.ok(service.stats());

@@ -80,6 +80,43 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ex.getMessage(), List.of()));
     }
 
+    /** Signed in, but not allowed to touch this particular record. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            com.perimity.campus.security.CurrentUser.AccessDeniedInThisServiceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(
+            com.perimity.campus.security.CurrentUser.AccessDeniedInThisServiceException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /** A @PreAuthorize refusal. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSpringForbidden(
+            org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail("Your role is not permitted to perform this action",
+                        List.of()));
+    }
+
+    /** Object storage failed. The caller did nothing wrong. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            com.perimity.campus.storage.StorageException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStorage(
+            com.perimity.campus.storage.StorageException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.fail("Could not store the file. Please try again.", List.of()));
+    }
+
+    /** Upload larger than the multipart limit. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.fail("That file is too large.", List.of()));
+    }
+
     /** Business-rule failures thrown deliberately by the service layer. */
     @org.springframework.web.bind.annotation.ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(RuntimeException ex) {
