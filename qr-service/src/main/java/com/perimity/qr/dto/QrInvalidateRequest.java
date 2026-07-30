@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * POST /api/internal/qr/invalidate/{passId} - called on re-issue or revoke.
+ * POST /api/qr/internal/invalidate/{passId} - called on re-issue or revoke.
  *
  * The reason is mandatory by design. Nothing is ever hard-deleted in Perimity,
  * so an invalidated QrRecord row survives forever as audit evidence; a row

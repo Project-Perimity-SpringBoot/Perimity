@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * What POST /api/internal/qr/decrypt returns to guard-service.
+ * What POST /api/qr/internal/decrypt returns to guard-service.
  *
  * Note what is NOT here: no GREEN/RED/AMBER, no holder name, no photo.
  * qr-service answers exactly one question - "is this a real, still-active

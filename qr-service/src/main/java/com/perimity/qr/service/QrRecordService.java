@@ -181,7 +181,7 @@ public class QrRecordService {
     }
 
     /**
-     * Retires the active QR for a pass - POST /api/internal/qr/invalidate/{passId}.
+     * Retires the active QR for a pass - POST /api/qr/internal/invalidate/{passId}.
      *
      * Nothing is deleted. The row stays with active=false plus a timestamp and
      * a reason, because on Day 11 the guard's scan has to be able to answer
