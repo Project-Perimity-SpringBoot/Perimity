@@ -49,6 +49,37 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Day 7 - security. This secures EVERY endpoint by default, including
+             /api/guard/ping and Swagger. config/SecurityConfig.java is what
+             re-opens them, so the two always ship together. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Day 7 - JWT. Same versions as auth-service, deliberately.
+             api at compile scope, impl and jackson at runtime: our code calls
+             the api, Spring loads the other two. Mixing versions across the six
+             services gives NoClassDefFoundError: io/jsonwebtoken/... on the
+             first request rather than at build time. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

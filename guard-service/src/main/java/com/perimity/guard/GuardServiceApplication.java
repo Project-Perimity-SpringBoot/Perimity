@@ -37,7 +37,7 @@ public class GuardServiceApplication {
                     .build();
             session = sessionRepo.save(session);
 
-            EntryLog log = EntryLog.builder()
+            EntryLog log = EntryLog.builder() 
                     .campusId(1L)
                     .gateId(3L)
                     .gateName("Main Gate")
