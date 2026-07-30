@@ -87,6 +87,43 @@ public class CampusGateService {
         return CampusGateResponse.from(require(campusId, id));
     }
 
+    /**
+     * Resolve ONE gate and prove it may be used for a shift right now.
+     *
+     * Day 11. guard-service calls this at session start, before it writes a
+     * ScanSession. Today it does not call anything: campusId, gateId and
+     * gateName all arrive in the request body and are stored unchecked, and
+     * gateName is then copied into every EntryLog document permanently. That
+     * makes the gate on a scan record a CLAIM by the scanning device rather
+     * than a fact - which is the one thing an entry log cannot afford to be,
+     * since its whole purpose is being evidence about who came through where.
+     *
+     * getOne above deliberately does NOT check active, because a Campus Admin
+     * has to be able to open a decommissioned gate to edit it. This method is
+     * the opposite: it exists to answer one question, "may a shift start here",
+     * and a decommissioned gate is not an answer to that.
+     *
+     * 404 rather than 403 for a wrong-campus gate. The gate genuinely does not
+     * exist as far as that campus is concerned, and a distinct 403 would confirm
+     * to a caller that some other campus owns that id.
+     */
+    @Transactional(readOnly = true)
+    public CampusGateResponse requireActiveForShift(Long campusId, Long gateId) {
+        CampusGate gate = gateRepository.findById(gateId)
+                .filter(g -> g.getCampusId().equals(campusId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Gate " + gateId + " does not belong to campus " + campusId + "."));
+
+        if (!gate.isActive()) {
+            // Not an exception the guard caused, and worth a message they can
+            // act on: the picker will have been stale, so reload it.
+            throw new IllegalStateException(
+                    "Gate \"" + gate.getName() + "\" is no longer in service. "
+                            + "Choose another gate.");
+        }
+        return CampusGateResponse.from(gate);
+    }
+
     /** What the guard's gate picker shows - active gates only. */
     @Transactional(readOnly = true)
     public List<CampusGateResponse> listActive(Long campusId) {
