@@ -1,7 +1,7 @@
 package com.perimity.qr.messaging;
 
 import com.perimity.qr.dto.QrGenerateRequest;
-import com.perimity.qr.email.PassEmailService;
+import com.perimity.qr.email.PassEmailDispatcher;
 import com.perimity.qr.dto.QrRecordResponse;
 import com.perimity.qr.entity.GenerationJob;
 import com.perimity.qr.messaging.contract.QrGenerationJob;
@@ -53,18 +53,18 @@ public class QrGenerationListener {
     private final GenerationJobService generationJobService;
     private final QrRecordService qrRecordService;
     private final QrResultPublisher resultPublisher;
-    private final PassEmailService passEmailService;
+    private final PassEmailDispatcher passEmailDispatcher;
 
     public QrGenerationListener(Validator validator,
                                 GenerationJobService generationJobService,
                                 QrRecordService qrRecordService,
                                 QrResultPublisher resultPublisher,
-                                PassEmailService passEmailService) {
+                                PassEmailDispatcher passEmailDispatcher) {
         this.validator = validator;
         this.generationJobService = generationJobService;
         this.qrRecordService = qrRecordService;
         this.resultPublisher = resultPublisher;
-        this.passEmailService = passEmailService;
+        this.passEmailDispatcher = passEmailDispatcher;
     }
 
     @RabbitListener(queues = RabbitConfig.QUEUE_GENERATE)
@@ -138,7 +138,19 @@ public class QrGenerationListener {
              * onto its own queue so 600 bulk sends do not hold the generation
              * pipeline.
              */
-            passEmailService.sendPassEmail(job.getId(), message, record.getPdfKey());
+            /*
+             * DAY 10. Queued, not sent, on this thread.
+             *
+             * Day 9 called PassEmailService directly here, which put a 50-200ms
+             * SMTP round trip inside the listener method - so a job was not DONE
+             * until the mail server answered, and 600 bulk rows meant the
+             * progress bar stood still for a minute. The dispatcher hands the
+             * work to a bounded executor and returns.
+             *
+             * Nothing is lost if this service dies before the send completes:
+             * email_status stays PENDING and ReconciliationService reports it.
+             */
+            passEmailDispatcher.dispatch(job.getId(), message, record.getPdfKey());
 
         } catch (PermanentGenerationException ex) {
             generationJobService.markFailed(job.getId(), describe(ex));
