@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
  * problem, which is the wrong fix applied to the wrong component.
  *
  * So failures are recorded rather than raised, and the email becomes separately
- * retryable through POST /api/internal/qr/{passId}/resend-email. That is the
+ * retryable through POST /api/qr/internal/{passId}/resend-email. That is the
  * same discipline applied to Tushar's QrResultListener: a log line is not a
  * durable record, and the row is.
  */
@@ -144,7 +144,7 @@ public class PassEmailService {
              * do with any exception from here.
              */
             log.error("Pass email failed for job {} (pass {}). The pass itself is fine - "
-                            + "retry with POST /api/internal/qr/{}/resend-email",
+                            + "retry with POST /api/qr/internal/{}/resend-email",
                     jobId, message.passId(), message.passId(), ex);
 
             generationJobService.markEmailFailed(jobId, describe(ex));

@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Body of POST /api/internal/qr/{passId}/resend-email.
+ * Body of POST /api/qr/internal/{passId}/resend-email.
  *
  * The address is required from the caller rather than looked up, because
  * qr-service does not store holder emails and should not start doing so to

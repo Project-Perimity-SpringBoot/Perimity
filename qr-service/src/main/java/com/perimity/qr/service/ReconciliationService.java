@@ -142,7 +142,7 @@ public class ReconciliationService {
 
         log.warn("{} pass email(s) failed and {} still pending on completed jobs. "
                         + "Passes are fine; the holders have not been told. "
-                        + "GET /api/internal/qr/emails/undelivered lists them.",
+                        + "GET /api/qr/internal/emails/undelivered lists them.",
                 failed.size(), pending.size());
     }
 }

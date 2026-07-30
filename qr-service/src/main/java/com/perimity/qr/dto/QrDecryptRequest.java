@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * POST /api/internal/qr/decrypt - guard-service sends a scanned token.
+ * POST /api/qr/internal/decrypt - guard-service sends a scanned token.
  *
  * This is the only DTO in the service that carries attacker-controlled input:
  * whatever was physically in the QR code someone held up to a camera. Every
