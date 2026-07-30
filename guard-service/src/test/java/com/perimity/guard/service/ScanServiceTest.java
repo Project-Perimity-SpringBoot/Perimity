@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,7 +82,12 @@ class ScanServiceTest {
 
         // Saving returns the argument with an id, mimicking Mongo. ScanResponse
         // reads log.getId(), so returning null here would hide a real NPE.
-        when(entryLogRepository.save(any(EntryLog.class))).thenAnswer(invocation -> {
+        //
+        // lenient() because one test - noOpenSession - deliberately never reaches
+        // a save. Mockito's strict stubs would fail it for the stub being unused,
+        // which is precisely backwards: that test exists to prove nothing is
+        // written when there is no shift.
+        lenient().when(entryLogRepository.save(any(EntryLog.class))).thenAnswer(invocation -> {
             EntryLog log = invocation.getArgument(0);
             log.setId("entrylog-1");
             return log;
