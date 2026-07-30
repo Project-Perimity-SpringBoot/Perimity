@@ -47,3 +47,5 @@ user-service/.factorypath
 
 # Eclipse/STS
 .factorypath
+
+storage-dev/
