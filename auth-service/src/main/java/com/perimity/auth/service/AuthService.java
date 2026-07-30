@@ -9,6 +9,7 @@ import com.perimity.auth.dto.response.UserResponse;
 import com.perimity.auth.entity.OtpVerification;
 import com.perimity.auth.entity.User;
 import com.perimity.auth.entity.enums.AuditAction;
+import com.perimity.auth.entity.enums.OtpPurpose;
 import com.perimity.auth.exception.AuthenticationFailedException;
 import com.perimity.auth.exception.RateLimitedException;
 import com.perimity.auth.repository.OtpVerificationRepository;
@@ -162,6 +163,37 @@ public class AuthService {
 
         LocalDateTime now = LocalDateTime.now();
 
+        /*
+         * Day 12. Super Admin, Campus Admin and Guard are password-only - the
+         * SRS is explicit, and Role.canLoginWithOtp() has said so since Day 2.
+         * Nothing called it, so any of those three could skip password login
+         * entirely by asking for a code. That also sidesteps account lockout,
+         * which only counts failed PASSWORD attempts.
+         *
+         * Refused here by NOT ISSUING A CODE, and then returning the same
+         * response as always. It has to be silent: an explicit "that account
+         * cannot use OTP" would tell an attacker which addresses are admins,
+         * which is precisely the enumeration this endpoint is written to
+         * prevent. They get the generic "if that address is registered, a code
+         * has been sent" like everyone else, and no code ever arrives.
+         *
+         * LOGIN only. Registration, visitor verification and pass retrieval are
+         * not credential paths and are unaffected.
+         */
+        if (dto.getPurpose() == OtpPurpose.LOGIN) {
+            boolean passwordOnly = userRepository.findByEmailIgnoreCaseAndActiveTrue(dto.getEmail())
+                    .map(u -> !u.getRole().canLoginWithOtp())
+                    .orElse(false);
+
+            if (passwordOnly) {
+                audit.recordAnonymous(AuditAction.OTP_FAILED, "email:" + dto.getEmail(),
+                        "OTP login refused - this role signs in with a password");
+                return OtpChallengeResponse.of(
+                        dto.getEmail(), dto.getPurpose(), now.plusMinutes(otpExpiryMinutes),
+                        otpMaxAttempts);
+            }
+        }
+
         // Any older unused code stops working the moment a new one is issued,
         // so two live codes never exist for the same email and purpose.
         otpRepository.consumeOutstanding(dto.getEmail(), dto.getPurpose(), now);
@@ -229,6 +261,22 @@ public class AuthService {
         }
 
         User user = maybeUser.get();
+
+        /*
+         * The same rule again, checked after the code was accepted rather than
+         * before. Belt and braces, and not redundant: a code issued before this
+         * change shipped, or issued for a role that was edited afterwards,
+         * would otherwise still mint a token. The check that matters is the one
+         * standing between a valid code and an issued JWT.
+         */
+        if (dto.getPurpose() == OtpPurpose.LOGIN && !user.getRole().canLoginWithOtp()) {
+            audit.record(AuditAction.LOGIN_FAILED, user.getId(), user.getRole(),
+                    user.getCampusId(), "user:" + user.getId(),
+                    "OTP login attempted by a password-only role");
+            throw new AuthenticationFailedException(
+                    "This account signs in with a password.");
+        }
+
         user.setLastLoginAt(now);
         user.setFailedLoginCount(0);
         user.setLockedUntil(null);
