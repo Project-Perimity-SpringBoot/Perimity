@@ -11,6 +11,10 @@ import java.time.LocalDateTime;
  * id proof would make it readable by anyone who ever sees the JSON. The client
  * asks for a short-lived pre-signed URL separately, when it actually needs to
  * display the file.
+ *
+ * verificationRemarks is populated only on a rejection. It is what tells the
+ * person which document to replace and why, so a rejection is actionable rather
+ * than a dead end.
  */
 public record DocumentResponse(
         Long id,
@@ -22,6 +26,7 @@ public record DocumentResponse(
         boolean verified,
         Long verifiedBy,
         LocalDateTime verifiedAt,
+        String verificationRemarks,
         LocalDateTime createdAt
 ) {
 
@@ -36,6 +41,7 @@ public record DocumentResponse(
                 e.isVerified(),
                 e.getVerifiedBy(),
                 e.getVerifiedAt(),
+                e.getVerificationRemarks(),
                 e.getCreatedAt()
         );
     }

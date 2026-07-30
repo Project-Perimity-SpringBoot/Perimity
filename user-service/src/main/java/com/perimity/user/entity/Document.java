@@ -29,7 +29,8 @@ import org.hibernate.annotations.CreationTimestamp;
  * and whether an admin has verified it.
  *
  * Append-and-verify, not edit: a document is uploaded once and then either
- * verified or replaced, so there is no updated_at.
+ * verified or rejected, so there is no updated_at. The only fields that change
+ * after insert are the three verification ones below, written by an admin.
  */
 @Entity
 @Table(
@@ -85,6 +86,18 @@ public class Document {
 
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;
+
+    /**
+     * Why a document was rejected. Mandatory on rejection - DocumentVerificationDto
+     * refuses a rejection with no remarks, and this is where that text lands.
+     *
+     * Added on Day 6. Without it the rejection reason was validated, accepted,
+     * and then dropped on the floor: the person was told "rejected" with no way
+     * to learn what to fix, and would upload the same file again.
+     */
+    @Size(max = 500)
+    @Column(name = "verification_remarks", length = 500)
+    private String verificationRemarks;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
