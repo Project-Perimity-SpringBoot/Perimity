@@ -41,7 +41,8 @@ import org.hibernate.annotations.UpdateTimestamp;
                 @Index(name = "idx_gp_holder_status", columnList = "holder_user_id, status"),
                 @Index(name = "idx_gp_campus_status", columnList = "campus_id, status"),
                 @Index(name = "idx_gp_event", columnList = "event_id"),
-                @Index(name = "idx_gp_expiry_sweep", columnList = "status, valid_to")
+                @Index(name = "idx_gp_expiry_sweep", columnList = "status, valid_to"),
+                @Index(name = "idx_gp_batch", columnList = "batch_id")
         }
 )
 // endNullable = true: a standing DAILY pass legitimately has no end date.
@@ -88,6 +89,21 @@ public class GatePass {
     /** Null for DAILY passes. Set for EVENT passes. */
     @Column(name = "event_id")
     private Long eventId;
+
+    /**
+     * The bulk batch that produced this pass. Null for a single approval.
+     *
+     * Added Day 10. Without it there is no way to ask "how many of this
+     * batch's passes are finished", which is the entire Bulk Progress screen,
+     * and no way to retry only the failed rows of a batch - the alternative
+     * being to re-upload the whole sheet and create duplicates.
+     *
+     * Deliberately NOT a foreign key to bulk_upload_batches. A pass outlives
+     * the batch conversation and must never be blocked from archival by it.
+     * The batch is provenance, not a parent.
+     */
+    @Column(name = "batch_id")
+    private Long batchId;
 
     @NotNull
     @Column(name = "valid_from", nullable = false)

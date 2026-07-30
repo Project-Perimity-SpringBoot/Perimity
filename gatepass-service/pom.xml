@@ -93,6 +93,39 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- ============================================================
+             Day 10 - the bulk engine.
+
+             poi-ooxml reads and writes .xlsx. It pulls in poi transitively,
+             so both are declared explicitly to keep the versions locked
+             together - a mismatch between them produces NoSuchMethodError at
+             RUNTIME rather than at compile time, which is a miserable
+             afternoon to debug.
+             ============================================================ -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+
+        <!-- Object storage. Same version as campus-service (Arham), which is
+             the reference implementation this layer was copied from. Two
+             services on two S3 SDK versions is a conflict waiting for the day
+             someone builds a shared module.
+
+             Inactive while perimity.storage.type=local, which is the default -
+             nobody needs an AWS account to run this project. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.16</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

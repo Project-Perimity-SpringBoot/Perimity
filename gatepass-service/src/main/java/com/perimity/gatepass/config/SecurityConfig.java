@@ -82,6 +82,27 @@ public class SecurityConfig {
                                      "/v3/api-docs", "/v3/api-docs/**",
                                      "/api-docs", "/api-docs/**").permitAll()
 
+                    // Development file serving - Day 10. This is how the
+                    // errors.csv download link works before AWS exists.
+                    //
+                    // permitAll on a route that serves files off disk deserves
+                    // a second look, so the reasoning is written down:
+                    //
+                    //  1. The bean does not exist in production.
+                    //     LocalStorageController is @ConditionalOnProperty on
+                    //     storage.type=local, so with type=s3 the route is
+                    //     never registered and this line permits nothing.
+                    //  2. Path traversal is blocked at the filesystem layer -
+                    //     LocalFileStorageService.resolve() normalises the key
+                    //     and throws if it escapes the storage root.
+                    //  3. It IS still a gap: anyone who guesses a key can read
+                    //     that object. Keys carry a UUID so guessing is
+                    //     impractical, but impractical is not authorised.
+                    //
+                    // Same trade-off Arham accepted in campus-service, gated
+                    // on the same property. Agreed as a team decision.
+                    .requestMatchers("/api/gatepass/storage/local/**").permitAll()
+
                     // service-to-service. NOT permitAll - the API key filter
                     // authenticates these, and it runs before this check.
                     .requestMatchers("/api/gatepass/internal/**").hasRole("INTERNAL")

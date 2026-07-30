@@ -2,6 +2,7 @@ package com.perimity.gatepass.messaging;
 
 import com.perimity.gatepass.dto.request.PassActivationDto;
 import com.perimity.gatepass.messaging.contract.QrGenerationResult;
+import com.perimity.gatepass.service.BulkUploadService;
 import com.perimity.gatepass.service.GatePassService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,9 +27,12 @@ public class QrResultListener {
     private static final Logger log = LoggerFactory.getLogger(QrResultListener.class);
 
     private final GatePassService gatePassService;
+    private final BulkUploadService bulkUploadService;
 
-    public QrResultListener(GatePassService gatePassService) {
+    public QrResultListener(GatePassService gatePassService,
+                            BulkUploadService bulkUploadService) {
         this.gatePassService = gatePassService;
+        this.bulkUploadService = bulkUploadService;
     }
 
     @RabbitListener(queues = RabbitConfig.QUEUE_RESULT)
@@ -55,6 +59,12 @@ public class QrResultListener {
                             .build());
 
             log.info("Pass {} activated from job {}", result.passId(), result.jobId());
+
+            // Day 10. Runs in its OWN transaction (REQUIRES_NEW) so a counter
+            // problem can never roll back an activation that already
+            // succeeded. No-ops when batchId is null, which is every single
+            // approval, so this line is free on the non-bulk path.
+            bulkUploadService.recordRowCompleted(result.batchId());
 
         } catch (RuntimeException ex) {
             // Most likely the pass was revoked while generation was running.

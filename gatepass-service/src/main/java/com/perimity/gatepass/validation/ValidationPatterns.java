@@ -57,7 +57,7 @@ public final class ValidationPatterns {
      * Blocks digits and symbols, which is what actually catches junk rows in a
      * bulk spreadsheet ("N/A", "-", "12345", "test@test").
      */
-    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M}\\s.'-]{1,119}$";
+    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]{1,119}$";
 
     public static final String PERSON_NAME_MESSAGE =
             "Name may contain letters, spaces, apostrophes, hyphens and full stops only";
