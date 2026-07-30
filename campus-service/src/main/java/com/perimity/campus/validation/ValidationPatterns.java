@@ -48,9 +48,9 @@ public final class ValidationPatterns {
      * "approval.required" or "reentry.allowed". Keeps the key-value store tidy
      * and predictable so every service reads the same key names.
      */
-    public static final String CONFIG_KEY = "^[a-z][a-z0-9]*(\\.[a-z0-9]+)*$";
+    public static final String CONFIG_KEY = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$";
     public static final String CONFIG_KEY_MESSAGE =
-            "Config key must be lower-case dotted tokens, e.g. approval.required";
+            "Config key must be lower-case, using underscores or dots, e.g. repeat_entry_result";
 
     /**
      * An S3 object key for a campus logo. Blocks path traversal ("..") and a
