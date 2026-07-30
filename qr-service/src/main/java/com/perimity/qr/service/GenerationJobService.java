@@ -4,6 +4,7 @@ import com.perimity.qr.dto.BatchProgressResponse;
 import com.perimity.qr.dto.JobStatusResponse;
 import com.perimity.qr.messaging.contract.QrGenerationJob;
 import com.perimity.qr.entity.GenerationJob;
+import com.perimity.qr.entity.enums.EmailStatus;
 import com.perimity.qr.entity.enums.JobStatus;
 import com.perimity.qr.repository.GenerationJobRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -41,6 +42,9 @@ public class GenerationJobService {
                 .errorMessage(job.getErrorMessage())
                 .startedAt(job.getStartedAt())
                 .completedAt(job.getCompletedAt())
+                .emailStatus(job.getEmailStatus())
+                .emailError(job.getEmailError())
+                .emailSentAt(job.getEmailSentAt())
                 .build();
     }
 
@@ -234,5 +238,94 @@ public class GenerationJobService {
             return value;
         }
         return value.substring(0, ERROR_MESSAGE_MAX - 3) + "...";
+    }
+
+    // ================= DAY 9 - pass email outcome =================
+
+    /** generation_jobs.email_error is 500 characters. */
+    private static final int EMAIL_ERROR_MAX = 500;
+
+    /**
+     * The current email state of a job, or null if the job is gone.
+     *
+     * Read by PassEmailService before it does any work, so that a broker
+     * redelivery of an already-emailed job does not put a second copy of the
+     * same pass in someone's inbox.
+     */
+    @Transactional(readOnly = true)
+    public EmailStatus emailStatusOf(Long jobId) {
+        return generationJobRepository.findById(jobId)
+                .map(GenerationJob::getEmailStatus)
+                .orElse(null);
+    }
+
+    /**
+     * REQUIRES_NEW on all three writers below.
+     *
+     * They are called after the job has already been committed DONE and the
+     * result message published. Joining a caller's transaction would let a
+     * later rollback erase the only record of whether a visitor was ever told
+     * about their pass - and unlike the pass itself, that is not reconstructable
+     * from anything else.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markEmailSent(Long jobId) {
+        generationJobRepository.findById(jobId).ifPresent(job -> {
+            job.setEmailStatus(EmailStatus.SENT);
+            job.setEmailSentAt(LocalDateTime.now());
+            job.setEmailError(null);
+            generationJobRepository.save(job);
+        });
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markEmailFailed(Long jobId, String reason) {
+        generationJobRepository.findById(jobId).ifPresent(job -> {
+            job.setEmailStatus(EmailStatus.FAILED);
+            job.setEmailError(truncateEmailError(reason));
+            generationJobRepository.save(job);
+        });
+    }
+
+    /**
+     * No address to send to. Not a failure, and deliberately not counted as one
+     * - a walk-in visitor with no email is a normal bulk-upload row, and a red
+     * number on the Bulk Progress screen for it would send someone chasing a
+     * problem that does not exist.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markEmailNotRequired(Long jobId) {
+        generationJobRepository.findById(jobId).ifPresent(job -> {
+            job.setEmailStatus(EmailStatus.NO_RECIPIENT);
+            job.setEmailError(null);
+            generationJobRepository.save(job);
+        });
+    }
+
+    /**
+     * Puts a settled email back to PENDING so it will be attempted again.
+     * Backs the manual resend endpoint.
+     *
+     * Returns the job so the caller can read passId and batchId without a
+     * second query.
+     */
+    @Transactional
+    public GenerationJob resetEmailForRetry(Long jobId) {
+        GenerationJob job = generationJobRepository.findById(jobId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "No generation job with id " + jobId));
+
+        job.setEmailStatus(EmailStatus.PENDING);
+        job.setEmailError(null);
+        return generationJobRepository.save(job);
+    }
+
+    private String truncateEmailError(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= EMAIL_ERROR_MAX
+                ? value
+                : value.substring(0, EMAIL_ERROR_MAX - 3) + "...";
     }
 }

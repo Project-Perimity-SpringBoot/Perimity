@@ -1,6 +1,7 @@
 package com.perimity.qr.messaging;
 
 import com.perimity.qr.dto.QrGenerateRequest;
+import com.perimity.qr.email.PassEmailService;
 import com.perimity.qr.dto.QrRecordResponse;
 import com.perimity.qr.entity.GenerationJob;
 import com.perimity.qr.messaging.contract.QrGenerationJob;
@@ -52,15 +53,18 @@ public class QrGenerationListener {
     private final GenerationJobService generationJobService;
     private final QrRecordService qrRecordService;
     private final QrResultPublisher resultPublisher;
+    private final PassEmailService passEmailService;
 
     public QrGenerationListener(Validator validator,
                                 GenerationJobService generationJobService,
                                 QrRecordService qrRecordService,
-                                QrResultPublisher resultPublisher) {
+                                QrResultPublisher resultPublisher,
+                                PassEmailService passEmailService) {
         this.validator = validator;
         this.generationJobService = generationJobService;
         this.qrRecordService = qrRecordService;
         this.resultPublisher = resultPublisher;
+        this.passEmailService = passEmailService;
     }
 
     @RabbitListener(queues = RabbitConfig.QUEUE_GENERATE)
@@ -117,6 +121,24 @@ public class QrGenerationListener {
 
             log.info("Generation complete for pass {} (job {}, batch {}, attempt {})",
                     message.passId(), job.getId(), message.batchId(), attempt);
+
+            /*
+             * DAY 9. Last, and outside everything that can fail the job.
+             *
+             * Placed after markDone and after the result publish on purpose. By
+             * this point the token exists, both objects are stored, and gatepass
+             * has been told to activate - all correct, none of it conditional on
+             * an email. sendPassEmail never throws; a mail failure is recorded
+             * on the job row and retried separately, because retrying the JOB
+             * would regenerate the QR, which is issuing a second token to repair
+             * a mail problem.
+             *
+             * It also runs on this consumer thread, which is why the mail
+             * timeouts in application.properties are bounded. Day 10 moves this
+             * onto its own queue so 600 bulk sends do not hold the generation
+             * pipeline.
+             */
+            passEmailService.sendPassEmail(job.getId(), message, record.getPdfKey());
 
         } catch (PermanentGenerationException ex) {
             generationJobService.markFailed(job.getId(), describe(ex));

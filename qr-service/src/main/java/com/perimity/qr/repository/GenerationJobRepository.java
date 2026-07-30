@@ -1,6 +1,7 @@
 package com.perimity.qr.repository;
 
 import com.perimity.qr.entity.GenerationJob;
+import com.perimity.qr.entity.enums.EmailStatus;
 import com.perimity.qr.entity.enums.JobStatus;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,19 @@ public interface GenerationJobRepository extends JpaRepository<GenerationJob, Lo
     Optional<GenerationJob> findByJobRef(String jobRef);
 
     List<GenerationJob> findByStatus(JobStatus status);
+
+    /**
+     * DAY 9. Jobs whose pass email did not go out.
+     *
+     * Backs the bulk resend on Day 10, where one unreachable mail server during
+     * a 600-row upload leaves a batch of visitors with passes they were never
+     * told about. Ordered so the oldest failure is retried first - the person
+     * who has been waiting longest gets their pass first.
+     */
+    List<GenerationJob> findByEmailStatusOrderByIdAsc(EmailStatus emailStatus);
+
+    /** DAY 9. Per-batch email counts for the Bulk Progress screen. */
+    long countByBatchIdAndEmailStatus(Long batchId, EmailStatus emailStatus);
 
     /** Bulk Progress screen: how many of this batch are done, failed, still queued. */
     long countByBatchIdAndStatus(Long batchId, JobStatus status);
