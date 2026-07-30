@@ -1,15 +1,11 @@
 package com.perimity.auth.service;
 
-import com.perimity.auth.entity.AuditLog;
 import com.perimity.auth.entity.enums.AuditAction;
 import com.perimity.auth.entity.enums.Role;
-import com.perimity.auth.repository.AuditLogRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -23,46 +19,77 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  *    into a support ticket.
  *
  * 2. Writing an audit row must NEVER fail the action it describes. A failed
- *    insert here would roll back a successful login, which is absurd - so every
- *    write runs in its own transaction and swallows its own errors.
+ *    insert here would roll back a successful login, which is absurd.
  *
- * REQUIRES_NEW matters for the opposite case too: a LOGIN_FAILED row must
- * survive even though the surrounding request throws.
+ * NOTHING IN THIS CLASS IS @Transactional, and that is the fix rather than an
+ * oversight. The transaction lives in AuditWriter, one bean along, so that the
+ * try/catch here sits OUTSIDE the transaction boundary and can actually catch a
+ * commit failure. The previous version put @Transactional and the try/catch on
+ * the same method, which cannot work: the commit runs in the proxy after the
+ * method returns, so a rollback-only transaction still threw
+ * UnexpectedRollbackException straight past the catch and into the caller.
+ *
+ * That bug was invisible for as long as every insert succeeded. It surfaced the
+ * first time one failed - a new enum value hitting an old CHECK constraint -
+ * and took the whole request down, which is precisely the outcome rule 2
+ * exists to prevent.
  */
 @Service
 public class AuditService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
 
-    private final AuditLogRepository repository;
+    private final AuditWriter writer;
 
-    public AuditService(AuditLogRepository repository) {
-        this.repository = repository;
+    public AuditService(AuditWriter writer) {
+        this.writer = writer;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /** An event this service observed itself. Source IP comes from the request. */
     public void record(AuditAction action, Long actorUserId, Role actorRole,
                        Long campusId, String targetEntity, String details) {
-        try {
-            repository.save(AuditLog.builder()
-                    .action(action)
-                    .actorUserId(actorUserId)
-                    .actorRole(actorRole)
-                    .campusId(campusId)
-                    .targetEntity(targetEntity)
-                    .sourceIp(currentIp())
-                    .details(sanitise(details))
-                    .build());
-        } catch (RuntimeException ex) {
-            // Deliberately swallowed. See the class comment.
-            log.error("Could not write audit row for {}: {}", action, ex.getMessage());
-        }
+        safely(action, actorUserId, actorRole, campusId, targetEntity, currentIp(), details);
     }
 
     /** For anonymous events - a failed login by an address with no account. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordAnonymous(AuditAction action, String targetEntity, String details) {
         record(action, null, null, null, targetEntity, details);
+    }
+
+    /**
+     * An event that happened in ANOTHER service (Day 11).
+     *
+     * sourceIp is passed in rather than read from the request. currentIp() would
+     * return the calling service's own container address - identical on every
+     * row, for every guard, at every gate - which answers no question anyone
+     * would ask the audit log.
+     */
+    public void recordFromService(AuditAction action, Long actorUserId, Role actorRole,
+                                  Long campusId, String targetEntity, String details,
+                                  String sourceIp) {
+        // Falls back to the caller's address only when nothing was forwarded:
+        // better than null, and visibly wrong in a way that prompts a fix.
+        String ip = (sourceIp == null || sourceIp.isBlank()) ? currentIp() : sourceIp;
+        safely(action, actorUserId, actorRole, campusId, targetEntity, ip, details);
+    }
+
+    /**
+     * The single point where an audit failure is absorbed.
+     *
+     * Catches Exception, not RuntimeException: a commit failure can surface as
+     * either, and the whole point is that nothing gets out of here.
+     */
+    private void safely(AuditAction action, Long actorUserId, Role actorRole, Long campusId,
+                        String targetEntity, String sourceIp, String details) {
+        try {
+            writer.write(action, actorUserId, actorRole, campusId,
+                    targetEntity, sourceIp, sanitise(details));
+        } catch (Exception ex) {
+            // Deliberately swallowed - see the class comment. Logged at ERROR
+            // because a silently missing audit row is a security problem, even
+            // though it must not be a user-facing one.
+            log.error("Could not write audit row for {}: {}", action, ex.getMessage());
+        }
     }
 
     /**
