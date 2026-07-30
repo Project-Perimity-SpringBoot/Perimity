@@ -111,16 +111,25 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Day 9 onwards, uncomment when you get there.
+        <!-- ========== Day 9: object storage ==========
+             The S3 SDK is only USED when perimity.storage.type=s3. With the
+             default (local) it sits unused on the classpath, so nobody needs an
+             AWS account or a network connection to run this service.
+
+             2.28.16 matches campus-service. Two AWS SDK versions in one repo
+             pull in two copies of the shared core and the classpath winner is
+             whichever Maven happens to resolve first. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.16</version>
+        </dependency>
+
+        <!-- Day 10 onwards, uncomment when you get there.
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-            <version>2.28.11</version>
         </dependency>
         -->
     </dependencies>

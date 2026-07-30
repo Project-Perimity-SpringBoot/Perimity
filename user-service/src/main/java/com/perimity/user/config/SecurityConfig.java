@@ -1,5 +1,6 @@
 package com.perimity.user.config;
 
+import com.perimity.user.security.InternalApiKeyFilter;
 import com.perimity.user.security.JwtAuthenticationFilter;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,11 +44,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final InternalApiKeyFilter internalFilter;
     private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter,
+                          InternalApiKeyFilter internalFilter,
                           @Value("${perimity.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtFilter = jwtFilter;
+        this.internalFilter = internalFilter;
         this.allowedOrigins = allowedOrigins;
     }
 
@@ -82,7 +86,24 @@ public class SecurityConfig {
                     .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
                                      "/api-docs", "/api-docs/**",
                                      "/v3/api-docs", "/v3/api-docs/**").permitAll()
+
+                    // Service-to-service (Day 8). NOT permitAll - the API key
+                    // filter authenticates these and runs before this check.
+                    // gatepass-service calls the profile summary here while
+                    // issuing a pass, with no user and no JWT to present.
+                    .requestMatchers("/api/user/internal/**").hasRole("INTERNAL")
+
+                    // Development file serving (Day 9). Deliberately NOT
+                    // permitAll, unlike campus-service's equivalent: that one
+                    // serves campus logos, this one would serve identity
+                    // documents. Only reachable when storage is local.
+                    .requestMatchers("/api/user/storage/local/**").authenticated()
+
                     .anyRequest().authenticated())
+            // Order matters. The internal key filter runs first and skips
+            // itself on every non-internal path, so a browser request still
+            // reaches the JWT filter untouched.
+            .addFilterBefore(internalFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
