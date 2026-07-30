@@ -128,7 +128,7 @@ public class HttpPassVerificationClient implements PassVerificationClient {
      * from the lifecycle" - ScanService still checks campus and date range after
      * this, so returning null is not the same as saying yes.
      */
-    private DenialReason denialFor(String status) {
+    DenialReason denialFor(String status) {
         if (status == null) {
             return DenialReason.INVALID_TOKEN;
         }
@@ -148,7 +148,7 @@ public class HttpPassVerificationClient implements PassVerificationClient {
         };
     }
 
-    private PassType passTypeFor(String passType) {
+    PassType passTypeFor(String passType) {
         if ("EVENT".equals(passType)) {
             return PassType.EVENT;
         }
