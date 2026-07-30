@@ -31,9 +31,20 @@ public class VisitorRequestDecisionDto {
             example = "APPROVED")
     private RequestStatus decision;
 
-    @NotNull(message = "Reviewer is required")
-    @Positive(message = "Reviewer user id must be a positive number")
-    @Schema(example = "42")
+    /**
+     * SERVER-OWNED since Day 7. Taken from the JWT by the controller, never
+     * from the request body.
+     *
+     * @JsonIgnore is the important part: without it a caller could put their
+     * own value here and the controller's overwrite would be the only thing
+     * stopping them. With it, Jackson discards the key and the field cannot be
+     * injected at all.
+     *
+     * No @NotNull either - validation runs BEFORE the controller sets it, so a
+     * constraint here would reject every request.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
     private Long reviewedBy;
 
     @Size(max = 500)

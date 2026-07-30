@@ -103,6 +103,18 @@ public class VisitorRequest {
     @Builder.Default
     private boolean otpVerified = false;
 
+    /**
+     * The visitor's identity in AuthDB, supplied by auth-service when it
+     * confirms the email OTP.
+     *
+     * Null until then, and that is the point: GatePass.holderUserId is @NotNull,
+     * so a pass physically cannot be issued for a request whose email was never
+     * verified. The database enforces the rule rather than a comment asking
+     * someone to remember it.
+     */
+    @Column(name = "visitor_user_id")
+    private Long visitorUserId;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

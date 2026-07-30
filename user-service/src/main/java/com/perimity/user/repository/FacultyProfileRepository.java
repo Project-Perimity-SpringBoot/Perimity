@@ -1,6 +1,7 @@
 package com.perimity.user.repository;
 
 import com.perimity.user.entity.FacultyProfile;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,9 @@ public interface FacultyProfileRepository extends JpaRepository<FacultyProfile, 
     boolean existsByUserId(Long userId);
 
     Optional<FacultyProfile> findByCampusIdAndEmployeeIdIgnoreCase(Long campusId, String employeeId);
+
+    /** Mirrors StudentProfileRepository.findByDepartmentId - both are checked before a department is deactivated. */
+    List<FacultyProfile> findByDepartmentId(Long departmentId);
 
     Page<FacultyProfile> findByCampusIdOrderByIdDesc(Long campusId, Pageable pageable);
 
