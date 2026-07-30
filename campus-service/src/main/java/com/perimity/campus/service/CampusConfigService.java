@@ -47,6 +47,21 @@ public class CampusConfigService {
         requireCampus(campusId);
         validateJsonIfNeeded(dto);
 
+        /*
+         * FR-CFG-4: "validate a setting value against its declared type and
+         * permitted range before saving". Only JSON was being checked, so a
+         * BOOLEAN key accepted "banana" and an INTEGER key accepted "abc",
+         * silently, and every service reading that value inherited the
+         * problem.
+         *
+         * It matters most for repeat_entry_result. A Campus Admin who types
+         * GREENN gets a saved setting and no error; guard-service then meets a
+         * value it cannot interpret at the gate, mid-scan, with a queue behind
+         * the person. The cheapest place to catch that is here, once, at the
+         * moment it is typed.
+         */
+        CampusConfigDefaults.validate(dto.getConfigKey(), dto.getConfigValue());
+
         CampusConfig config = configRepository
                 .findByCampusIdAndConfigKey(campusId, dto.getConfigKey())
                 .orElseGet(() -> CampusConfig.builder()
