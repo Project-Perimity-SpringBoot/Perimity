@@ -43,6 +43,15 @@
             <version>2.6.0</version>
         </dependency>
 
+        <!-- Day 12 - health endpoint. SRS 5.6 requires every service to report
+             its own status plus the reachability of its database and the
+             services it depends on. Actuator gives the Mongo check for free;
+             DownstreamHealthConfig adds the four HTTP dependencies. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

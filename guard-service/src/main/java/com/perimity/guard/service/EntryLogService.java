@@ -66,13 +66,25 @@ public class EntryLogService {
                 .stream().map(EntryLogResponse::from).toList();
     }
 
+    /**
+     * One count per result, not two.
+     *
+     * Counting only ALLOWED and DENIED left AMBER scans out of both, so the
+     * dashboard total disagreed with the number of documents actually in the
+     * collection - and nothing on screen would have shown it.
+     */
     public EntryStatsResponse stats(EntryLogFilterDto filter) {
-        long allowed = repository.countByCampusIdAndScanResultAndScannedAtBetween(
-                filter.getCampusId(), ScanResult.ALLOWED, filter.getFrom(), filter.getTo());
-        long denied = repository.countByCampusIdAndScanResultAndScannedAtBetween(
-                filter.getCampusId(), ScanResult.DENIED, filter.getFrom(), filter.getTo());
+        long allowed = countOf(filter, ScanResult.ALLOWED);
+        long amber = countOf(filter, ScanResult.AMBER);
+        long denied = countOf(filter, ScanResult.DENIED);
+
         return EntryStatsResponse.of(filter.getCampusId(), filter.getFrom(), filter.getTo(),
-                allowed, denied);
+                allowed, amber, denied);
+    }
+
+    private long countOf(EntryLogFilterDto filter, ScanResult result) {
+        return repository.countByCampusIdAndScanResultAndScannedAtBetween(
+                filter.getCampusId(), result, filter.getFrom(), filter.getTo());
     }
 
     /**
