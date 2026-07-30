@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.util.HexFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,11 +34,26 @@ import org.springframework.stereotype.Component;
  * of these, and any token that does not start with it is refused as
  * INVALID_TOKEN - which is also exactly the right behaviour in production.
  *
- * @ConditionalOnMissingBean so that dropping in the real client on Day 8
- * silently retires this one. Removing the file is still the right move.
+ * ==========================================================================
+ * DAY 8 - THE CONDITION CHANGED, AND THE OLD ONE WAS UNSOUND
+ * ==========================================================================
+ * This used to carry @ConditionalOnMissingBean. That annotation is built for
+ * @Bean methods inside auto-configuration, where ordering is guaranteed. On a
+ * plain @Component it is evaluated during scanning, in no defined order relative
+ * to other components - so adding HttpPassVerificationClient could just as
+ * easily have produced NoUniqueBeanDefinitionException on ScanService's
+ * constructor as it could have retired this class.
+ *
+ * An explicit property is decidable at startup and reads the same to everyone:
+ *
+ *     perimity.guard.clients=http   real calls (the default)
+ *     perimity.guard.clients=stub   this class, development tokens only
+ *
+ * Delete this file once qr-service and gatepass-service both ship their
+ * endpoints and the integration tests pass against the real thing.
  */
 @Component
-@ConditionalOnMissingBean(ignored = StubPassVerificationClient.class, value = PassVerificationClient.class)
+@ConditionalOnProperty(name = "perimity.guard.clients", havingValue = "stub")
 public class StubPassVerificationClient implements PassVerificationClient {
 
     private static final Logger log = LoggerFactory.getLogger(StubPassVerificationClient.class);
