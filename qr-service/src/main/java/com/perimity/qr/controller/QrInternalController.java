@@ -1,12 +1,15 @@
 package com.perimity.qr.controller;
 
 import com.perimity.qr.dto.ApiResponse;
+import com.perimity.qr.dto.QrDecryptRequest;
+import com.perimity.qr.dto.QrDecryptResponse;
 import com.perimity.qr.dto.QrInvalidateRequest;
 import com.perimity.qr.dto.ResendEmailRequest;
 import com.perimity.qr.email.PassEmailRetryService;
 import com.perimity.qr.entity.enums.EmailStatus;
 import java.util.Map;
 import com.perimity.qr.dto.QrRecordResponse;
+import com.perimity.qr.service.QrDecryptService;
 import com.perimity.qr.service.QrRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,11 +45,54 @@ public class QrInternalController {
 
     private final QrRecordService qrRecordService;
     private final PassEmailRetryService passEmailRetryService;
+    private final QrDecryptService qrDecryptService;
 
     public QrInternalController(QrRecordService qrRecordService,
-                                PassEmailRetryService passEmailRetryService) {
+                                PassEmailRetryService passEmailRetryService,
+                                QrDecryptService qrDecryptService) {
         this.qrRecordService = qrRecordService;
         this.passEmailRetryService = passEmailRetryService;
+        this.qrDecryptService = qrDecryptService;
+    }
+
+    /**
+     * DAY 11. The scan path. guard-service posts whatever came out of the
+     * camera; this answers whether it is a genuine, still-current token.
+     *
+     * POST rather than GET, and the token in the body rather than the path,
+     * for one reason: a URL ends up in access logs, browser history, proxy
+     * caches and error reports. A pass token in any of those is a pass anyone
+     * who reads them can use. A request body appears in none of them.
+     *
+     * The response deliberately carries no verdict, no holder name and no
+     * photo - see QrDecryptResponse. Whether this pass may enter this gate
+     * today is guard-service's call, and the holder's details are
+     * user-service's data.
+     *
+     * @Valid is what makes the 512-character ceiling and the URL-safe Base64
+     * pattern on QrDecryptRequest actually run. Without it every constraint is
+     * skipped and this endpoint would hand arbitrary user input straight to a
+     * cipher - which is the one place in this service where that matters most.
+     */
+    @PostMapping("/decrypt")
+    @Operation(summary = "Decrypt a scanned token and report whether it is still the live one")
+    public ApiResponse<QrDecryptResponse> decrypt(@Valid @RequestBody QrDecryptRequest request) {
+        QrDecryptResponse result = qrDecryptService.decrypt(request);
+
+        /*
+         * Always HTTP 200, even when the token is refused.
+         *
+         * A refused token is a successful answer to the question asked, not a
+         * failed request. Returning 4xx would make guard-service's `call()`
+         * wrapper treat every forged scan as an outage - and its comment says
+         * exactly what that costs: "a timeout means we do not know whether the
+         * pass is valid", which must never be turned into a red card.
+         *
+         * The verdict lives in the body, where the caller reads it deliberately.
+         */
+        return ApiResponse.ok(
+                result.isTokenValid() ? "Token is valid" : "Token refused",
+                result);
     }
 
     /**
