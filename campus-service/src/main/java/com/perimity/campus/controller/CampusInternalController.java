@@ -28,7 +28,8 @@ import org.springframework.web.bind.annotation.*;
  *
  * CALLERS TODAY:
  *   gatepass-service  campus name + code, to build the QR job
- *   guard-service     the gate list, for the shift picker
+ *   guard-service     the gate list, for the shift picker, and the single-gate
+ *                     check it makes when a shift actually starts
  *   any service       a config value
  */
 @RestController
@@ -65,6 +66,28 @@ public class CampusInternalController {
     @Operation(summary = "Active gates. guard-service fills its shift picker from this.")
     public ApiResponse<List<CampusGateResponse>> gates(@PathVariable @Positive Long id) {
         return ApiResponse.ok(gateService.listActive(id));
+    }
+
+
+    /**
+     * Day 11. One gate, proven usable for a shift starting now.
+     *
+     * The list above fills the picker; this validates what comes back from it.
+     * They are not the same question and the second is the one that matters:
+     * a picker is a suggestion, and guard-service currently stores the campusId,
+     * gateId and gateName it is handed without checking any of them - after
+     * which the gate name is copied into every entry log for that shift.
+     *
+     * 404 when the gate belongs to another campus. 400 when it exists here but
+     * has been decommissioned - a different problem with a different fix, and
+     * the guard needs to be told which.
+     */
+    @GetMapping("/campuses/{campusId}/gates/{gateId}")
+    @Operation(summary = "Validate one gate for a shift start. 404 if it is not this "
+            + "campus's, 400 if it is out of service.")
+    public ApiResponse<CampusGateResponse> gateForShift(@PathVariable @Positive Long campusId,
+                                                        @PathVariable @Positive Long gateId) {
+        return ApiResponse.ok(gateService.requireActiveForShift(campusId, gateId));
     }
 
     @GetMapping("/campuses/{id}/config/{key}")
