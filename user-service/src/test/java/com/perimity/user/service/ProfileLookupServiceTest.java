@@ -8,7 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.perimity.user.dto.response.ProfileSummaryBatchResponse;
 import com.perimity.user.dto.response.ProfileSummaryResponse;
 import com.perimity.user.entity.FacultyProfile;
 import com.perimity.user.entity.StudentProfile;
@@ -18,7 +17,6 @@ import com.perimity.user.repository.FacultyProfileRepository;
 import com.perimity.user.repository.StudentProfileRepository;
 import com.perimity.user.storage.StorageException;
 import com.perimity.user.storage.StorageService;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -154,83 +152,6 @@ class ProfileLookupServiceTest {
         // 500 because S3 was slow is broken - at a gate, with a queue behind it.
         assertThat(summary.photoUrl()).isNull();
         assertThat(summary.identifierCode()).isEqualTo("R1");
-    }
-
-    // ------------------------------------------------- Day 10: the batch
-
-    @Test
-    @DisplayName("a batch returns students and faculty together")
-    void batchMixesBothKinds() {
-        when(studentRepository.findByUserIdIn(any())).thenReturn(List.of(student(108L, "R1")));
-        when(facultyRepository.findByUserIdIn(any())).thenReturn(List.of(
-                FacultyProfile.builder().id(9L).userId(42L).campusId(1L).employeeId("EMP-1").build()));
-
-        ProfileSummaryBatchResponse result = service.summariesOf(List.of(108L, 42L), false);
-
-        assertThat(result.foundCount()).isEqualTo(2);
-        assertThat(result.missing()).isEmpty();
-        assertThat(result.found()).extracting(ProfileSummaryResponse::userId)
-                .containsExactlyInAnyOrder(108L, 42L);
-    }
-
-    @Test
-    @DisplayName("accounts with no profile come back as missing, not as an error")
-    void missesAreDataNotErrors() {
-        // The bulk engine creates lightweight VISITOR identities for attendees
-        // nobody has seen before. They have an account and a pass and no profile
-        // here, so a mixed sheet is SUPPOSED to return fewer than it asked about.
-        when(studentRepository.findByUserIdIn(any())).thenReturn(List.of(student(108L, "R1")));
-        when(facultyRepository.findByUserIdIn(any())).thenReturn(List.of());
-
-        ProfileSummaryBatchResponse result = service.summariesOf(List.of(108L, 500L, 501L), false);
-
-        assertThat(result.requested()).isEqualTo(3);
-        assertThat(result.foundCount()).isEqualTo(1);
-        assertThat(result.missing()).containsExactly(500L, 501L);
-    }
-
-    @Test
-    @DisplayName("duplicate ids are collapsed rather than refused")
-    void duplicatesAreCollapsed() {
-        // A caller assembling ids from a spreadsheet will occasionally send the
-        // same one twice. Refusing the whole batch over that would be unhelpful.
-        when(studentRepository.findByUserIdIn(any())).thenReturn(List.of(student(108L, "R1")));
-        when(facultyRepository.findByUserIdIn(any())).thenReturn(List.of());
-
-        ProfileSummaryBatchResponse result = service.summariesOf(List.of(108L, 108L, 108L), false);
-
-        assertThat(result.requested()).isEqualTo(1);
-        assertThat(result.found()).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("a batch signs no URLs unless asked, so 1000 rows is not 1000 signatures")
-    void batchSkipsPhotoUrlsByDefault() {
-        when(studentRepository.findByUserIdIn(any())).thenReturn(List.of(student(108L, "R1")));
-        when(facultyRepository.findByUserIdIn(any())).thenReturn(List.of());
-
-        ProfileSummaryBatchResponse off = service.summariesOf(List.of(108L), false);
-        assertThat(off.found().get(0).photoUrl()).isNull();
-        verify(storage, never()).presignedReadUrl(anyString(), any());
-
-        ProfileSummaryBatchResponse on = service.summariesOf(List.of(108L), true);
-        assertThat(on.found().get(0).photoUrl()).isEqualTo(SIGNED);
-    }
-
-    @Test
-    @DisplayName("the batch is two queries, not one per id")
-    void batchIsTwoQueries() {
-        when(studentRepository.findByUserIdIn(any())).thenReturn(List.of());
-        when(facultyRepository.findByUserIdIn(any())).thenReturn(List.of());
-
-        service.summariesOf(List.of(1L, 2L, 3L, 4L, 5L), false);
-
-        // The whole reason this endpoint exists. If someone ever rewrites it as
-        // a loop over findByUserId, this is what catches it.
-        verify(studentRepository).findByUserIdIn(any());
-        verify(facultyRepository).findByUserIdIn(any());
-        verify(studentRepository, never()).findByUserId(any());
-        verify(facultyRepository, never()).findByUserId(any());
     }
 
     private StudentProfile student(Long userId, String rollNo) {

@@ -6,7 +6,7 @@ Student and faculty profiles, per-campus departments, and document records.
 The login account itself lives in auth-service; this service holds the identity
 information attached to it.
 
-Complete through **Day 11** of the plan.
+Complete through **Day 12** of the plan — backend frozen.
 
 ---
 
@@ -73,18 +73,16 @@ through a shared key.
 
 | Method | Path | Called by |
 |---|---|---|
-| GET | `/profiles/{userId}/summary` | gatepass when issuing a pass; guard for the scanner |
-| POST | `/profiles/summaries` (`?withPhotoUrl=`) | the bulk engine — up to 1000 ids in one call |
-| GET | `/profiles/{userId}/exists` | a caller that only needs yes or no |
+| GET | `/profiles/{userId}/summary` | gatepass (`InternalServiceClient.profileOf`), guard (`HttpHolderProfileClient`) |
 
-**Day 10 — the batch lookup.** A bulk upload is up to a thousand rows.
-Enriching each through the single endpoint is a thousand round trips for
-something two queries answer. It is a POST because a thousand ids in a query
-string is roughly 8 KB — Tomcat's default header limit — so a GET would fail on
-exactly the large batches that matter. Accounts with no profile come back in
-`missing` rather than as an error: the bulk engine creates lightweight VISITOR
-identities for attendees nobody has seen before, so a mixed sheet is *supposed*
-to return fewer than it asked about.
+One endpoint, and after the Day 12 freeze it stays that way. A batch lookup and
+an existence check were removed on Day 12 with zero callers between them.
+
+Two services read `userId`, `identifierCode` and `photoS3Key` out of this
+response by name. Adding a field is safe — Jackson drops what a caller does not
+declare. **Renaming or removing one of those three is not:** the call keeps
+returning 200, the field arrives null, and a pass prints without a photo while a
+scanner shows a blank card, with nothing in any log.
 
 **Day 11 — the scanner photo.** `summary` returns a short-lived signed
 `photoUrl` alongside `photoS3Key`. A key is not displayable, and guard-service
@@ -251,13 +249,39 @@ mvn test
 | Student profile and document upload screens | 16 |
 | `Dockerfile`, then uncomment this service's block in the root compose file | — |
 
-**Day 10 note.** The plan assigns "per-row identity resolution by email" to this
-service, but identity is keyed by email and email lives in `authdb`. Neither
-profile table here has an email column, so user-service structurally cannot own
-that lookup without breaking database-per-service. auth-service ships
-`POST /api/internal/auth/users` (resolve-or-create, idempotent) and gatepass's
-bulk engine calls it directly. What was left for this service was the batch
-profile lookup above, so a 600-row batch is one call rather than 600.
+**Day 10 carried no work for this service.** The plan assigns "per-row identity
+resolution by email" here, but identity is keyed by email and email lives in
+`authdb` — neither profile table has an email column, so owning that lookup
+would mean reading another service's database. auth-service ships
+`POST /api/internal/auth/users` (resolve-or-create, idempotent) and gatepass
+calls it directly at `BulkUploadService:343`. The Day 10 gate is met without
+this service being involved. Day 17 asks its owner to *confirm* identity
+resolution is correct, which is consistent with never having built it.
+
+## Day 12 — what the integration pass changed here
+
+Three defects, all in this service, all of which failed silently:
+
+**The pause call was a no-op on every developer machine.**
+`perimity.gatepass.base-url` defaulted to empty, so `PassPauseClientConfig`
+selected `NoOpPassPauseClient`. Editing a photo logged a warning and left the
+pass `ACTIVE` — the exact outcome the pause rule exists to prevent. It is now
+`perimity.services.gatepass-url`, defaulting to `http://localhost:8083`.
+
+**The environment variable was the wrong name.** Every other service reads
+`<PEER>_SERVICE_URL`. This one read `GATEPASS_BASE_URL`, so setting
+`GATEPASS_SERVICE_URL` in the shared `.env` configured five services and quietly
+skipped this one.
+
+**A missing `INTERNAL_API_KEY` used to start the service anyway** and then 401
+every internal call. Both callers swallow that, so the symptom was a pass with
+no photo and a scanner with a blank card — nothing pointing at a missing
+variable. `InternalApiKeyFilter` now refuses to start, matching auth, gatepass
+and campus.
+
+Timeouts also moved from a hardcoded 2s/3s to the shared
+`perimity.services.timeout-ms`, so one number in `.env` tunes every internal
+call in the platform.
 
 **Known drift:** `docs/Perimity_Team_Guide.md` §4.2 lists these paths as
 `/api/users/...` (plural). The code uses `/api/user/...` (singular), matching
