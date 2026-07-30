@@ -20,6 +20,10 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
 
     Page<StudentProfile> findByCampusIdOrderByIdDesc(Long campusId, Pageable pageable);
 
+    /** The Student Directory filtered by department. Always campus-scoped too. */
+    Page<StudentProfile> findByCampusIdAndDepartmentIdOrderByIdDesc(
+            Long campusId, Long departmentId, Pageable pageable);
+
     List<StudentProfile> findByDepartmentId(Long departmentId);
 
     long countByCampusId(Long campusId);

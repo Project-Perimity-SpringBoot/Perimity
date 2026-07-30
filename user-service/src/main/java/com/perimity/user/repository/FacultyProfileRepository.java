@@ -22,5 +22,8 @@ public interface FacultyProfileRepository extends JpaRepository<FacultyProfile, 
 
     Page<FacultyProfile> findByCampusIdOrderByIdDesc(Long campusId, Pageable pageable);
 
+    Page<FacultyProfile> findByCampusIdAndDepartmentIdOrderByIdDesc(
+            Long campusId, Long departmentId, Pageable pageable);
+
     long countByCampusId(Long campusId);
 }

@@ -62,14 +62,57 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Day 3 onwards, uncomment when you get there. Adding
-             spring-boot-starter-security NOW will lock every endpoint behind
-             HTTP Basic and make your ping and Swagger appear broken.
-
+        <!-- Day 7 - Spring Security.
+             Adding this locks EVERY endpoint by default, including /ping and
+             Swagger. config/SecurityConfig.java is what re-opens them; if you
+             remove that class, this dependency will make the service look
+             completely broken. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+
+        <!-- Day 7 - JWT.
+             user-service only VERIFIES tokens; auth-service is the only service
+             that issues them. jjwt-impl and jjwt-jackson are runtime scope on
+             purpose: compiling against them instead of jjwt-api is how you end
+             up coupled to an internal class that changes between releases.
+             Version 0.12.6 must match auth-service. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Day 7 - lets @WithMockUser and the security filter chain be tested. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Test-only in-memory database, so a context test does not need a
+             running Postgres container. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Day 9 onwards, uncomment when you get there.
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
