@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -399,6 +400,58 @@ public class BulkUploadService {
         }
 
         batchRepository.save(batch);
+    }
+
+    /**
+     * Re-queue only the rows of a batch whose generation never finished.
+     *
+     * A broker restart, an OOM in qr-service, or a poison message that hit the
+     * dead-letter queue leaves passes at PENDING with nobody coming back for
+     * them. Before this, the only recovery was to re-upload the whole
+     * spreadsheet - which creates a SECOND pass for all 580 people who were
+     * fine, and puts a second QR in each of their inboxes.
+     *
+     * PENDING is the definition of "never finished": ACTIVE means qr-service
+     * reported success, and REVOKED or EXPIRED means someone or something has
+     * since made the row moot. Only PENDING is genuinely unfinished work.
+     *
+     * Idempotent by construction. Re-running it on a batch with nothing pending
+     * publishes nothing and returns zero, so an impatient admin clicking Retry
+     * four times does no damage.
+     */
+    @Transactional
+    public Map<String, Object> retryFailedRows(Long campusId, Long batchId) {
+
+        BulkUploadBatch batch = require(campusId, batchId);
+
+        if (batch.getStatus() != BatchStatus.PROCESSING
+                && batch.getStatus() != BatchStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Only a batch that has been confirmed can be retried. This one is "
+                            + batch.getStatus().name().toLowerCase() + ".");
+        }
+
+        List<GatePass> stuck =
+                passRepository.findByBatchIdAndStatus(batchId, PassStatus.PENDING);
+
+        if (stuck.isEmpty()) {
+            return Map.of("batchId", batchId, "requeued", 0,
+                    "message", "Nothing to retry - every pass in this batch has been generated.");
+        }
+
+        // Back to PROCESSING. A batch marked COMPLETED that turns out to have
+        // stragglers is not complete, and leaving the status alone would mean
+        // recordRowCompleted never fires again for it.
+        batch.setStatus(BatchStatus.PROCESSING);
+        batch.setCompletedAt(null);
+        batchRepository.save(batch);
+
+        stuck.forEach(qrJobPublisher::publishAfterCommit);
+
+        log.info("Batch {} - re-queued {} stuck pass(es)", batchId, stuck.size());
+
+        return Map.of("batchId", batchId, "requeued", stuck.size(),
+                "message", "Re-queued " + stuck.size() + " row(s) that had not finished.");
     }
 
     // ============================================================== reads

@@ -353,6 +353,32 @@ public class GatePassService {
 
     // ------------------------------------------------------------- reads
 
+    /**
+     * Pass lookup for another SERVICE, not scoped to a campus.
+     *
+     * Day 11. guard-service calls this on every single scan: the QR decrypts
+     * to a pass id, and before the gate opens it has to know the pass is still
+     * ACTIVE and still in date. Palash's HttpPassVerificationClient has been
+     * calling it since Day 9 and getting 404, because it did not exist.
+     *
+     * WHY NO campusId PARAMETER, when every other read here is campus-scoped:
+     * the caller does not have one. A guard scans a QR; the token yields a pass
+     * id and nothing else. Requiring a campus would mean guard-service guessing
+     * at the answer it is asking the question to find out.
+     *
+     * That is safe here and would NOT be safe on a public endpoint. This is
+     * reachable only behind InternalApiKeyFilter - a service, never a browser.
+     * The campus still gets checked: the response carries campusId, and
+     * ScanService compares it against the guard's open session, so a pass from
+     * another campus is denied at the gate rather than here.
+     */
+    @Transactional(readOnly = true)
+    public GatePassResponse getForInternal(Long id) {
+        GatePass pass = passRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Pass", id));
+        return withEventName(pass);
+    }
+
     @Transactional(readOnly = true)
     public GatePassResponse getOne(Long campusId, Long id) {
         GatePass pass = require(campusId, id);

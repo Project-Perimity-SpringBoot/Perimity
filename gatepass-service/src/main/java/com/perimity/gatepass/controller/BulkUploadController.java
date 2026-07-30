@@ -117,6 +117,20 @@ public class BulkUploadController {
                 service.confirm(currentUser.campusId(), batchId, dto));
     }
 
+    /**
+     * Retry only the rows that never finished. Screen 10's "retry failed rows"
+     * button.
+     *
+     * Deliberately NOT "re-upload the sheet". Re-uploading creates a second
+     * pass for everyone who was already fine.
+     */
+    @PostMapping("/{batchId}/retry")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
+    @Operation(summary = "Re-queue only the passes of this batch still stuck at PENDING")
+    public ApiResponse<Map<String, Object>> retry(@PathVariable @Positive Long batchId) {
+        return ApiResponse.ok(service.retryFailedRows(currentUser.campusId(), batchId));
+    }
+
     // ---------------------------------------------------------------- reads
 
     /** Screen 10 polls this every two seconds. */

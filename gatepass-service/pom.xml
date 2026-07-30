@@ -141,6 +141,42 @@
 
     <build>
         <plugins>
+            <!-- ============================================================
+                 Jacoco - Day 11. Coverage report for rubric credit.
+
+                 prepare-agent must bind BEFORE the tests run, and report AFTER,
+                 which is why there are two executions rather than one. Bound to
+                 'verify' rather than 'test' so `mvn test` stays fast for the
+                 inner loop and CI's `mvn verify` gets the report.
+
+                 Output: target/site/jacoco/index.html
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <excludes>
+                        <!-- Generated or trivially-correct code. Counting it
+                             inflates the number without proving anything. -->
+                        <exclude>**/dto/**</exclude>
+                        <exclude>**/entity/**</exclude>
+                        <exclude>**/GatepassServiceApplication.class</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
