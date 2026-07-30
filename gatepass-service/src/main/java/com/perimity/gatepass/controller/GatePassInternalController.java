@@ -36,6 +36,25 @@ public class GatePassInternalController {
         this.service = service;
     }
 
+    /**
+     * THE ENDPOINT GUARD-SERVICE SCANS AGAINST. Palash has been calling this
+     * since Day 9; it did not exist until Day 11, so every scan fell back to
+     * his stub or failed outright.
+     *
+     * Note his client currently uses /api/internal/gatepass/passes/{id} - the
+     * segments the other way round. One of us has to move; this service already
+     * has three live endpoints under /api/gatepass/internal and the security
+     * matcher is written for that prefix, so his client is the cheaper change.
+     * Agreed at standup - do not silently add a second mapping to paper over it,
+     * because then two URLs are correct and nobody knows which is canonical.
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "One pass, by id, for a scan. Not campus-scoped - the caller "
+            + "has only a token. Behind the internal API key.")
+    public ApiResponse<GatePassResponse> getOne(@PathVariable @Positive Long id) {
+        return ApiResponse.ok(service.getForInternal(id));
+    }
+
     @PostMapping("/{id}/activate")
     @Operation(summary = "qr-service reports generation finished. PENDING to ACTIVE.")
     public ApiResponse<GatePassResponse> activate(
