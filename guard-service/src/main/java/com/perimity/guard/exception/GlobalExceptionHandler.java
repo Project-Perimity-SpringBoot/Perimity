@@ -103,6 +103,29 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ex.getMessage(), List.of()));
     }
 
+    /**
+     * qr-service or gatepass-service is unreachable, so we cannot say whether a
+     * pass is valid.
+     *
+     * 503, not 200-with-a-denial. FR-SCAN-10 requires the guard to tell "this
+     * pass is invalid" apart from "the scanner is broken" - they demand opposite
+     * actions. The scanner UI renders its full-screen red card from a 200 body,
+     * so a distinct status code is what keeps an outage off that screen.
+     *
+     * Note that no EntryLog is written on this path. An outage is not a scan, and
+     * recording it as a refusal would put a denial against the name of someone
+     * who may hold a perfectly valid pass.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            com.perimity.guard.client.PassVerificationUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVerificationUnavailable(
+            com.perimity.guard.client.PassVerificationUnavailableException ex) {
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.fail(ex.getMessage(),
+                        List.of("SCANNER_UNAVAILABLE")));
+    }
+
     private ResponseEntity<ApiResponse<Void>> badRequest(String message, List<String> errors) {
         return ResponseEntity.badRequest().body(ApiResponse.fail(message, errors));
     }
