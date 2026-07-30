@@ -2,14 +2,19 @@ package com.perimity.gatepass.service;
 
 import com.perimity.gatepass.dto.request.EventCreateDto;
 import com.perimity.gatepass.dto.request.EventUpdateDto;
+import com.perimity.gatepass.bulk.AttendeeRosterWriter;
+import com.perimity.gatepass.dto.response.EventAttendanceSummaryResponse;
 import com.perimity.gatepass.dto.response.EventResponse;
 import com.perimity.gatepass.dto.response.PageResponse;
 import com.perimity.gatepass.entity.Event;
 import com.perimity.gatepass.exception.ResourceNotFoundException;
 import com.perimity.gatepass.repository.EventRepository;
 import com.perimity.gatepass.repository.GatePassRepository;
+import com.perimity.gatepass.entity.enums.PassStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,13 +47,16 @@ public class EventService {
      * @Lazy on one side, not a redesign.
      */
     private final GatePassService gatePassService;
+    private final AttendeeRosterWriter rosterWriter;
 
     public EventService(EventRepository eventRepository,
                         GatePassRepository gatePassRepository,
-                        GatePassService gatePassService) {
+                        GatePassService gatePassService,
+                        AttendeeRosterWriter rosterWriter) {
         this.eventRepository = eventRepository;
         this.gatePassRepository = gatePassRepository;
         this.gatePassService = gatePassService;
+        this.rosterWriter = rosterWriter;
     }
 
     /** Create an event. Rejects a duplicate name on the same campus. */
@@ -165,6 +173,55 @@ public class EventService {
                 id, cancelledBy, revoked);
 
         return EventResponse.from(event, gatePassRepository.countByEventId(id));
+    }
+
+    /**
+     * The gatepass half of Screen 12 - how many people were REGISTERED.
+     *
+     * The attendance half comes from guard-service, called separately by the
+     * browser. See EventAttendanceSummaryResponse for why this service does not
+     * proxy it.
+     */
+    @Transactional(readOnly = true)
+    public EventAttendanceSummaryResponse attendanceSummary(Long campusId, Long id) {
+        Event event = require(campusId, id);
+
+        long total = 0;
+        long registered = 0;
+        List<EventAttendanceSummaryResponse.StatusCount> byStatus = new ArrayList<>();
+
+        for (Object[] row : gatePassRepository.countByEventGroupedByStatus(id)) {
+            PassStatus status = (PassStatus) row[0];
+            long count = ((Number) row[1]).longValue();
+
+            byStatus.add(new EventAttendanceSummaryResponse.StatusCount(status.name(), count));
+            total += count;
+
+            // A revoked registration is not a no-show. Counting it would drag
+            // the attendance percentage down for a reason unrelated to whether
+            // anybody turned up.
+            if (status != PassStatus.REVOKED) {
+                registered += count;
+            }
+        }
+
+        byStatus.sort(Comparator.comparing(EventAttendanceSummaryResponse.StatusCount::status));
+
+        return EventAttendanceSummaryResponse.of(event, total, registered, byStatus);
+    }
+
+    /**
+     * The registered-attendee roster, as CSV.
+     *
+     * Reuses the bulk engine's CSV writer rather than building strings here,
+     * so the formula-injection defence applies to this export too. An organiser
+     * opening an attendee list in Excel is exactly the same threat as an admin
+     * opening an error report, and holderName came from an uploaded sheet.
+     */
+    @Transactional(readOnly = true)
+    public byte[] attendeeCsv(Long campusId, Long id) {
+        require(campusId, id);
+        return rosterWriter.write(gatePassRepository.findByEventIdOrderByHolderNameAsc(id));
     }
 
     /** Load or 404. Campus-scoped, so a wrong campus reads as "not found". */

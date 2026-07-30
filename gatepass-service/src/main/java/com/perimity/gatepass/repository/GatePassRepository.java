@@ -120,4 +120,30 @@ public interface GatePassRepository extends JpaRepository<GatePass, Long> {
      * asks for PENDING - those are the rows whose generation never came back.
      */
     List<GatePass> findByBatchIdAndStatus(Long batchId, PassStatus status);
+
+    // ------------------------------------------------- Day 12, attendance
+
+    /**
+     * Pass counts for one event, grouped by status, in ONE query.
+     *
+     * The alternative is five countByEventIdAndStatus calls. Same answer, five
+     * round trips, and the five results are not a consistent snapshot - a pass
+     * activating between call two and call four is counted twice or not at all.
+     */
+    @Query("""
+           SELECT p.status, COUNT(p) FROM GatePass p
+            WHERE p.eventId = :eventId
+            GROUP BY p.status
+           """)
+    List<Object[]> countByEventGroupedByStatus(@Param("eventId") Long eventId);
+
+    /**
+     * The attendee roster for the CSV export, ordered by name.
+     *
+     * Ordered in the DATABASE rather than in Java because the export streams
+     * and must not hold 600 rows in memory just to sort them. It also makes
+     * the CSV stable between exports, which matters when an organiser diffs
+     * two of them.
+     */
+    List<GatePass> findByEventIdOrderByHolderNameAsc(Long eventId);
 }
