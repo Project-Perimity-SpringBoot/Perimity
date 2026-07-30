@@ -10,6 +10,7 @@ import java.util.HexFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,13 +47,32 @@ import org.springframework.stereotype.Component;
  *
  * An explicit property is decidable at startup and reads the same to everyone:
  *
- *     perimity.guard.clients=http   real calls (the default)
- *     perimity.guard.clients=stub   this class, development tokens only
+ *     perimity.guard.clients.verification=http   real calls (the default)
+ *     perimity.guard.clients.verification=stub   this class, dev tokens only
  *
- * Delete this file once qr-service and gatepass-service both ship their
- * endpoints and the integration tests pass against the real thing.
+ * ==========================================================================
+ * DAY 11 - TWO LOCKS, NOT ONE, AND HERE IS WHY
+ * ==========================================================================
+ * This class hands out valid passes to anyone who can type
+ * "dev:118:108:Any_Name:1:DAILY::2026-01-01:". At a real gate that is not a
+ * test double, it is a skeleton key.
+ *
+ * One property standing between a deployed gate and that is too thin. A stray
+ * GUARD_CLIENTS=stub copied into an EC2 .env on Day 22 would enable it silently,
+ * and the only sign would be a warning in a log nobody is tailing.
+ *
+ * So it now also requires the "dev" profile. Deployed environments do not set
+ * one, so even a wrong property leaves this class unregistered - and the wrong
+ * property then fails loudly instead, because no PassVerificationClient bean
+ * exists and ScanService will not construct. Refusing to start is a very good
+ * outcome for a misconfiguration of this kind.
+ *
+ * To use it locally: SPRING_PROFILES_ACTIVE=dev plus the property.
+ *
+ * Delete the file outright once the live integration test passes.
  */
 @Component
+@Profile("dev")
 @ConditionalOnProperty(name = "perimity.guard.clients.verification", havingValue = "stub")
 public class StubPassVerificationClient implements PassVerificationClient {
 
@@ -61,8 +81,10 @@ public class StubPassVerificationClient implements PassVerificationClient {
 
     public StubPassVerificationClient() {
         log.warn("=======================================================================");
-        log.warn(" StubPassVerificationClient is active. Development tokens only.");
-        log.warn(" Replace with a real qr-service call on Day 8 and DELETE this class.");
+        log.warn(" StubPassVerificationClient is ACTIVE - any dev: token is accepted.");
+        log.warn(" This must never run outside a developer machine.");
+        log.warn(" qr-service /decrypt now exists: switch to");
+        log.warn("   perimity.guard.clients.verification=http");
         log.warn("=======================================================================");
     }
 
