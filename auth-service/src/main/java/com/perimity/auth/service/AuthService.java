@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Login and one-time codes.
  *
  * The DTOs already proved the input is well formed. Everything here needs the
- * database, Redis or the clock.
+ * database, Redis, the clock, or (Day 9) the mail server.
  */
 @Service
 public class AuthService {
@@ -48,6 +48,7 @@ public class AuthService {
     private final RateLimiter rateLimiter;
     private final AuditService audit;
     private final LoginAttemptService loginAttempts;
+    private final EmailService emailService;
 
     private final int maxFailedAttempts;
     private final int lockoutMinutes;
@@ -64,6 +65,7 @@ public class AuthService {
                        RateLimiter rateLimiter,
                        AuditService audit,
                        LoginAttemptService loginAttempts,
+                       EmailService emailService,
                        @Value("${perimity.password.max-failed-attempts}") int maxFailedAttempts,
                        @Value("${perimity.password.lockout-minutes}") int lockoutMinutes,
                        @Value("${perimity.otp.length}") int otpLength,
@@ -78,6 +80,7 @@ public class AuthService {
         this.rateLimiter = rateLimiter;
         this.audit = audit;
         this.loginAttempts = loginAttempts;
+        this.emailService = emailService;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutMinutes = lockoutMinutes;
         this.otpLength = otpLength;
@@ -177,8 +180,10 @@ public class AuthService {
         audit.recordAnonymous(AuditAction.OTP_REQUESTED,
                 "email:" + dto.getEmail(), "Purpose " + dto.getPurpose());
 
-        // Day 9 replaces this with SES. DELETE THIS LINE BEFORE DEPLOYMENT.
-        log.warn("DEV ONLY - OTP for {} ({}) is {}", dto.getEmail(), dto.getPurpose(), plainCode);
+        // Day 9: real delivery. EmailService itself falls back to a console log
+        // when perimity.mail.enabled is false, so local dev without SMTP set up
+        // still works exactly as it did before.
+        emailService.sendOtp(dto.getEmail(), plainCode, dto.getPurpose(), otpExpiryMinutes);
 
         return OtpChallengeResponse.of(dto.getEmail(), dto.getPurpose(), expiresAt, otpMaxAttempts);
     }

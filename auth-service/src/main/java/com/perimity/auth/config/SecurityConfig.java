@@ -1,5 +1,6 @@
 package com.perimity.auth.config;
 
+import com.perimity.auth.security.InternalApiKeyFilter;
 import com.perimity.auth.security.JwtAuthenticationFilter;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -24,10 +25,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * Adding spring-boot-starter-security secures EVERY endpoint by default,
  * including /ping and Swagger. This class is what re-opens them.
  *
- * Leaving /ping locked is a real production failure, not a nuisance: Docker
- * polls it as a healthcheck, gets 401, marks the container unhealthy and
- * restarts it forever.
- *
  * FOUR PATHS MUST BE PUBLIC IN EVERY SERVICE. Only the service name changes:
  *
  *     /api/<service>/ping
@@ -35,9 +32,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  *     /swagger-ui/**
  *     /v3/api-docs/**        and /api-docs/** where that path is configured
  *
- * Note the api-docs split: four services set springdoc.api-docs.path=/api-docs
- * while this one uses /v3/api-docs. Both are permitted below, but the team
- * should agree one value.
+ * PLUS a fifth, added Day 8: /api/internal/** is permitAll here too, because a
+ * service-to-service call never carries a JWT. It is not actually open -
+ * InternalApiKeyFilter, registered below, is what locks it down.
  *
  * auth-service additionally opens login, OTP, visitor registration and the two
  * password-reset endpoints - you cannot obtain a token without reaching them.
@@ -49,9 +46,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final InternalApiKeyFilter internalApiKeyFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter,
+                          InternalApiKeyFilter internalApiKeyFilter) {
         this.jwtFilter = jwtFilter;
+        this.internalApiKeyFilter = internalApiKeyFilter;
     }
 
     @Bean
@@ -63,10 +63,6 @@ public class SecurityConfig {
             .formLogin(f -> f.disable())
             .httpBasic(b -> b.disable())
             .exceptionHandling(e -> e
-                    // Without these, Spring answers 403 to a caller with NO
-                    // token, which says "you are logged in but not allowed"
-                    // when the truth is "you are not logged in".
-                    // 401 means bring a token. 403 means your token is not enough.
                     .authenticationEntryPoint((req, res, ex) -> {
                         res.setStatus(401);
                         res.setContentType("application/json");
@@ -93,8 +89,15 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/auth/password/reset-request").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/auth/password/reset-confirm").permitAll()
 
+                    // Day 8 - internal, service-to-service only. Not a human
+                    // caller, so not JWT. Without this line FilterSecurityInterceptor
+                    // demands a Bearer token no internal call will ever present,
+                    // and every one dies 401 before InternalApiKeyFilter even runs.
+                    .requestMatchers("/api/internal/**").permitAll()
+
                     .anyRequest().authenticated())
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(internalApiKeyFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
