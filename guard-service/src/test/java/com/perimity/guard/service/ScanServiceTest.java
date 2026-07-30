@@ -9,8 +9,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.perimity.guard.client.CampusConfigClient;
+import com.perimity.guard.client.HolderProfileClient;
 import com.perimity.guard.client.PassVerification;
 import com.perimity.guard.client.PassVerificationClient;
+import com.perimity.guard.client.RepeatEntryPolicy;
 import com.perimity.guard.client.RunningEventClient;
 import com.perimity.guard.document.EntryLog;
 import com.perimity.guard.document.ScanSession;
@@ -72,13 +75,19 @@ class ScanServiceTest {
     @Mock private ScanSessionService sessionService;
     @Mock private PassVerificationClient passVerification;
     @Mock private RunningEventClient runningEvents;
+    @Mock private CampusConfigClient campusConfig;
+    @Mock private HolderProfileClient holderProfiles;
 
     private ScanService scanService;
 
     @BeforeEach
     void setUp() {
         scanService = new ScanService(entryLogRepository, sessionService,
-                passVerification, runningEvents);
+                passVerification, runningEvents, campusConfig, holderProfiles);
+
+        // A holder with no profile is the common case, not an edge case: every
+        // visitor is one. Lenient because refused scans never reach this call.
+        lenient().when(holderProfiles.profileFor(any())).thenReturn(Optional.empty());
 
         // Saving returns the argument with an id, mimicking Mongo. ScanResponse
         // reads log.getId(), so returning null here would hide a real NPE.
@@ -266,6 +275,143 @@ class ScanServiceTest {
 
             assertThat(savedLog().getAttributedEventId()).isNull();
             assertThat(savedLog().isEventAttributed()).isFalse();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Repeat entry (FR-SCAN-8)
+    // ------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("repeat entry on the same day")
+    class RepeatEntry {
+
+        @Test
+        @DisplayName("a second scan today is AMBER when the campus says so - and still lets them in")
+        void secondScanIsAmberByDefault() {
+            openSession();
+            allowedDailyPass();
+            enteredAlreadyToday(true);
+            when(campusConfig.repeatEntryPolicy(CAMPUS_ID)).thenReturn(RepeatEntryPolicy.AMBER);
+
+            ScanResponse response = scanService.scan(request("t"), GUARD_ID);
+
+            assertThat(response.result()).isEqualTo(ScanResult.AMBER);
+            // The whole point: amber is not a refusal.
+            assertThat(response.result().permitsEntry()).isTrue();
+            assertThat(response.denialReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("a second scan is plain green when the campus prefers GREEN")
+        void secondScanIsGreenWhenConfigured() {
+            openSession();
+            allowedDailyPass();
+            enteredAlreadyToday(true);
+            when(campusConfig.repeatEntryPolicy(CAMPUS_ID)).thenReturn(RepeatEntryPolicy.GREEN);
+
+            ScanResponse response = scanService.scan(request("t"), GUARD_ID);
+
+            // Indistinguishable from a first entry, which is what GREEN means.
+            assertThat(response.result()).isEqualTo(ScanResult.ALLOWED);
+        }
+
+        @Test
+        @DisplayName("a repeat is logged like any other entry - never silently dropped")
+        void repeatIsStillLogged() {
+            openSession();
+            allowedDailyPass();
+            enteredAlreadyToday(true);
+            when(campusConfig.repeatEntryPolicy(CAMPUS_ID)).thenReturn(RepeatEntryPolicy.AMBER);
+
+            scanService.scan(request("t"), GUARD_ID);
+
+            // A paper register had a line per entry. So does this.
+            assertThat(savedLog().getScanResult()).isEqualTo(ScanResult.AMBER);
+            verify(sessionService).recordScan(any(), eq(ScanResult.AMBER));
+        }
+
+        @Test
+        @DisplayName("a first entry never asks the campus for its repeat policy")
+        void firstEntrySkipsTheConfigLookup() {
+            openSession();
+            allowedDailyPass();
+            enteredAlreadyToday(false);
+
+            ScanResponse response = scanService.scan(request("t"), GUARD_ID);
+
+            assertThat(response.result()).isEqualTo(ScanResult.ALLOWED);
+            // Config is only consulted when it can change the answer. On the
+            // common path a scan makes no config call at all.
+            verify(campusConfig, never()).repeatEntryPolicy(any());
+        }
+
+        private void allowedDailyPass() {
+            when(passVerification.verify(any()))
+                    .thenReturn(pass(PassType.DAILY, null, null, CAMPUS_ID,
+                            LocalDate.now().minusYears(1), null));
+            when(runningEvents.runningEventFor(HOLDER_ID)).thenReturn(Optional.empty());
+        }
+
+        private void enteredAlreadyToday(boolean already) {
+            when(entryLogRepository.existsByHolderUserIdAndCampusIdAndScannedAtBetween(
+                    eq(HOLDER_ID), eq(CAMPUS_ID), any(), any())).thenReturn(already);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Holder photo (FR-SCAN-9)
+    // ------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("holder photo")
+    class Photo {
+
+        @Test
+        @DisplayName("a permitted entry carries the holder's photo key")
+        void allowedCarriesPhoto() {
+            openSession();
+            when(passVerification.verify(any()))
+                    .thenReturn(pass(PassType.EVENT, 17L, null, CAMPUS_ID,
+                            LocalDate.now().minusDays(1), LocalDate.now().plusDays(1)));
+            when(holderProfiles.profileFor(HOLDER_ID)).thenReturn(Optional.of(
+                    new HolderProfileClient.HolderProfile(HOLDER_ID, "S-1042",
+                            "profiles/user-108/photo.jpg")));
+
+            ScanResponse response = scanService.scan(request("t"), GUARD_ID);
+
+            assertThat(response.holderPhotoKey()).isEqualTo("profiles/user-108/photo.jpg");
+        }
+
+        @Test
+        @DisplayName("a refusal never fetches a photo at all")
+        void refusalSkipsTheLookup() {
+            openSession();
+            when(passVerification.verify(any()))
+                    .thenReturn(pass(PassType.DAILY, null, DenialReason.PASS_REVOKED,
+                            CAMPUS_ID, LocalDate.now().minusDays(1), null));
+
+            ScanResponse response = scanService.scan(request("t"), GUARD_ID);
+
+            assertThat(response.holderPhotoKey()).isNull();
+            // Not merely absent from the response - never requested. A red path
+            // must not pay for a call it has no use for.
+            verify(holderProfiles, never()).profileFor(any());
+        }
+
+        @Test
+        @DisplayName("no profile is normal, not an error - every visitor is one")
+        void missingProfileStillLetsThemIn() {
+            openSession();
+            when(passVerification.verify(any()))
+                    .thenReturn(pass(PassType.EVENT, 17L, null, CAMPUS_ID,
+                            LocalDate.now().minusDays(1), LocalDate.now().plusDays(1)));
+            when(holderProfiles.profileFor(HOLDER_ID)).thenReturn(Optional.empty());
+
+            ScanResponse response = scanService.scan(request("t"), GUARD_ID);
+
+            assertThat(response.result()).isEqualTo(ScanResult.ALLOWED);
+            assertThat(response.holderPhotoKey()).isNull();
         }
     }
 

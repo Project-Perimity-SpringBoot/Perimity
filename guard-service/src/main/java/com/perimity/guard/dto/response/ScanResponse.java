@@ -28,15 +28,30 @@ public record ScanResponse(
         Long gateId,
         String gateName,
         LocalDateTime scannedAt,
-        String entryLogId
+        String entryLogId,
+
+        /**
+         * Object-storage key for the holder's photo, or null.
+         *
+         * A KEY, not a URL - user-service has no internal presigned-URL endpoint
+         * yet, so nothing can render this. It is carried anyway so the contract
+         * is settled and the scanner only has to change where it points, not what
+         * it expects. Null is entirely normal: visitors have no profile.
+         *
+         * Not stored on the EntryLog, unlike holderName. A name is a fact about
+         * the moment of entry and belongs in an append-only record; a photo key
+         * is a pointer to somebody else's mutable storage and does not.
+         */
+        String holderPhotoKey
 ) {
 
+    /** Amber counts. The person walked through. */
     public boolean entryAllowed() {
-        return result == ScanResult.ALLOWED;
+        return result.permitsEntry();
     }
 
     /** Normal campus entry, or entry credited to an event. */
-    public static ScanResponse allowed(EntryLog log, String eventName) {
+    public static ScanResponse allowed(EntryLog log, String eventName, String photoKey) {
         String message = eventName == null
                 ? "Welcome, " + safeName(log)
                 : "Welcome to " + eventName;
@@ -44,16 +59,44 @@ public record ScanResponse(
                 ScanResult.ALLOWED, message, null,
                 log.getPassId(), log.getHolderUserId(), log.getHolderName(),
                 log.getAttributedEventId(), eventName,
-                log.getGateId(), log.getGateName(), log.getScannedAt(), log.getId());
+                log.getGateId(), log.getGateName(), log.getScannedAt(), log.getId(),
+                photoKey);
     }
 
-    /** Refused. The reason is always shown, in words a guard can act on. */
+    /**
+     * Amber. The person goes in; the guard is simply told they have been seen
+     * already today.
+     *
+     * denialReason stays null, because nothing was denied. A guard reading this
+     * card should see no reason text at all - a reason implies a problem, and
+     * there isn't one. Whether a campus wants amber or plain green here is its
+     * own choice, read from `repeat_entry_result`.
+     */
+    public static ScanResponse repeatEntry(EntryLog log, String eventName, String photoKey) {
+        String message = eventName == null
+                ? "Seen already today · " + safeName(log)
+                : "Seen already today · " + eventName;
+        return new ScanResponse(
+                ScanResult.AMBER, message, null,
+                log.getPassId(), log.getHolderUserId(), log.getHolderName(),
+                log.getAttributedEventId(), eventName,
+                log.getGateId(), log.getGateName(), log.getScannedAt(), log.getId(),
+                photoKey);
+    }
+
+    /**
+     * Refused. The reason is always shown, in words a guard can act on.
+     *
+     * No photo on a refusal - it was never fetched. The guard's job on red is to
+     * turn the person away, and a face to compare against would only invite them
+     * to second-guess a decision the system already made on better evidence.
+     */
     public static ScanResponse denied(EntryLog log, DenialReason reason) {
         return new ScanResponse(
                 ScanResult.DENIED, messageFor(reason), reason,
                 log.getPassId(), log.getHolderUserId(), log.getHolderName(),
                 null, null, log.getGateId(), log.getGateName(),
-                log.getScannedAt(), log.getId());
+                log.getScannedAt(), log.getId(), null);
     }
 
     /**

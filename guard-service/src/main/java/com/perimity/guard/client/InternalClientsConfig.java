@@ -67,6 +67,44 @@ public class InternalClientsConfig {
                 .build();
     }
 
+    /**
+     * campus-service, for the repeat-entry policy.
+     *
+     * Its result is cached for minutes at a time, so this client is off the
+     * per-scan hot path even though the other two are not.
+     */
+    @Bean
+    RestClient campusRestClient(RestClient.Builder builder,
+                                @Value("${perimity.services.campus-url}") String campusUrl,
+                                @Value("${perimity.services.timeout-ms}") long timeoutMs,
+                                @Value("${perimity.internal.api-key}") String apiKey) {
+
+        return builder.clone()
+                .baseUrl(campusUrl)
+                .requestFactory(factory(timeoutMs))
+                .defaultHeader(KEY_HEADER, apiKey)
+                .build();
+    }
+
+    /**
+     * user-service, for the holder's photo on the result card.
+     *
+     * Only called once a scan has already been permitted, and its failure is
+     * swallowed - so it sits outside the latency budget that matters.
+     */
+    @Bean
+    RestClient userRestClient(RestClient.Builder builder,
+                              @Value("${perimity.services.user-url}") String userUrl,
+                              @Value("${perimity.services.timeout-ms}") long timeoutMs,
+                              @Value("${perimity.internal.api-key}") String apiKey) {
+
+        return builder.clone()
+                .baseUrl(userUrl)
+                .requestFactory(factory(timeoutMs))
+                .defaultHeader(KEY_HEADER, apiKey)
+                .build();
+    }
+
     private SimpleClientHttpRequestFactory factory(long timeoutMs) {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
