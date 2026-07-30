@@ -47,6 +47,52 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- ========== Activated on Day 7: security ========== -->
+
+        <!-- NOTE: adding this starter secures EVERY endpoint by default,
+             including /ping and Swagger. SecurityConfig is what re-opens them.
+             Never add this without adding that class in the same commit. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- JWT. This service only READS tokens; auth-service issues them.
+             Same version across all six, or signatures will not verify. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ========== Activated on Day 8: messaging ========== -->
+
+        <!-- RabbitMQ. Pass issue drops a QR job here and returns immediately;
+             generating a QR, a PDF and an email takes seconds, and 600 of them
+             synchronously would time out the browser. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- RestClient for the internal calls to auth, user and campus. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

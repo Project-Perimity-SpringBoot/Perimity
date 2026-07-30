@@ -73,6 +73,38 @@ public class GlobalExceptionHandler {
                         List.of("A record with these details already exists, or a required value was missing")));
     }
 
+    /**
+     * A row the caller named does not exist, or lives on another campus.
+     *
+     * Without this handler ResourceNotFoundException falls through as an
+     * unhandled RuntimeException and Spring returns 500 with a stack trace -
+     * which is what happened before it was added. A missing row is a 404.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /** The caller is signed in but not allowed to touch this particular record. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            com.perimity.gatepass.security.CurrentUser.AccessDeniedInThisServiceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(
+            com.perimity.gatepass.security.CurrentUser.AccessDeniedInThisServiceException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /** A @PreAuthorize refusal. Spring throws its own type for these. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSpringForbidden(
+            org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail("Your role is not permitted to perform this action",
+                        List.of()));
+    }
+
     /** Business-rule failures thrown deliberately by the service layer. */
     @org.springframework.web.bind.annotation.ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(RuntimeException ex) {

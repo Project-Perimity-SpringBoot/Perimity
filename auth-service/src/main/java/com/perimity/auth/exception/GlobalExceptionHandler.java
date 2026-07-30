@@ -73,6 +73,50 @@ public class GlobalExceptionHandler {
                         List.of("A record with these details already exists, or a required value was missing")));
     }
 
+    /** Failed authentication. Generic on purpose - see the exception. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(AuthenticationFailedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthFailure(AuthenticationFailedException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /** Signed in, but not allowed to touch this particular record. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            com.perimity.auth.security.CurrentUser.ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(
+            com.perimity.auth.security.CurrentUser.ForbiddenException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /** A @PreAuthorize refusal. Spring throws its own type. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSpringForbidden(
+            org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail("Your role is not permitted to perform this action",
+                        List.of()));
+    }
+
+    /** A row the caller named does not exist. */
+    @org.springframework.web.bind.annotation.ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
+    /**
+     * Too many attempts. 429, not 400 - a client that sees 400 retries, a
+     * client that sees 429 backs off. Retry-After tells it how long.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(RateLimitedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimited(RateLimitedException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
     /** Business-rule failures thrown deliberately by the service layer. */
     @org.springframework.web.bind.annotation.ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiResponse<Void>> handleBusinessRule(RuntimeException ex) {

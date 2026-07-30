@@ -14,6 +14,9 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     List<Department> findByCampusIdOrderByNameAsc(Long campusId);
 
+    /** Campus-scoped single lookup. A wrong campus id reads as "not found", not a data leak. */
+    Optional<Department> findByIdAndCampusId(Long id, Long campusId);
+
     Optional<Department> findByCampusIdAndCodeIgnoreCase(Long campusId, String code);
 
     boolean existsByCampusIdAndCodeIgnoreCase(Long campusId, String code);
