@@ -15,7 +15,7 @@ package com.perimity.qr.email;
  *
  * So the caller catches this, records EmailStatus.FAILED with the reason, and
  * lets the job finish DONE. The email is then retryable on its own through
- * POST /api/internal/qr/{passId}/resend-email, without regenerating anything.
+ * POST /api/qr/internal/{passId}/resend-email, without regenerating anything.
  */
 public class EmailDeliveryException extends RuntimeException {
 
