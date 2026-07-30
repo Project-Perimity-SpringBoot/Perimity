@@ -1,6 +1,8 @@
 package com.perimity.gatepass.controller;
 
+import com.perimity.gatepass.bulk.AttendeeRosterWriter;
 import com.perimity.gatepass.dto.ApiResponse;
+import com.perimity.gatepass.dto.response.EventAttendanceSummaryResponse;
 import com.perimity.gatepass.dto.request.EventCreateDto;
 import com.perimity.gatepass.dto.request.EventUpdateDto;
 import com.perimity.gatepass.dto.response.EventResponse;
@@ -15,7 +17,11 @@ import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -88,6 +94,42 @@ public class EventController {
             @Valid @RequestBody EventUpdateDto dto) {
 
         return ApiResponse.ok("Event updated", eventService.update(currentUser.campusId(), id, dto));
+    }
+
+    /**
+     * Screen 12, the gatepass half: how many people were REGISTERED.
+     *
+     * The browser calls this AND guard-service's
+     * GET /api/guard/entry-logs/events/{id}/attendance, then subtracts. Two
+     * calls rather than one because the two numbers live in two databases and
+     * neither service may read the other's - and because Palash's endpoint
+     * needs a staff JWT, which a service-to-service call cannot supply.
+     *
+     * Pass registeredCount from this response straight into his as a query
+     * parameter; his response is built to receive it.
+     */
+    @GetMapping("/{id}/attendance-summary")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
+    @Operation(summary = "Registered counts for an event. Pair with guard-service's "
+            + "attendance endpoint to build the organiser view.")
+    public ApiResponse<EventAttendanceSummaryResponse> attendanceSummary(
+            @PathVariable @Positive Long id) {
+        return ApiResponse.ok(eventService.attendanceSummary(currentUser.campusId(), id));
+    }
+
+    /** "Export attendance CSV". The roster of everyone issued a pass. */
+    @GetMapping("/{id}/attendees.csv")
+    @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
+    @Operation(summary = "The registered-attendee roster as a CSV download")
+    public ResponseEntity<Resource> attendeeCsv(@PathVariable @Positive Long id) {
+        byte[] csv = eventService.attendeeCsv(currentUser.campusId(), id);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"event-" + id + "-attendees.csv\"")
+                .contentType(MediaType.parseMediaType(AttendeeRosterWriter.CONTENT_TYPE))
+                .contentLength(csv.length)
+                .body(new ByteArrayResource(csv));
     }
 
     @PatchMapping("/{id}/cancel")
