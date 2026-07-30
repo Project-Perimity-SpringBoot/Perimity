@@ -21,6 +21,7 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI campusOpenApi() {
         final String scheme = "bearerAuth";
+        final String internal = "internalApiKey";
         return new OpenAPI()
                 .info(new Info()
                         .title("Perimity - Campus Service")
@@ -32,10 +33,25 @@ public class OpenApiConfig {
                                 Endpoints under /internal need the X-Internal-Api-Key header
                                 instead - Swagger cannot call those.
                                 """))
+                // The default for a human-facing endpoint. CampusInternalController
+                // overrides it with its own @SecurityRequirement.
                 .addSecurityItem(new SecurityRequirement().addList(scheme))
-                .components(new Components().addSecuritySchemes(scheme,
-                        new SecurityScheme().name(scheme)
-                                .type(SecurityScheme.Type.HTTP)
-                                .scheme("bearer").bearerFormat("JWT")));
+                .components(new Components()
+                        .addSecuritySchemes(scheme,
+                                new SecurityScheme().name(scheme)
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer").bearerFormat("JWT"))
+                        // Without this Swagger has no field for the internal key,
+                        // sends an Authorization header the internal endpoints do
+                        // not want, and every one of them answers 401 - which
+                        // reads as a broken endpoint rather than a missing input.
+                        .addSecuritySchemes(internal,
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        // Must match InternalApiKeyFilter.HEADER exactly.
+                                        .name("X-Internal-Api-Key")
+                                        .description("The shared INTERNAL_API_KEY from the "
+                                                + "repo-root .env. Service-to-service only.")));
     }
 }
