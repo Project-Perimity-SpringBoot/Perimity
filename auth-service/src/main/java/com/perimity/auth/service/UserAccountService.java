@@ -1,5 +1,6 @@
 package com.perimity.auth.service;
 
+import com.perimity.auth.dto.request.InternalIdentityBatchDto;
 import com.perimity.auth.dto.request.InternalIdentityCreateDto;
 import com.perimity.auth.dto.request.PasswordChangeDto;
 import com.perimity.auth.dto.request.PasswordResetConfirmDto;
@@ -8,6 +9,8 @@ import com.perimity.auth.dto.request.UserCreateDto;
 import com.perimity.auth.dto.request.UserStatusUpdateDto;
 import com.perimity.auth.dto.request.UserUpdateDto;
 import com.perimity.auth.dto.request.VisitorRegistrationDto;
+import com.perimity.auth.dto.response.IdentityBatchResponseDto;
+import com.perimity.auth.dto.response.IdentityBatchResponseDto.RowResult;
 import com.perimity.auth.dto.response.PageResponse;
 import com.perimity.auth.dto.response.UserResponse;
 import com.perimity.auth.entity.PasswordReset;
@@ -23,6 +26,12 @@ import com.perimity.auth.repository.UserRepository;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.HexFormat;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -221,6 +230,150 @@ public class UserAccountService {
 
     /** created tells the controller whether to answer 200 (reused) or 201 (new). */
     public record IdentityResolution(UserResponse user, boolean created) { }
+
+
+    // ------------------------------------------------- Day 10, bulk resolve
+
+    /**
+     * Resolve or create a whole spreadsheet's identities in one call.
+     *
+     * This is the mixed-attendee problem from Event_Bulk_Design.md: 600 rows,
+     * roughly 100 of whom are already members, and the faculty does not know
+     * which. Per row, matched by email - existing identity reused, brand-new
+     * email gets a lightweight VISITOR identity, blocklisted row skipped.
+     *
+     * FOUR QUERIES FOR THE WHOLE SHEET, whatever its size:
+     *   1. this campus's blocked emails
+     *   2. this campus's blocked phones
+     *   3. every existing identity among the sheet's emails
+     *   4. one batch insert for the genuinely new people
+     *
+     * Calling the single-row resolveOrCreateInternalIdentity 600 times would be
+     * roughly 1,800 queries and 600 separate insert statements. It would also
+     * throw on the first blocklisted row and abandon the rest of the sheet.
+     *
+     * NOTHING HERE THROWS FOR A BAD ROW. Every row gets an outcome and the
+     * batch always completes - "never block the batch for a few bad ones".
+     */
+    @Transactional
+    public IdentityBatchResponseDto resolveOrCreateBatch(InternalIdentityBatchDto request) {
+        Long campusId = request.getCampusId();
+        List<InternalIdentityBatchDto.Row> rows = request.getRows();
+
+        Set<String> blockedEmails = blocklistRepository.findBlockedEmails(campusId);
+        Set<String> blockedPhones = blocklistRepository.findBlockedPhones(campusId);
+
+        // Every distinct email in the sheet, lowercased once here so nothing
+        // downstream has to think about case again.
+        Set<String> sheetEmails = new LinkedHashSet<>();
+        for (InternalIdentityBatchDto.Row row : rows) {
+            sheetEmails.add(row.getEmail().trim().toLowerCase());
+        }
+
+        Map<String, Long> known = new HashMap<>();
+        for (User existing : userRepository.findByEmailIn(sheetEmails)) {
+            known.put(existing.getEmail(), existing.getId());
+        }
+
+        /*
+         * Intra-batch duplicates are handled here rather than left to the
+         * caller, and that is not defensive politeness - it is required.
+         *
+         * users.email is UNIQUE. Two rows with the same new email, both queued
+         * for insert, means saveAll throws a constraint violation and the whole
+         * transaction rolls back. One repeated address in a 600-row sheet would
+         * cost all 600 identities. Tushar validates duplicates in the fast
+         * phase too, but this service performs the insert, so this service has
+         * to be the one that cannot be made to violate its own constraint.
+         */
+        Set<String> seenInThisBatch = new LinkedHashSet<>();
+        List<User> toCreate = new ArrayList<>();
+        List<PendingRow> pending = new ArrayList<>(rows.size());
+
+        for (InternalIdentityBatchDto.Row row : rows) {
+            String email = row.getEmail().trim().toLowerCase();
+            String phone = row.getPhone() == null ? null : row.getPhone().trim();
+
+            boolean blocked = blockedEmails.contains(email)
+                    || (phone != null && blockedPhones.contains(phone));
+            if (blocked) {
+                pending.add(new PendingRow(row, email, Outcome.REFUSED));
+                continue;
+            }
+
+            /*
+             * Duplicate check BEFORE the existing-identity check, deliberately.
+             * The other order looks equivalent and is not: a sheet listing the
+             * same already-registered member twice would return two REUSED rows
+             * with the same id, and the caller would try to issue that person
+             * two event passes. "Already seen in this batch" is the honest
+             * outcome whether the email was new or known.
+             */
+            if (!seenInThisBatch.add(email)) {
+                pending.add(new PendingRow(row, email, Outcome.DUPLICATE));
+                continue;
+            }
+
+            if (known.containsKey(email)) {
+                pending.add(new PendingRow(row, email, Outcome.REUSED));
+                continue;
+            }
+
+            toCreate.add(User.builder()
+                    .email(email)
+                    .name(row.getName().trim())
+                    .phone(phone)
+                    .role(Role.VISITOR)
+                    .campusId(campusId)
+                    .passwordHash(null)
+                    .mustChangePassword(false)
+                    .active(true)
+                    .build());
+            pending.add(new PendingRow(row, email, Outcome.CREATED));
+        }
+
+        // One insert for everyone genuinely new.
+        for (User created : userRepository.saveAll(toCreate)) {
+            known.put(created.getEmail(), created.getId());
+        }
+
+        List<RowResult> results = new ArrayList<>(pending.size());
+        for (PendingRow p : pending) {
+            Integer n = p.row().getRowNumber();
+            String shown = p.row().getEmail();
+            switch (p.outcome()) {
+                // No reason, ever. FR-BLK-4.
+                case REFUSED -> results.add(RowResult.refused(n, shown));
+                case REUSED -> results.add(RowResult.reused(n, shown, known.get(p.email())));
+                case CREATED -> results.add(RowResult.created(n, shown, known.get(p.email())));
+                case DUPLICATE -> results.add(RowResult.duplicate(n, shown, known.get(p.email())));
+            }
+        }
+
+        IdentityBatchResponseDto response = IdentityBatchResponseDto.of(results);
+
+        // One row for the batch, for the same reason as bulk screening: 600
+        // ACCOUNT_CREATED rows would bury every other entry from that day.
+        audit.recordAnonymous(AuditAction.BULK_IDENTITY_RESOLVED,
+                "campus:" + campusId,
+                response.createdCount() + " created, " + response.reusedCount() + " reused, "
+                        + response.refusedCount() + " refused, "
+                        + response.duplicateCount() + " duplicate, of "
+                        + response.totalRows() + " rows"
+                        + (request.getSource() == null ? "" : ", source " + request.getSource()));
+
+        log.info("Bulk identity resolve for campus {}: {} created, {} reused, {} refused, "
+                        + "{} duplicate, of {} rows",
+                campusId, response.createdCount(), response.reusedCount(),
+                response.refusedCount(), response.duplicateCount(), response.totalRows());
+
+        return response;
+    }
+
+    private enum Outcome { REUSED, CREATED, REFUSED, DUPLICATE }
+
+    /** One row's decision, held until the inserts have run and ids exist. */
+    private record PendingRow(InternalIdentityBatchDto.Row row, String email, Outcome outcome) { }
 
     // ------------------------------------------------------------ reads
 
