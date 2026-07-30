@@ -1,0 +1,15 @@
+# Normalise line endings so a save in STS does not rewrite every file.
+#
+# Without this, Eclipse writes CRLF on Windows, the repository holds LF, and git
+# reports every line of every file as changed. A pull request then shows dozens
+# of fully-rewritten files, review is impossible, and anyone else touching the
+# same file gets a conflict over invisible characters.
+#
+# `text=auto` means: store LF in the repository, check out whatever is native.
+# The other four services already carry the two lines below; this file adds the
+# normalisation rule they are missing.
+
+* text=auto
+
+/mvnw text eol=lf
+*.cmd text eol=crlf
