@@ -44,7 +44,28 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
     private final String expectedKey;
 
     public InternalApiKeyFilter(@Value("${perimity.internal.api-key}") String expectedKey) {
-        this.expectedKey = expectedKey == null ? "" : expectedKey;
+        /*
+         * DAY 12: fail at STARTUP, not on the first call.
+         *
+         * This used to accept a blank key and refuse every internal request at
+         * runtime instead. That is safe - it never let anyone in - but it is
+         * unreadable in an integration pass: gatepass and guard both get a 401,
+         * their clients swallow it, and the visible symptom is a pass with no
+         * photo and a scanner with a blank card. Nobody looking at those would
+         * guess the cause was a missing line in .env.
+         *
+         * Refusing to start names the actual problem in one line, and matches
+         * auth-service, gatepass-service and campus-service, which all read
+         * ${INTERNAL_API_KEY} with no default. qr-service does the same check
+         * in its own filter constructor.
+         */
+        if (expectedKey == null || expectedKey.isBlank()) {
+            throw new IllegalStateException(
+                    "INTERNAL_API_KEY is not set. Add it to the repo-root .env - the same "
+                    + "value in all six services - or gatepass-service and guard-service "
+                    + "cannot read profiles from this one.");
+        }
+        this.expectedKey = expectedKey;
     }
 
     /** Only runs on internal paths. Everything else goes straight through to the JWT filter. */
@@ -60,10 +81,8 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
 
         String supplied = request.getHeader(HEADER);
 
-        // An unset key must never mean "let everyone in". If INTERNAL_API_KEY is
-        // missing from .env the correct behaviour is to refuse every internal
-        // call, not to accept every one of them.
-        if (expectedKey.isBlank() || supplied == null || !constantTimeEquals(supplied, expectedKey)) {
+        // The key cannot be blank here - the constructor refuses to build.
+        if (supplied == null || !constantTimeEquals(supplied, expectedKey)) {
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");

@@ -26,8 +26,13 @@ import org.springframework.web.client.RestClient;
  *
  * TIMEOUTS ARE NOT OPTIONAL. Without them a hung gatepass-service holds this
  * request thread until the socket gives up, and a profile save appears to
- * freeze for minutes. Three seconds is far longer than a healthy call needs and
- * far shorter than a user will wait.
+ * freeze for minutes.
+ *
+ * DAY 12: the value now comes from perimity.services.timeout-ms, the same
+ * property gatepass and guard read, instead of being hardcoded here. One number
+ * in .env tunes every internal call in the platform - and three services each
+ * inventing their own is how one of them ends up at thirty seconds without
+ * anybody noticing.
  */
 public class HttpPassPauseClient implements PassPauseClient {
 
@@ -37,10 +42,10 @@ public class HttpPassPauseClient implements PassPauseClient {
     private final RestClient restClient;
     private final String internalApiKey;
 
-    public HttpPassPauseClient(String baseUrl, String internalApiKey) {
+    public HttpPassPauseClient(String baseUrl, long timeoutMs, String internalApiKey) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(2));
-        factory.setReadTimeout(Duration.ofSeconds(3));
+        factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(timeoutMs));
 
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)

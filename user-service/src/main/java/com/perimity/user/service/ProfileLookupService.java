@@ -1,17 +1,12 @@
 package com.perimity.user.service;
 
-import com.perimity.user.dto.response.ProfileSummaryBatchResponse;
 import com.perimity.user.dto.response.ProfileSummaryResponse;
 import com.perimity.user.exception.ResourceNotFoundException;
 import com.perimity.user.repository.FacultyProfileRepository;
 import com.perimity.user.repository.StudentProfileRepository;
 import com.perimity.user.storage.StorageService;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,57 +85,6 @@ public class ProfileLookupService {
         }
         return facultyRepository.findByUserId(userId)
                 .map(p -> ProfileSummaryResponse.from(p, photoUrl(p.getPhotoS3Key())));
-    }
-
-    /** Cheap existence check, for a caller that only needs to know a profile is there. */
-    @Transactional(readOnly = true)
-    public boolean hasProfile(Long userId) {
-        return studentRepository.existsByUserId(userId) || facultyRepository.existsByUserId(userId);
-    }
-
-    // -------------------------------------------------------------- batch
-
-    /**
-     * Many accounts in one call. Two queries, not N.
-     *
-     * A MISS IS NOT AN ERROR. The bulk engine creates lightweight VISITOR
-     * identities in auth-service for attendees nobody has seen before; those
-     * people have an account and a pass and no profile here, because they are
-     * not students or staff. Asking about 600 attendees and getting 480 back is
-     * the normal result for a mixed sheet.
-     *
-     * withPhotoUrl is off by default. Signing a URL is local work rather than a
-     * network call, but it is a thousand signatures on a full batch for
-     * something gatepass does not need when it is only resolving identities.
-     * The scanner, which does need a face, asks for one profile at a time.
-     *
-     * Duplicate ids in the request are collapsed rather than rejected. A caller
-     * assembling ids from a spreadsheet will occasionally send the same one
-     * twice, and refusing the whole batch over that would be unhelpful; the
-     * response is keyed by what was found, so a duplicate simply cannot appear
-     * twice in the result.
-     */
-    @Transactional(readOnly = true)
-    public ProfileSummaryBatchResponse summariesOf(List<Long> userIds, boolean withPhotoUrl) {
-        Set<Long> wanted = new LinkedHashSet<>(userIds);
-
-        List<ProfileSummaryResponse> found = new ArrayList<>();
-
-        studentRepository.findByUserIdIn(wanted).forEach(p -> found.add(
-                ProfileSummaryResponse.from(p, withPhotoUrl ? photoUrl(p.getPhotoS3Key()) : null)));
-        facultyRepository.findByUserIdIn(wanted).forEach(p -> found.add(
-                ProfileSummaryResponse.from(p, withPhotoUrl ? photoUrl(p.getPhotoS3Key()) : null)));
-
-        Set<Long> resolved = found.stream()
-                .map(ProfileSummaryResponse::userId)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-
-        List<Long> missing = wanted.stream().filter(id -> !resolved.contains(id)).toList();
-
-        log.debug("Batch summary: {} requested, {} found, {} without a profile",
-                wanted.size(), found.size(), missing.size());
-
-        return ProfileSummaryBatchResponse.of(wanted.size(), found, missing);
     }
 
     // ----------------------------------------------------------- helpers

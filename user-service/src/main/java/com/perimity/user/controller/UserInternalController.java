@@ -1,50 +1,44 @@
 package com.perimity.user.controller;
 
 import com.perimity.user.dto.ApiResponse;
-import com.perimity.user.dto.request.ProfileSummaryBatchRequest;
-import com.perimity.user.dto.response.ProfileSummaryBatchResponse;
 import com.perimity.user.dto.response.ProfileSummaryResponse;
 import com.perimity.user.service.ProfileLookupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
-import java.util.Map;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Service-to-service reads. Guarded by X-Internal-Api-Key, never public.
  *
+ * ONE ENDPOINT. That is the whole internal surface of this service, and after
+ * the Day 12 backend freeze it should stay that way. A batch lookup and an
+ * existence check both lived here and were removed on Day 12 with zero callers
+ * between them.
+ *
  * =========================================================
- *  THE PATH AND RESPONSE SHAPE HERE ARE A FIXED CONTRACT
+ *  THE PATH AND RESPONSE SHAPE ARE A FIXED CONTRACT
  * =========================================================
  *
- * gatepass-service already calls this. From its InternalServiceClient:
+ * TWO services call this today, and both records read fields by name:
  *
- *     GET /api/user/internal/profiles/{userId}/summary
- *     -> { "success": true, "data": { userId, identifierCode, photoS3Key } }
+ *   gatepass-service  InternalServiceClient.ProfileView
+ *                     (userId, identifierCode, photoS3Key)
+ *   guard-service     HttpHolderProfileClient.SummaryView
+ *                     (userId, identifierCode, photoS3Key)
  *
- * It reads three fields out of the envelope. This endpoint returns more, which
- * is fine because Spring Boot's Jackson ignores unknown properties. What is NOT
- * fine is renaming or removing any of those three, or changing the envelope:
- * the call would start returning nulls and every printed pass would silently
- * lose its photo with nothing in a log to explain it.
+ * Adding a field is safe - Jackson drops what a caller does not declare.
+ * Renaming or removing one of those three is not: the call keeps returning 200
+ * and the field arrives null, so a pass prints without a photo and a scanner
+ * shows a blank card, with nothing in any log to explain either.
  *
  * READ ONLY, on purpose. No service should be able to CHANGE another's data
  * through a shared key - a leaked key would then be a compromised platform
  * rather than a compromised report.
- *
- * CALLERS:
- *   gatepass-service  identifier + photo key, to build the QR job (Day 8)
- *   gatepass bulk     the batch lookup, so 600 rows is one call (Day 10)
- *   guard-service     photoUrl, to put a face on the scanner screen (Day 11)
  */
 @RestController
 @RequestMapping("/api/user/internal")
@@ -59,62 +53,36 @@ public class UserInternalController {
     }
 
     /**
-     * One profile, with a signed photo link.
+     * One profile, including a signed photo link.
      *
-     * THE SCANNER CALL (Day 11). photoUrl is included here rather than behind a
-     * second endpoint because guard-service makes this call while a person is
-     * standing at a gate, and the plan targets a result in under two seconds.
-     * Two round trips to fetch one face is the wrong trade at a barrier.
+     * ===================================================================
+     *  FOR guard-service: photoUrl IS ALREADY HERE. There is no second
+     *  endpoint to wait for, and there should not be one.
+     * ===================================================================
+     *
+     * HttpHolderProfileClient's comment asks for
+     * GET /api/user/internal/profiles/{userId}/photo-url. That was the right
+     * ask against the Day 9 response, which carried only a storage key. Day 11
+     * put the signed link on THIS response instead, so the call guard-service
+     * already makes now returns everything the result card needs.
+     *
+     * Its SummaryView record declares (userId, identifierCode, photoS3Key), so
+     * Jackson is currently discarding photoUrl. Adding the field to that record
+     * is the whole fix - one line, in guard-service.
+     *
+     * A separate endpoint would mean a second round trip while a person stands
+     * at a gate, against a two-second budget, for data the first call already
+     * had.
      *
      * The link is short-lived and minted per request. In S3 mode it is absolute
-     * and carries its own signature, so the scanner UI can use it directly. In
-     * local development mode it is a relative path served by
-     * LocalStorageController, which the guard's own browser can fetch because
-     * the guard is signed in - guard-SERVICE holds only an API key, but the
-     * scanner SCREEN holds a GUARD-role JWT.
+     * and self-signing. In local development it is a relative path served by
+     * LocalStorageController - guard-SERVICE holds only an API key, but the
+     * scanner SCREEN is a browser with a GUARD-role JWT, so it can fetch it.
+     * Either way the UI just uses the string.
      */
     @GetMapping("/profiles/{userId}/summary")
-    @Operation(summary = "Identifier, campus and a short-lived photo link for one account")
+    @Operation(summary = "Identifier, campus, photo key and a short-lived photo URL for one account")
     public ApiResponse<ProfileSummaryResponse> summary(@PathVariable @Positive Long userId) {
         return ApiResponse.ok(profileLookupService.summaryOf(userId));
-    }
-
-    /**
-     * Many profiles in one call (Day 10).
-     *
-     * A bulk upload is up to a thousand rows. Enriching each one through the
-     * single endpoint above is a thousand HTTP round trips for something two
-     * queries answer.
-     *
-     * POST rather than GET because a thousand ids in a query string is about
-     * 8 KB of URL, which is Tomcat's default header limit - it would fail on
-     * exactly the large batches that matter and not on the small ones anybody
-     * tests with. A read expressed as a POST, deliberately.
-     *
-     * Accounts with no profile come back in `missing` rather than as an error.
-     * Bulk-created VISITOR identities legitimately have no profile here, so a
-     * mixed sheet is SUPPOSED to return fewer than it was asked about.
-     */
-    @PostMapping("/profiles/summaries")
-    @Operation(summary = "Resolve up to 1000 accounts to their profiles. Misses are data, not errors.")
-    public ApiResponse<ProfileSummaryBatchResponse> summaries(
-            @Valid @RequestBody ProfileSummaryBatchRequest request,
-            @RequestParam(defaultValue = "false") boolean withPhotoUrl) {
-
-        return ApiResponse.ok(
-                profileLookupService.summariesOf(request.getUserIds(), withPhotoUrl));
-    }
-
-    /**
-     * Lets a caller check a profile exists without pulling one back.
-     *
-     * Cheaper than fetching and discarding a body, and it keeps "does this
-     * person have a profile" out of the 404 path, where a perfectly normal
-     * answer would otherwise fill the logs with warnings.
-     */
-    @GetMapping("/profiles/{userId}/exists")
-    @Operation(summary = "Does this account have a profile in user-service?")
-    public ApiResponse<Map<String, Boolean>> exists(@PathVariable @Positive Long userId) {
-        return ApiResponse.ok(Map.of("exists", profileLookupService.hasProfile(userId)));
     }
 }
