@@ -95,6 +95,18 @@ public class SecurityConfig {
                     //      Delete this line when the React shell takes over. ----
                     .requestMatchers("/scanner.html").permitAll()
 
+                    // ---- Day 12 health (SRS 5.6). Public because Docker and the
+                    //      load balancer poll it with no credentials - a health
+                    //      check that needs a token marks every container
+                    //      unhealthy and restarts it forever.
+                    //
+                    //      It reveals which dependencies are reachable, which is
+                    //      the point, and no data of its own. Only `health` is
+                    //      exposed - see application.properties. Do NOT widen
+                    //      that to `*`: env and configprops would publish this
+                    //      service's configuration to the same audience. ----
+                    .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+
                     // ---- Nothing calls into guard-service service-to-service yet.
                     //      The matcher is here so the pattern matches the other five
                     //      and a future internal endpoint cannot land outside it. ----
