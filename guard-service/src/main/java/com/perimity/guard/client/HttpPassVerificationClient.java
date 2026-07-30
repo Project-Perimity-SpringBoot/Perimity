@@ -73,7 +73,7 @@ public class HttpPassVerificationClient implements PassVerificationClient {
 
         DecryptEnvelope decrypted = call(
                 () -> qr.post()
-                        .uri("/api/internal/qr/decrypt")
+                        .uri("/api/qr/internal/decrypt")
                         .body(new DecryptRequest(token, null))
                         .retrieve()
                         .body(DecryptEnvelope.class),
@@ -87,9 +87,18 @@ public class HttpPassVerificationClient implements PassVerificationClient {
 
         DecryptView d = decrypted.data();
 
+        // NOTE THE PATH. gatepass-service exposes /api/gatepass/internal/**, not
+        // the /api/internal/gatepass/** that Team Guide section 5 documents. This
+        // called the documented path for three days and 404'd on every scan -
+        // which surfaced as a 503 outage card, because a 404 from a hop is
+        // indistinguishable here from that hop being down.
+        //
+        // Matching what is deployed rather than what is written down. If the team
+        // ever standardises the prefix, this line and HttpRunningEventClient move
+        // together - they are the only two callers.
         PassEnvelope passEnvelope = call(
                 () -> gatepass.get()
-                        .uri("/api/internal/gatepass/passes/{id}", d.passId())
+                        .uri("/api/gatepass/internal/passes/{id}", d.passId())
                         .retrieve()
                         .body(PassEnvelope.class),
                 "gatepass-service pass lookup");
