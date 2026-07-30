@@ -5,7 +5,9 @@ import com.perimity.user.dto.request.StudentProfileCreateDto;
 import com.perimity.user.dto.request.StudentProfileUpdateDto;
 import com.perimity.user.dto.response.PageResponse;
 import com.perimity.user.dto.response.StudentProfileResponse;
+import com.perimity.user.dto.response.PresignedUrlResponse;
 import com.perimity.user.security.CurrentUser;
+import com.perimity.user.service.ProfileAssetService;
 import com.perimity.user.service.StudentProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,10 +17,12 @@ import java.util.Map;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Student profiles.
@@ -52,12 +56,15 @@ import org.springframework.web.bind.annotation.*;
 public class StudentProfileController {
 
     private final StudentProfileService studentProfileService;
+    private final ProfileAssetService profileAssetService;
     private final CurrentUser currentUser;
 
     public StudentProfileController(StudentProfileService studentProfileService,
-                                    CurrentUser currentUser) {
+                                    CurrentUser currentUser,
+                                    ProfileAssetService profileAssetService) {
         this.studentProfileService = studentProfileService;
         this.currentUser = currentUser;
+        this.profileAssetService = profileAssetService;
     }
 
     @PostMapping
@@ -126,5 +133,45 @@ public class StudentProfileController {
             @Valid @RequestBody StudentProfileUpdateDto dto) {
 
         return ApiResponse.ok("Student profile updated", studentProfileService.update(id, dto));
+    }
+
+    // ------------------------------------------------------------- photo
+
+    /**
+     * Upload or replace the profile photo (Day 9).
+     *
+     * multipart/form-data. The storage key is generated server-side from this
+     * profile, so an upload can only land under this person's own prefix.
+     *
+     * THIS PAUSES THE HOLDER'S PASS. The photo is what a guard checks a face
+     * against, so changing it while a pass is ACTIVE leaves a QR vouching for a
+     * different picture. Same rule as editing a roll number.
+     */
+    @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload or replace the photo. PNG, JPEG or WebP. Pauses the holder's pass.")
+    public ApiResponse<StudentProfileResponse> uploadPhoto(
+            @PathVariable @Positive Long id,
+            @RequestPart("file") MultipartFile file) {
+
+        return ApiResponse.ok("Photo updated. The pass is held pending re-approval.",
+                profileAssetService.uploadStudentPhoto(id, file));
+    }
+
+    /**
+     * A short-lived link to the photo, minted on demand.
+     *
+     * Not the bytes, and never a permanent URL - see PresignedUrlResponse.
+     */
+    @GetMapping("/{id}/photo-url")
+    @Operation(summary = "Short-lived link to the photo")
+    public ApiResponse<PresignedUrlResponse> photoUrl(@PathVariable @Positive Long id) {
+        return ApiResponse.ok(profileAssetService.studentPhotoUrl(id));
+    }
+
+    @DeleteMapping("/{id}/photo")
+    @Operation(summary = "Remove the photo. Also pauses the holder's pass.")
+    public ApiResponse<StudentProfileResponse> removePhoto(@PathVariable @Positive Long id) {
+        return ApiResponse.ok("Photo removed. The pass is held pending re-approval.",
+                profileAssetService.removeStudentPhoto(id));
     }
 }
