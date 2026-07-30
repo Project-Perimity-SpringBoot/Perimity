@@ -4,9 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -18,7 +16,13 @@ import lombok.Setter;
 /**
  * Body of POST /api/guard/scan - the whole product, in one request.
  *
- * NOTE WHAT IS NOT HERE: gateId, campusId, scannedAt, and any result field.
+ * NOTE WHAT IS NOT HERE: guardUserId, gateId, campusId, scannedAt, and any
+ * result field.
+ *
+ *   guardUserId comes from the verified JWT (Day 7). It used to be a field here,
+ *   which meant any caller could post a scan as any guard - the same flaw as
+ *   naming your own gate, and the one that was missed. A register that can be
+ *   written by hand is the problem this product exists to solve.
  *
  *   gateId and campusId come from the guard's OPEN SESSION. If the client could
  *   name the gate, a guard could log entries at a gate they were never posted
@@ -47,12 +51,6 @@ public class ScanRequestDto {
              message = "Token contains characters that could not have come from a Perimity QR code")
     @Schema(description = "The payload read out of the QR code, exactly as scanned")
     private String token;
-
-    @NotNull(message = "Guard is required")
-    @Positive(message = "Guard user id must be a positive number")
-    @Schema(description = "Used to find the open session, which supplies gate and campus",
-            example = "55")
-    private Long guardUserId;
 
     @Schema(description = "Flat map: userAgent, appVersion, ip")
     private Map<String, Object> deviceInfo;

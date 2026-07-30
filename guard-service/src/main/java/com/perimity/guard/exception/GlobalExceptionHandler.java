@@ -86,6 +86,23 @@ public class GlobalExceptionHandler {
         return badRequest(ex.getMessage(), List.of());
     }
 
+    /**
+     * The authorisation check a role annotation cannot express: right role,
+     * wrong record. Thrown by CurrentUser.
+     *
+     * 403, not 401 - we know exactly who the caller is, they simply may not do
+     * this. Unmapped, this surfaces as a 500, and the Day 7 gate is stated in
+     * terms of a 403, so the day would fail on a case that is working correctly.
+     */
+    @org.springframework.web.bind.annotation.ExceptionHandler(
+            com.perimity.guard.security.CurrentUser.ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(
+            com.perimity.guard.security.CurrentUser.ForbiddenException ex) {
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail(ex.getMessage(), List.of()));
+    }
+
     private ResponseEntity<ApiResponse<Void>> badRequest(String message, List<String> errors) {
         return ResponseEntity.badRequest().body(ApiResponse.fail(message, errors));
     }

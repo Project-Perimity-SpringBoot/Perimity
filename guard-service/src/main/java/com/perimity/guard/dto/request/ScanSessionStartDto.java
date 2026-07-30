@@ -34,10 +34,8 @@ import lombok.Setter;
 @Builder
 public class ScanSessionStartDto {
 
-    @NotNull(message = "Guard is required")
-    @Positive(message = "Guard user id must be a positive number")
-    @Schema(example = "55")
-    private Long guardUserId;
+    // guardUserId is NOT here. It comes from the verified JWT (Day 7) - a guard
+    // must not be able to open a shift in someone else's name.
 
     @NotNull(message = "Campus is required")
     @Positive(message = "Campus id must be a positive number")

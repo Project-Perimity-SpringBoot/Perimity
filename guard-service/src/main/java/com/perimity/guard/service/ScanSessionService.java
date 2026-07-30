@@ -3,7 +3,6 @@ package com.perimity.guard.service;
 import com.perimity.guard.document.ScanSession;
 import com.perimity.guard.document.enums.ScanResult;
 import com.perimity.guard.document.enums.SessionState;
-import com.perimity.guard.dto.request.ScanSessionEndDto;
 import com.perimity.guard.dto.request.ScanSessionStartDto;
 import com.perimity.guard.dto.response.ScanSessionResponse;
 import com.perimity.guard.exception.ResourceNotFoundException;
@@ -36,14 +35,14 @@ public class ScanSessionService {
      * the constraint is "at most one where state is OPEN", and a Mongo partial
      * index is more trouble than this rule is worth at this scale.
      */
-    public ScanSessionResponse start(ScanSessionStartDto dto) {
-        if (sessionRepository.existsByGuardUserIdAndState(dto.getGuardUserId(), SessionState.OPEN)) {
+    public ScanSessionResponse start(ScanSessionStartDto dto, Long guardUserId) {
+        if (sessionRepository.existsByGuardUserIdAndState(guardUserId, SessionState.OPEN)) {
             throw new IllegalStateException(
                     "This guard already has an open shift. End it before starting another.");
         }
 
         ScanSession session = ScanSession.builder()
-                .guardUserId(dto.getGuardUserId())
+                .guardUserId(guardUserId)
                 .campusId(dto.getCampusId())
                 .gateId(dto.getGateId())
                 .gateName(dto.getGateName().trim())
@@ -58,15 +57,16 @@ public class ScanSessionService {
     /**
      * Close a shift.
      *
-     * guardUserId is checked against the stored session so one guard cannot end
-     * another's shift by guessing an id. endedAt is stamped here, never taken
-     * from the client.
+     * guardUserId now arrives from the verified JWT, and is still checked against
+     * the stored session so one guard cannot end another's shift by guessing an
+     * id. Belt and braces on purpose: the token proves who you are, this proves
+     * the shift is yours. endedAt is stamped here, never taken from the client.
      */
-    public ScanSessionResponse end(String sessionId, ScanSessionEndDto dto) {
+    public ScanSessionResponse end(String sessionId, Long guardUserId) {
         ScanSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Session", sessionId));
 
-        if (!session.getGuardUserId().equals(dto.getGuardUserId())) {
+        if (!session.getGuardUserId().equals(guardUserId)) {
             throw new IllegalArgumentException("This shift belongs to a different guard.");
         }
         if (session.getState() == SessionState.CLOSED) {

@@ -46,10 +46,15 @@ public class ScanService {
         this.runningEvents = runningEvents;
     }
 
-    public ScanResponse scan(ScanRequestDto dto) {
+    /**
+     * guardUserId is a parameter, not a field on the DTO. It arrives from the
+     * verified JWT via the controller. A scan that could name its own guard is a
+     * register anyone can forge.
+     */
+    public ScanResponse scan(ScanRequestDto dto, Long guardUserId) {
         // Gate and campus come from here, never from the request. This single
         // lookup is what makes the entry log evidence rather than a claim.
-        ScanSession session = sessionService.requireOpenSession(dto.getGuardUserId());
+        ScanSession session = sessionService.requireOpenSession(guardUserId);
 
         LocalDateTime now = LocalDateTime.now();
         PassVerification pass = passVerification.verify(dto.getToken());
