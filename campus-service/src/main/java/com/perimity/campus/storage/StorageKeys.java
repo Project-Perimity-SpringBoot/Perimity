@@ -9,19 +9,35 @@ import java.util.UUID;
  *
  *   campuses/{campusCode}/logo-{uuid}.png
  *   campuses/{campusCode}/assets/{uuid}-{filename}
- *   {campusCode}/bulk/{batchId}/errors.csv
- *   {campusCode}/passes/pass-{id}-qr.png
+ *   bulk/{campusCode}/{batchId}/errors.csv
+ *   passes/{campusCode}/pass-{id}-qr.png
  *
- * Two rules worth keeping:
+ * TYPE FIRST, THEN CAMPUS. The Database Design document lays the bucket out as
+ * campuses/, profiles/, passes/, bulk/ at the top level, and campusLogo above
+ * already followed it - bulkErrorReport did not, which put one campus's files
+ * in two unrelated places in the same bucket. Corrected on Day 10, before
+ * anything had written a key in the old shape.
+ *
+ * The ordering is not cosmetic once this is real S3: a lifecycle rule that
+ * expires bulk artefacts after 90 days is one prefix match on bulk/, and an
+ * IAM policy scoped to passes/ is one line. Neither is expressible when the
+ * campus code comes first.
+ *
+ * Three rules worth keeping:
  *
  * 1. The campus CODE, not the id, is the top-level prefix. A human debugging a
  *    bucket at 2am can see which institution a file belongs to without opening
  *    the database. This is also why the code can never be edited.
  *
- * 2. Every key carries a UUID. Overwriting logo.png means a cached copy in
- *    CloudFront keeps serving the old image, and there is no way to tell which
- *    version a stale page is showing. A new key each time makes replacement
- *    unambiguous.
+ * 2. A DISPLAYED file carries a UUID. Overwriting logo.png means a cached copy
+ *    in CloudFront keeps serving the old image, and there is no way to tell
+ *    which version a stale page is showing. A new key each time makes
+ *    replacement unambiguous.
+ *
+ * 3. A DERIVED file does not. An error report is a pure function of one batch,
+ *    it is fetched once by the person who just uploaded, and a retry that
+ *    regenerates it should replace it rather than leave an orphan nobody will
+ *    ever delete. Deterministic key, on purpose.
  */
 public final class StorageKeys {
 
@@ -37,8 +53,12 @@ public final class StorageKeys {
                 + safe(originalFilename);
     }
 
+    /**
+     * Deterministic - no UUID. See rule 3 above: re-running validation for the
+     * same batch must overwrite its report, not accumulate copies.
+     */
     public static String bulkErrorReport(String campusCode, Long batchId) {
-        return safe(campusCode) + "/bulk/" + batchId + "/errors.csv";
+        return "bulk/" + safe(campusCode) + "/" + batchId + "/errors.csv";
     }
 
     /** Lowercase, and nothing that could escape the prefix or confuse a URL. */
