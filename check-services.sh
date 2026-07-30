@@ -93,11 +93,11 @@ echo ""
 
 # --- guard -> qr : the scan path, hop 1 ---
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-    -X POST "http://localhost:8086/api/internal/qr/decrypt" \
+    -X POST "http://localhost:8086/api/qr/internal/decrypt" \
     -H "Content-Type: application/json" -H "X-Internal-Api-Key: $KEY" \
     -d '{"token":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","gateId":1}' 2>/dev/null)
-[ "$code" = "200" ] && pass "guard -> qr    POST /api/internal/qr/decrypt  ($code)" \
-                    || fail "guard -> qr    POST /api/internal/qr/decrypt  ($code, want 200)"
+[ "$code" = "200" ] && pass "guard -> qr    POST /api/qr/internal/decrypt  ($code)" \
+                    || fail "guard -> qr    POST /api/qr/internal/decrypt  ($code, want 200)"
 
 # --- guard -> gatepass : the scan path, hop 2 ---
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
@@ -148,7 +148,7 @@ echo "=============================================="
 echo " 4. THE INTERNAL KEY ACTUALLY GUARDS THINGS"
 echo "=============================================="
 echo ""
-for entry in "8086:/api/internal/qr/emails/undelivered" \
+for entry in "8086:/api/qr/internal/emails/undelivered" \
              "8083:/api/gatepass/internal/passes/1" \
              "8084:/api/campus/internal/campuses/1"; do
     IFS=: read -r port path <<< "$entry"
