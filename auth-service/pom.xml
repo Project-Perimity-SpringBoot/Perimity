@@ -113,13 +113,13 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
-        <!-- ==========================================================
-        Day 5 - Mail (real OTP emails):
+        
+        <!--Day 9 - Mail (real OTP emails):-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
-        ========================================================== -->
+        
 
     </dependencies>
 

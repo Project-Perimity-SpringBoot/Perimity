@@ -1,5 +1,6 @@
 package com.perimity.auth.service;
 
+import com.perimity.auth.dto.request.InternalIdentityCreateDto;
 import com.perimity.auth.dto.request.PasswordChangeDto;
 import com.perimity.auth.dto.request.PasswordResetConfirmDto;
 import com.perimity.auth.dto.request.PasswordResetRequestDto;
@@ -50,8 +51,10 @@ public class UserAccountService {
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
     private final AuditService audit;
+    private final EmailService emailService;
     private final int resetExpiryMinutes;
     private final int resetPerEmailPerDay;
+    private final String resetUrlBase;
 
     public UserAccountService(UserRepository userRepository,
                               PasswordResetRepository resetRepository,
@@ -59,16 +62,20 @@ public class UserAccountService {
                               PasswordEncoder passwordEncoder,
                               RateLimiter rateLimiter,
                               AuditService audit,
+                              EmailService emailService,
                               @Value("${perimity.password.reset-link-expiry-minutes}") int resetExpiryMinutes,
-                              @Value("${perimity.ratelimit.reset.per-email-per-day}") int resetPerEmailPerDay) {
+                              @Value("${perimity.ratelimit.reset.per-email-per-day}") int resetPerEmailPerDay,
+                              @Value("${perimity.frontend.reset-password-url}") String resetUrlBase) {
         this.userRepository = userRepository;
         this.resetRepository = resetRepository;
         this.blocklistRepository = blocklistRepository;
         this.passwordEncoder = passwordEncoder;
         this.rateLimiter = rateLimiter;
         this.audit = audit;
+        this.emailService = emailService;
         this.resetExpiryMinutes = resetExpiryMinutes;
         this.resetPerEmailPerDay = resetPerEmailPerDay;
+        this.resetUrlBase = resetUrlBase;
     }
 
     // --------------------------------------------------------- accounts
@@ -148,6 +155,74 @@ public class UserAccountService {
 
         return UserResponse.from(user);
     }
+
+    // ------------------------------------------------- internal (Day 8)
+
+    /**
+     * The internal lookup other services need.
+     *
+     * GET /api/internal/auth/users/by-email is a read-only check: "does an
+     * identity already exist for this email, and if so what is it." This is
+     * what the bulk engine calls per row before deciding whether to reuse an
+     * identity or create a new lightweight visitor (Event_Bulk_Design.md,
+     * "The Mixed-Attendee Problem"). No audit row here - a lookup that finds
+     * nothing has changed nothing.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UserResponse> findByEmailForInternal(String email) {
+        return userRepository.findByEmailIgnoreCase(email).map(UserResponse::from);
+    }
+
+    /**
+     * POST /api/internal/auth/users.
+     *
+     * Same resolve-or-create shape as registerVisitor, called by a service
+     * instead of by a visitor. Idempotent by design: the bulk engine may call
+     * this twice for the same row on a retry, and a second call must return
+     * the same identity, not a duplicate account or an error.
+     */
+    @Transactional
+    public IdentityResolution resolveOrCreateInternalIdentity(InternalIdentityCreateDto dto) {
+        boolean blocked = blocklistRepository
+                        .existsByCampusIdAndEmailIgnoreCase(dto.getCampusId(), dto.getEmail())
+                || (dto.getPhone() != null
+                        && blocklistRepository.existsByCampusIdAndPhone(dto.getCampusId(), dto.getPhone()));
+
+        if (blocked) {
+            audit.recordAnonymous(AuditAction.BLOCKED_REGISTRATION_ATTEMPT,
+                    "email:" + dto.getEmail(),
+                    "Blocked during internal identity resolution, campus " + dto.getCampusId()
+                            + (dto.getSource() == null ? "" : ", source " + dto.getSource()));
+            throw new IllegalStateException("This person cannot be registered for that campus.");
+        }
+
+        Optional<User> existing = userRepository.findByEmailIgnoreCase(dto.getEmail());
+        if (existing.isPresent()) {
+            return new IdentityResolution(UserResponse.from(existing.get()), false);
+        }
+
+        User user = userRepository.save(User.builder()
+                .email(dto.getEmail().toLowerCase())
+                .name(dto.getName().trim())
+                .phone(dto.getPhone())
+                .role(Role.VISITOR)
+                .campusId(dto.getCampusId())
+                .passwordHash(null)
+                .mustChangePassword(false)
+                .active(true)
+                .build());
+
+        audit.recordAnonymous(AuditAction.ACCOUNT_CREATED, "user:" + user.getId(),
+                "Created via internal service call"
+                        + (dto.getSource() == null ? "" : ", source " + dto.getSource()));
+
+        return new IdentityResolution(UserResponse.from(user), true);
+    }
+
+    /** created tells the controller whether to answer 200 (reused) or 201 (new). */
+    public record IdentityResolution(UserResponse user, boolean created) { }
+
+    // ------------------------------------------------------------ reads
 
     @Transactional
     public UserResponse update(Long id, UserUpdateDto dto) {
@@ -233,8 +308,9 @@ public class UserAccountService {
      * ALWAYS returns quietly, whether or not the address exists. Anything else
      * makes this an account-enumeration tool.
      *
-     * @return the plain token, ONLY so the dev log can print it. Day 9 emails
-     *         it and this return value goes away.
+     * Day 9: the link is now emailed instead of logged. The Optional<String>
+     * return is kept as-is - AuthController already ignores it - but nothing
+     * outside EmailService sees the plain token any more.
      */
     @Transactional
     public Optional<String> requestPasswordReset(PasswordResetRequestDto dto) {
@@ -265,7 +341,9 @@ public class UserAccountService {
         audit.record(AuditAction.PASSWORD_RESET_REQUESTED, user.getId(), user.getRole(),
                 user.getCampusId(), "user:" + user.getId(), null);
 
-        log.warn("DEV ONLY - password reset token for {} is {}", dto.getEmail(), plainToken);
+        String resetLink = resetUrlBase + "?token=" + plainToken;
+        emailService.sendPasswordResetLink(dto.getEmail(), resetLink, resetExpiryMinutes);
+
         return Optional.of(plainToken);
     }
 
