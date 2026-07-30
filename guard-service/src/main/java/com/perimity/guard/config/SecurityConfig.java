@@ -88,6 +88,13 @@ public class SecurityConfig {
                                      "/api-docs", "/api-docs/**",
                                      "/v3/api-docs", "/v3/api-docs/**").permitAll()
 
+                    // ---- Day 10 scanner wireframe. The PAGE is public; every
+                    //      API it calls is not. It holds no data of its own - the
+                    //      guard pastes a token into it - so serving it openly
+                    //      leaks nothing, exactly like the Swagger page above.
+                    //      Delete this line when the React shell takes over. ----
+                    .requestMatchers("/scanner.html").permitAll()
+
                     // ---- Nothing calls into guard-service service-to-service yet.
                     //      The matcher is here so the pattern matches the other five
                     //      and a future internal endpoint cannot land outside it. ----
