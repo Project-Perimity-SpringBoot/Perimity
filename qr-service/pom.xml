@@ -48,6 +48,14 @@
 			<artifactId>spring-boot-starter-amqp</artifactId>
 		</dependency>
 
+		<!-- Day 9. SMTP with attachments. Serves MailHog locally and SES in
+		     production - only host, port and credentials differ, so the code path
+		     that runs on demo day is the one exercised every day before it. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.perimity.qr.dto.QrGenerateRequest;
+import com.perimity.qr.email.PassEmailService;
 import com.perimity.qr.dto.QrRecordResponse;
 import com.perimity.qr.entity.GenerationJob;
 import com.perimity.qr.entity.enums.JobStatus;
@@ -50,6 +51,7 @@ class QrGenerationListenerTest {
     private GenerationJobService jobService;
     private QrRecordService qrRecordService;
     private QrResultPublisher resultPublisher;
+    private PassEmailService passEmailService;
     private QrGenerationListener listener;
 
     @BeforeAll
@@ -68,7 +70,9 @@ class QrGenerationListenerTest {
         jobService = Mockito.mock(GenerationJobService.class);
         qrRecordService = Mockito.mock(QrRecordService.class);
         resultPublisher = Mockito.mock(QrResultPublisher.class);
-        listener = new QrGenerationListener(validator, jobService, qrRecordService, resultPublisher);
+        passEmailService = Mockito.mock(PassEmailService.class);
+        listener = new QrGenerationListener(
+                validator, jobService, qrRecordService, resultPublisher, passEmailService);
     }
 
     @Test
@@ -100,6 +104,8 @@ class QrGenerationListenerTest {
 
         // The point: the holder's already-emailed token keeps working...
         verify(qrRecordService, never()).generate(any());
+        // DAY 9: and no second copy of the same pass lands in their inbox.
+        verify(passEmailService, never()).sendPassEmail(anyLong(), any(), anyString());
         // ...but gatepass is still told, in case the first result was lost.
         verify(resultPublisher).publishSuccess("uuid-1", 7L, 100L,
                 "1/qr/7/3.png", "1/pdf/7/3.pdf", 1);

@@ -8,7 +8,6 @@
 # The `version:` key was removed — Compose v2 ignores it and warns about it.
 
 services:
-
   # ---------- Infrastructure ----------
 
   postgres:
@@ -54,7 +53,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5672:5672"   # AMQP
+      - "5672:5672" # AMQP
       - "15672:15672" # Management UI: http://localhost:15672
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -75,7 +74,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: perimity-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1025"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
   # ---------- Services ----------
   #
   # Uncomment your service's block once you have a Dockerfile in its folder.
