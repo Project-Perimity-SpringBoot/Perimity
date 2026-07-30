@@ -85,6 +85,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Day 9 - lets a test present a role without minting a real JWT.
+             SecurityMockMvcRequestPostProcessors.authentication(..) is what makes
+             the 401-vs-403 assertions in ScanControllerSecurityTest possible. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

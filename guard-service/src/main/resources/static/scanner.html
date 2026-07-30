@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Perimity — Gate Scanner</title>
+
+<!--
+  DAY 10 WIREFRAME. Not the final scanner.
+
+  Why this is a static page inside guard-service and not a React component:
+  there is no React shell yet - that is Omkar's Day 13 deliverable, and
+  scaffolding frontend/ now would collide with it head-on. Served from
+  guard-service it is same-origin with the API, so there is no CORS to fight,
+  no npm, and no build step. It runs today against the stub client.
+
+  On Day 13 this becomes frontend/src/guard/GuardScanner.jsx. Keep this file
+  anyway: a scanner that works with nothing but a browser is a good fallback if
+  the shell is late, and a good demo-day insurance policy.
+
+  DESIGN RULES IT IS PROVING
+  - The colour fills the whole screen. A guard reads it at arm's length on a
+    tablet, in daylight, while someone waits.
+  - The guard makes no decisions. One scan, one colour, one line of text.
+  - Camera unavailable, network down and unreadable QR are DISTINCT states,
+    not red denials (FR-SCAN-10). A red card means turn the person away; a
+    broken scanner means stop and call someone. Conflating them is how a
+    working pass gets refused.
+  - Entry only. No exit button, no in/out toggle, anywhere.
+-->
+
+<style>
+  :root {
+    --green: #17794a;
+    --red:   #b3261e;
+    --amber: #b26a00;
+    --ink:   #14171a;
+    --muted: #626a72;
+    --line:  #d9dbde;
+    --bg:    #f6f7f8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 20px 18px 40px; }
+
+  h1 { font-size: 21px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+  .card {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--muted); margin: 0 0 12px; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input, textarea {
+    width: 100%; padding: 10px 11px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  textarea { resize: vertical; min-height: 62px; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  button {
+    width: 100%; padding: 13px; font-size: 15px; font-weight: 600;
+    font-family: inherit; border: 0; border-radius: 8px; cursor: pointer;
+    background: var(--ink); color: #fff; margin-top: 14px;
+  }
+  button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .shift {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13px; color: var(--muted); margin-bottom: 14px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .dot.off { background: var(--line); }
+
+  video { width: 100%; border-radius: 10px; background: #000; display: block; }
+  #canvas { display: none; }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 9px; line-height: 1.5; }
+  code { background: #eceef0; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  /* ---- the result card: fills the screen, readable at arm's length ---- */
+  #result {
+    position: fixed; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 30px; color: #fff; z-index: 50;
+  }
+  #result.show { display: flex; }
+  #result.green { background: var(--green); }
+  #result.red   { background: var(--red); }
+  #result.amber { background: var(--amber); }
+  #result.fault { background: var(--ink); }
+
+  .verdict { font-size: 62px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+  .message { font-size: 25px; font-weight: 600; margin-top: 16px; max-width: 15ch; }
+  .who     { font-size: 17px; opacity: .92; margin-top: 22px; line-height: 1.6; }
+  .why     { font-size: 15px; opacity: .8; margin-top: 14px; max-width: 26ch; line-height: 1.5; }
+  .tap     { position: absolute; bottom: 30px; font-size: 13px; opacity: .7; }
+
+  .photo {
+    width: 108px; height: 108px; border-radius: 50%; margin-bottom: 22px;
+    background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; opacity: .75; padding: 8px; line-height: 1.3;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>Gate Scanner</h1>
+  <p class="sub">guard-service · Day 10 wireframe</p>
+
+  <div class="shift">
+    <span class="dot off" id="shiftDot"></span>
+    <span id="shiftText">No shift open</span>
+  </div>
+
+  <!-- Sign in. Temporary: the real login is screen 1, Omkar's Day 14. -->
+  <div class="card" id="setupCard">
+    <h2>1 · Start your shift</h2>
+
+    <label>Guard token (JWT)</label>
+    <textarea id="token" placeholder="Paste a GUARD token from auth-service Swagger"></textarea>
+
+    <div class="row">
+      <div><label>Campus</label><input id="campusId" type="number" value="1"></div>
+      <div><label>Gate</label><input id="gateId" type="number" value="3"></div>
+    </div>
+
+    <label>Gate name</label>
+    <input id="gateName" value="Main Gate">
+
+    <button id="startShift">Start shift</button>
+    <p class="hint">
+      Every scan takes its gate, campus and guard from this shift — never from
+      the scan request. That is what makes the entry log evidence rather than a
+      claim.
+    </p>
+  </div>
+
+  <!-- Scanning -->
+  <div class="card" id="scanCard" style="display:none">
+    <h2>2 · Scan</h2>
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <label>Or enter a token by hand</label>
+    <textarea id="manualToken"
+      placeholder="dev:118:108:R_Kulkarni:1:DAILY::2026-07-01:2026-12-31"></textarea>
+    <button class="secondary" id="manualScan">Submit token</button>
+
+    <p class="hint">
+      The manual box is not a debug tool — it is the fallback when a camera
+      fails at a gate with a queue behind it. With <code>GUARD_CLIENTS=stub</code>
+      the dev token format works end to end. Pass ids
+      <code>900</code>–<code>903</code> produce expired, revoked, paused and
+      pending refusals.
+    </p>
+
+    <button class="secondary" id="endShift">End shift</button>
+  </div>
+</div>
+
+<!-- Full-screen verdict -->
+<div id="result" onclick="hideResult()">
+  <div class="photo" id="photo">photo<br>(Mukul, Day 11)</div>
+  <div class="verdict" id="verdict"></div>
+  <div class="message" id="message"></div>
+  <div class="who" id="who"></div>
+  <div class="why" id="why"></div>
+  <div class="tap">tap to dismiss</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script>
+const API = window.location.origin;
+let sessionId = null, stream = null, scanning = false, lastToken = null, lastAt = 0;
+
+const $ = id => document.getElementById(id);
+const auth = () => ({ 'Authorization': 'Bearer ' + $('token').value.trim() });
+
+/* ---------------- shift ---------------- */
+
+$('startShift').onclick = async () => {
+  if (!$('token').value.trim()) return fault('No token', 'Paste a GUARD token first.');
+  $('startShift').disabled = true;
+  try {
+    const r = await fetch(API + '/api/guard/sessions', {
+      method: 'POST',
+      headers: { ...auth(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        campusId: +$('campusId').value,
+        gateId:   +$('gateId').value,
+        gateName: $('gateName').value,
+        deviceInfo: { userAgent: navigator.userAgent.slice(0, 60), appVersion: '0.1-wireframe' }
+      })
+    });
+    const body = await r.json();
+
+    if (r.status === 401) return fault('Not signed in', 'That token is missing, expired or invalid.');
+    if (r.status === 403) return fault('Wrong role', 'Only a GUARD may open a shift.');
+    if (!r.ok) return fault('Could not start shift', body.message || ('HTTP ' + r.status));
+
+    sessionId = body.data.id;
+    $('shiftDot').classList.remove('off');
+    $('shiftText').textContent = 'On shift · ' + body.data.gateName;
+    $('setupCard').style.display = 'none';
+    $('scanCard').style.display = 'block';
+    startCamera();
+  } catch (e) {
+    fault('Cannot reach the service', 'guard-service is not responding. Check it is running on 8085.');
+  } finally {
+    $('startShift').disabled = false;
+  }
+};
+
+$('endShift').onclick = async () => {
+  try {
+    await fetch(API + '/api/guard/sessions/' + sessionId + '/end', { method: 'POST', headers: auth() });
+  } catch (e) { /* ending a shift must never trap the guard in this screen */ }
+  stopCamera();
+  sessionId = null;
+  $('shiftDot').classList.add('off');
+  $('shiftText').textContent = 'No shift open';
+  $('scanCard').style.display = 'none';
+  $('setupCard').style.display = 'block';
+};
+
+/* ---------------- camera ---------------- */
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    $('video').srcObject = stream;
+    await $('video').play();
+    scanning = true;
+    requestAnimationFrame(tick);
+  } catch (e) {
+    // A camera failure is NOT a denial. Distinct state, and the manual box
+    // below stays usable so the queue keeps moving.
+    fault('Camera unavailable', 'Permission denied or no camera found. Use the token box below.');
+  }
+}
+
+function stopCamera() {
+  scanning = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+}
+
+function tick() {
+  if (!scanning) return;
+  const v = $('video'), c = $('canvas');
+  if (v.readyState === v.HAVE_ENOUGH_DATA) {
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, c.width, c.height);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    const code = jsQR(img.data, img.width, img.height);
+    // Same code twice inside 3s is one person holding a phone still, not two
+    // entries. Real repeat-entry detection is server-side on Day 11.
+    if (code && (code.data !== lastToken || Date.now() - lastAt > 3000)) {
+      lastToken = code.data; lastAt = Date.now();
+      submit(code.data);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+$('manualScan').onclick = () => {
+  const t = $('manualToken').value.trim();
+  if (t) submit(t);
+};
+
+/* ---------------- the scan ---------------- */
+
+async function submit(token) {
+  try {
+    const r = await fetch(API + '/api/guard/scan', {
+      method: 'POST',
+      headers: { ...auth(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        deviceInfo: { userAgent: navigator.userAgent.slice(0, 60), appVersion: '0.1-wireframe' }
+      })
+    });
+
+    // 503 is the scanner being broken, never a refusal. The server throws
+    // PassVerificationUnavailableException when qr-service or gatepass-service
+    // cannot be reached, and writes no entry log - because nothing happened at
+    // the gate. Showing red here would put a denial against someone who may
+    // hold a perfectly valid pass.
+    if (r.status === 503) {
+      return fault('Scanner unavailable', 'Cannot verify passes right now. Stop scanning and call it in.');
+    }
+    if (r.status === 401) return fault('Session expired', 'Sign in again.');
+    if (r.status === 403) return fault('Wrong role', 'Only a GUARD may scan.');
+
+    const body = await r.json();
+
+    if (!r.ok) {
+      // 400 with no open shift is a real business answer, not a fault.
+      return fault('Cannot scan', body.message || ('HTTP ' + r.status));
+    }
+    render(body.data);
+
+  } catch (e) {
+    fault('Network unreachable', 'The gate is offline. Do not wave people through.');
+  }
+}
+
+function render(d) {
+  // AMBER has no server-side source yet: ScanResult is ALLOWED/DENIED, and the
+  // repeat-entry rule needs Arham's repeat_entry_result key. The card renders it
+  // already so Day 11 is a backend change only.
+  const colour = d.result === 'ALLOWED' ? 'green' : (d.result === 'AMBER' ? 'amber' : 'red');
+  const el = $('result');
+  el.className = 'show ' + colour;
+
+  $('verdict').textContent = colour === 'green' ? 'ENTER'
+                           : colour === 'amber' ? 'SEEN AGAIN' : 'STOP';
+  $('message').textContent = d.message || '';
+
+  const bits = [];
+  if (d.holderName) bits.push(d.holderName);
+  if (d.passId) bits.push('Pass #' + d.passId);
+  $('who').innerHTML = bits.join('<br>');
+
+  // The reason is always shown on a refusal. "No" with no reason forces the
+  // guard to improvise, which is what the paper register did badly.
+  $('why').textContent = d.denialReason ? d.denialReason.replaceAll('_', ' ').toLowerCase() : '';
+  $('photo').style.display = colour === 'green' ? 'flex' : 'none';
+
+  // Auto-reset so the next person can walk up without the guard touching it.
+  clearTimeout(window.__reset);
+  window.__reset = setTimeout(hideResult, 5000);
+}
+
+function fault(title, detail) {
+  const el = $('result');
+  el.className = 'show fault';
+  $('verdict').textContent = 'CHECK';
+  $('message').textContent = title;
+  $('who').textContent = '';
+  $('why').textContent = detail;
+  $('photo').style.display = 'none';
+  clearTimeout(window.__reset);
+  window.__reset = setTimeout(hideResult, 6000);
+}
+
+function hideResult() {
+  $('result').className = '';
+  clearTimeout(window.__reset);
+}
+</script>
+</body>
+</html>
