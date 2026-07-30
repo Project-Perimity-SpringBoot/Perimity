@@ -23,7 +23,24 @@ public class GuardServiceApplication {
         SpringApplication.run(GuardServiceApplication.class, args);
     }
 
+    /**
+     * Local smoke-test data. Runs ONLY under the "dev" profile.
+     *
+     * The profile gate is not cosmetic. @WebMvcTest loads this class as its
+     * configuration but does not load Mongo repositories, so an ungated @Bean
+     * method asking for EntryLogRepository fails the whole application context -
+     * which took all six controller tests down with it.
+     *
+     * To keep using it locally, add SPRING_PROFILES_ACTIVE=dev to the launch
+     * configuration alongside JWT_SECRET, INTERNAL_API_KEY and GUARD_CLIENTS.
+     *
+     * Worth knowing what it does before you rely on it: it opens a session for
+     * guardUserId 1 on every startup, so requireOpenSession will find a shift no
+     * guard ever started, and a scan can succeed for the wrong reason. Real seed
+     * data is Day 20's job, through the API.
+     */
     @Bean
+    @org.springframework.context.annotation.Profile("dev")
     CommandLineRunner testInsert(EntryLogRepository entryLogRepo, ScanSessionRepository sessionRepo) {
         return args -> {
             ScanSession session = ScanSession.builder()
