@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * why this is a property rather than @ConditionalOnMissingBean.
  */
 @Component
-@ConditionalOnProperty(name = "perimity.guard.clients", havingValue = "stub")
+@ConditionalOnProperty(name = "perimity.guard.clients.events", havingValue = "stub")
 public class StubRunningEventClient implements RunningEventClient {
 
     @Override

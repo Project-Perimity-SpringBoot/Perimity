@@ -205,6 +205,6 @@ class ScanControllerSecurityTest {
     private ScanResponse allowedResponse() {
         return new ScanResponse(ScanResult.ALLOWED, "Welcome, R. Kulkarni", null,
                 118L, 108L, "R. Kulkarni", null, null, 3L, "Main Gate",
-                LocalDateTime.now(), "entrylog-1");
+                LocalDateTime.now(), "entrylog-1", null);
     }
 }
