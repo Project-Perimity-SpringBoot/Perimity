@@ -107,6 +107,28 @@ services:
 # credentials from the repo-root .env, so no secret appears below.
 # ============================================================================
 
+  # ---------- Service discovery ----------
+  #
+  # Added Day 13. Every service registers here and Feign resolves by service
+  # name instead of URL. Note this is NOT what makes cross-service calls work in
+  # Docker - compose DNS already resolves container names - so if Eureka is down
+  # the http client mode below still functions. That is deliberate: the registry
+  # is an addition, not a single point of failure.
+  discovery-server:
+    build: ./discovery-server
+    container_name: perimity-discovery
+    restart: unless-stopped
+    ports: ["8761:8761"]
+    healthcheck:
+      # The Eureka dashboard, not /actuator/health. actuator is not a declared
+      # dependency here, so that path may 404 - and a healthcheck that can never
+      # pass would leave all six services waiting on it forever.
+      test: ["CMD", "curl", "-f", "http://localhost:8761/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   auth-service:
     build: ./auth-service
     container_name: perimity-auth
@@ -121,8 +143,10 @@ services:
       MAIL_PORT: 1025
       MAIL_SMTP_AUTH: "false"
       MAIL_STARTTLS: "false"
+      EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
     healthcheck:
@@ -144,10 +168,12 @@ services:
       RABBITMQ_HOST: rabbitmq
       GATEPASS_BASE_URL: http://gatepass-service:8083
       STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8082:8082"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
@@ -171,10 +197,12 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       CAMPUS_SERVICE_URL: http://campus-service:8084
       STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8083:8083"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
@@ -194,10 +222,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8084:8084"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8084/api/campus/ping"]
@@ -222,10 +252,12 @@ services:
       MAIL_STARTTLS: "false"
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       QR_STORAGE_LOCAL_ROOT: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8086:8086"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
@@ -246,8 +278,10 @@ services:
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       CAMPUS_SERVICE_URL: http://campus-service:8084
       USER_SERVICE_URL: http://user-service:8082
+      EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8085:8085"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       mongo: { condition: service_healthy }
     healthcheck:
       # guard-service is the only one with a real health endpoint, so its check
