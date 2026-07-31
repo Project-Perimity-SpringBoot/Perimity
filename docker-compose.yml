@@ -1,11 +1,6 @@
 # Perimity — local development stack.
 #
 # Reads values from .env in this folder. Copy .env.example to .env first.
-#
-#   cp .env.example .env
-#   docker compose up --build
-#
-# The `version:` key was removed — Compose v2 ignores it and warns about it.
 
 services:
 
@@ -23,8 +18,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Creates authdb, userdb, gatepassdb, campusdb, qrdb on first startup.
-      # Without this, every service fails with "database ... does not exist".
       - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -54,8 +47,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5672:5672"   # AMQP
-      - "15672:15672" # Management UI: http://localhost:15672
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -76,119 +69,191 @@ services:
       timeout: 3s
       retries: 10
 
-  # ---------- Services ----------
-  #
-  # Uncomment your service's block once you have a Dockerfile in its folder.
-  # `condition: service_healthy` means the service waits until Postgres is
-  # actually accepting connections, not merely started. Without it, Spring Boot
-  # starts too early and crashes on the first connection attempt.
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: perimity-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1025"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
-  # auth-service:
-  #   build: ./auth-service
-  #   container_name: perimity-auth
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-  #   ports:
-  #     - "8081:8080"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
+  # ---------- Application services ----------
 
-  # user-service:
-  #   build: ./user-service
-  #   container_name: perimity-user
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/userdb
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-  #   ports:
-  #     - "8082:8080"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
+  discovery-server:
+    build: ./discovery-server
+    container_name: perimity-discovery
+    restart: unless-stopped
+    env_file: .env
+    ports: ["8761:8761"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
-  # gatepass-service:
-  #   build: ./gatepass-service
-  #   container_name: perimity-gatepass
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gatepassdb
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-  #   ports:
-  #     - "8083:8080"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
+  auth-service:
+    build: ./auth-service
+    container_name: perimity-auth
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      REDIS_HOST: redis
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_SMTP_AUTH: "false"
+      MAIL_STARTTLS: "false"
+    ports: ["8081:8081"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/auth/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
 
-  # campus-service:
-  #   build: ./campus-service
-  #   container_name: perimity-campus
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/campusdb
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-  #   ports:
-  #     - "8084:8080"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
+  user-service:
+    build: ./user-service
+    container_name: perimity-user
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/userdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8082:8082"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/user/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
 
-  # guard-service:
-  #   build: ./guard-service
-  #   container_name: perimity-guard
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/entrylogdb
-  #   ports:
-  #     - "8085:8080"
-  #   depends_on:
-  #     mongo:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
+  gatepass-service:
+    build: ./gatepass-service
+    container_name: perimity-gatepass
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gatepassdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      CAMPUS_SERVICE_URL: http://campus-service:8084
+      STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8083:8083"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/gatepass/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
 
-  # qr-service:
-  #   build: ./qr-service
-  #   container_name: perimity-qr
-  #   restart: unless-stopped
-  #   env_file: .env
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/qrdb
-  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-  #   ports:
-  #     - "8086:8080"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
+  campus-service:
+    build: ./campus-service
+    container_name: perimity-campus
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/campusdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8084:8084"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/api/campus/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
 
-  # frontend:
-  #   build: ./frontend
-  #   container_name: perimity-frontend
-  #   restart: unless-stopped
-  #   environment:
-  #     VITE_API_BASE_URL: ${VITE_API_BASE_URL}
-  #   ports:
-  #     - "3000:3000"
+  qr-service:
+    build: ./qr-service
+    container_name: perimity-qr
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/qrdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_SMTP_AUTH: "false"
+      MAIL_STARTTLS: "false"
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      QR_STORAGE_LOCAL_ROOT: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8086:8086"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/api/qr/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  guard-service:
+    build: ./guard-service
+    container_name: perimity-guard
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/entrylogdb
+      QR_SERVICE_URL: http://qr-service:8086
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      CAMPUS_SERVICE_URL: http://campus-service:8084
+      USER_SERVICE_URL: http://user-service:8082
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    ports: ["8085:8085"]
+    depends_on:
+      mongo: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
 
 volumes:
+  perimity_storage:
   postgres_data:
   mongo_data:
   rabbitmq_data:
