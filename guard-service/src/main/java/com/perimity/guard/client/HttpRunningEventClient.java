@@ -36,7 +36,12 @@ import org.springframework.web.client.RestClient;
  * Worth being aware of when reading attendance figures after an incident.
  */
 @Component
-@ConditionalOnProperty(name = "perimity.guard.clients.events", havingValue = "http", matchIfMissing = true)
+@ConditionalOnProperty(name = "perimity.guard.clients.events", havingValue = "http",
+        matchIfMissing = true)
+// Suppressed when perimity.clients.mode=feign, so exactly one implementation
+// of RunningEventClient exists in the context at a time.
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
+        "'${perimity.clients.mode:http}' != 'feign'")
 public class HttpRunningEventClient implements RunningEventClient {
 
     private static final Logger log = LoggerFactory.getLogger(HttpRunningEventClient.class);
