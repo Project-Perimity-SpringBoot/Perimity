@@ -19,9 +19,51 @@
 
     <properties>
         <java.version>17</java.version>
+        <spring-cloud.version>2023.0.6</spring-cloud.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Cloud 2023.0.x is the release train for Spring Boot 3.3.x.
+                 Never pin individual Spring Cloud versions - this BOM keeps them
+                 consistent with each other and with Boot. -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+    <!-- ===== Service discovery (Eureka client) ===== -->
+    <!-- Registers this service with discovery-server on startup and heartbeats
+         every 10s. Optional at runtime: eureka.client.enabled=false turns it off
+         and the service behaves exactly as it did before. -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- ===== Declarative HTTP clients (OpenFeign) ===== -->
+    <!-- Only in services that CALL peers. Feign resolves
+         @FeignClient(name = "campus-service") through Eureka, so no URL
+         appears in the code. -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+
+    <!-- Required for the 'fallback' attribute on @FeignClient to be honoured.
+         Without a circuit breaker on the classpath Feign throws on failure and
+         the fail-soft behaviour is silently lost. -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+    </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -47,6 +89,85 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- ========== Activated on Day 7: security ========== -->
+
+        <!-- NOTE: adding this starter secures EVERY endpoint by default,
+             including /ping and Swagger. SecurityConfig is what re-opens them.
+             Never add this without adding that class in the same commit. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- JWT. This service only READS tokens; auth-service issues them.
+             Same version across all six, or signatures will not verify. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ========== Activated on Day 8: messaging ========== -->
+
+        <!-- RabbitMQ. Pass issue drops a QR job here and returns immediately;
+             generating a QR, a PDF and an email takes seconds, and 600 of them
+             synchronously would time out the browser. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- RestClient for the internal calls to auth, user and campus. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+        <!-- ============================================================
+             Day 10 - the bulk engine.
+
+             poi-ooxml reads and writes .xlsx. It pulls in poi transitively,
+             so both are declared explicitly to keep the versions locked
+             together - a mismatch between them produces NoSuchMethodError at
+             RUNTIME rather than at compile time, which is a miserable
+             afternoon to debug.
+             ============================================================ -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+
+        <!-- Object storage. Same version as campus-service (Arham), which is
+             the reference implementation this layer was copied from. Two
+             services on two S3 SDK versions is a conflict waiting for the day
+             someone builds a shared module.
+
+             Inactive while perimity.storage.type=local, which is the default -
+             nobody needs an AWS account to run this project. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.16</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -62,6 +183,42 @@
 
     <build>
         <plugins>
+            <!-- ============================================================
+                 Jacoco - Day 11. Coverage report for rubric credit.
+
+                 prepare-agent must bind BEFORE the tests run, and report AFTER,
+                 which is why there are two executions rather than one. Bound to
+                 'verify' rather than 'test' so `mvn test` stays fast for the
+                 inner loop and CI's `mvn verify` gets the report.
+
+                 Output: target/site/jacoco/index.html
+                 ============================================================ -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <excludes>
+                        <!-- Generated or trivially-correct code. Counting it
+                             inflates the number without proving anything. -->
+                        <exclude>**/dto/**</exclude>
+                        <exclude>**/entity/**</exclude>
+                        <exclude>**/GatepassServiceApplication.class</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

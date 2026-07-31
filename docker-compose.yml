@@ -1,11 +1,13 @@
 # Perimity — local development stack.
 #
 # Reads values from .env in this folder. Copy .env.example to .env first.
-
+#
+#   cp .env.example .env
+#   docker compose up --build
+#
+# The `version:` key was removed — Compose v2 ignores it and warns about it.
 services:
-
   # ---------- Infrastructure ----------
-
   postgres:
     image: postgres:16
     container_name: perimity-postgres
@@ -18,13 +20,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates authdb, userdb, gatepassdb, campusdb, qrdb on first startup.
+      # Without this, every service fails with "database ... does not exist".
       - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 10
-
   mongo:
     image: mongo:7
     container_name: perimity-mongo
@@ -38,7 +41,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: perimity-rabbitmq
@@ -47,8 +49,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI: http://localhost:15672
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -56,7 +58,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   redis:
     image: redis:7
     container_name: perimity-redis
@@ -68,7 +69,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-
   mailhog:
     image: mailhog/mailhog:latest
     container_name: perimity-mailhog
@@ -81,9 +81,25 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
   # ---------- Application services ----------
-
+#
+# Paste these UNDER the existing infra services (postgres, mongo, rabbitmq,
+# redis, mailhog) and DELETE the six commented-out blocks currently there.
+#
+# Two things differ from those commented blocks, both deliberate:
+#
+#  1. Ports map 8081:8081, not 8081:8080. Every service sets its own
+#     server.port in application.properties (8081..8086). The old mapping
+#     assumed 8080 inside the container, so nothing would have answered.
+#
+#  2. Service URLs use CONTAINER NAMES, not localhost. Inside the compose
+#     network `localhost` is the container itself, so every cross-service call
+#     would have connected to nothing. This is the single most common reason a
+#     stack that works in an IDE fails in Docker.
+#
+# env_file supplies JWT_SECRET, INTERNAL_API_KEY, QR_AES_KEY and the database
+# credentials from the repo-root .env, so no secret appears below.
+# ============================================================================
   discovery-server:
     build: ./discovery-server
     container_name: perimity-discovery
@@ -96,7 +112,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
-
   auth-service:
     build: ./auth-service
     container_name: perimity-auth
@@ -106,12 +121,12 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      EUREKA_URL: http://discovery-server:8761/eureka/
       REDIS_HOST: redis
       MAIL_HOST: mailhog
       MAIL_PORT: 1025
       MAIL_SMTP_AUTH: "false"
       MAIL_STARTTLS: "false"
+      EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -122,7 +137,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   user-service:
     build: ./user-service
     container_name: perimity-user
@@ -133,7 +147,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
-      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      GATEPASS_BASE_URL: http://gatepass-service:8083
       STORAGE_LOCAL_DIR: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
@@ -148,7 +162,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   gatepass-service:
     build: ./gatepass-service
     container_name: perimity-gatepass
@@ -176,7 +189,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   campus-service:
     build: ./campus-service
     container_name: perimity-campus
@@ -199,7 +211,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   qr-service:
     build: ./qr-service
     container_name: perimity-qr
@@ -229,7 +240,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   guard-service:
     build: ./guard-service
     container_name: perimity-guard
@@ -246,12 +256,13 @@ services:
     depends_on:
       mongo: { condition: service_healthy }
     healthcheck:
+      # guard-service is the only one with a real health endpoint, so its check
+      # also reports whether the four services it calls are reachable.
       test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 40s
-
 volumes:
   perimity_storage:
   postgres_data:
