@@ -1,25 +1,30 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { ROLE_LABEL, ROLES } from './roles';
+import { navItems } from './featureRoutes';
+import { ROLES, ROLE_LABEL } from './roles';
+import { AppShell } from './ui';
+import { campus, useApi } from '../api';
 
 /**
- * Navbar, sidebar, and the routed page.
+ * ALSO FINISHED. Nobody edits this file to add a screen.
  *
- * The sidebar is role-aware: each entry declares who may see it, so a Guard
- * never sees a link to Campus Settings. Add your screens to NAV below - one
- * line each, and nobody has to touch this file's logic.
+ * It does two things and no more: filter the derived nav by the signed-in
+ * role, and pick the tone. Everything visual lives in AppShell.
  *
- * NO INSTITUTION NAME ANYWHERE. The product name is Perimity; the campus name
- * comes from the API for the logged-in user's campus. That rule is in every
- * governing document and CI fails a build that breaks it.
+ * NO INSTITUTION NAME ANYWHERE. The campus name renders from the API for the
+ * signed-in user's campus — the product is campus-agnostic and a hardcoded
+ * name is the one change that would quietly break that.
  */
-const NAV = [
-  { to: '/my-pass',   label: 'My Pass',        roles: [ROLES.STUDENT, ROLES.VISITOR, ROLES.FACULTY] },
-  { to: '/approvals', label: 'Approvals',      roles: [ROLES.FACULTY, ROLES.CAMPUS_ADMIN] },
-  { to: '/scan',      label: 'Scan',           roles: [ROLES.GUARD] },
-  { to: '/campus',    label: 'Campus',         roles: [ROLES.CAMPUS_ADMIN] },
-  { to: '/admin',     label: 'Platform',       roles: [ROLES.SUPER_ADMIN] },
-];
+const ICONS = {
+  '/student': '⌂', '/student/pass': '▣', '/student/passes': '≡', '/student/entries': '⇢',
+  '/student/profile': '◍', '/student/documents': '❐',
+  '/visitor': '▣',
+  '/approvals': '✓',
+  '/campus': '⌂', '/campus/users': '◍', '/campus/departments': '⊞', '/campus/gates': '⌷',
+  '/campus/blocklist': '⊘', '/campus/policy': '⚙', '/campus/audit': '≡',
+  '/admin': '⌂', '/admin/campuses': '⊞', '/admin/admins': '◍', '/admin/audit': '≡',
+  '/guard/log': '≡',
+};
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -30,34 +35,31 @@ export default function Layout() {
     navigate('/login', { replace: true });
   };
 
-  const visible = NAV.filter((item) => item.roles.includes(user.role));
+  const items = navItems
+    .filter((i) => !i.roles || i.roles.includes(user.role))
+    .map((i) => ({ ...i, icon: ICONS[i.to] }));
+
+  const platform = user.role === ROLES.SUPER_ADMIN;
+
+  /*
+   * The campus NAME is not on the token and not on /api/auth/me — UserResponse
+   * carries campusId and nothing else. So it is fetched once here rather than
+   * read off a field that does not exist, which is what an earlier draft did
+   * and which rendered a blank chip with no error to explain it.
+   */
+  const { data: myCampus } = useApi(
+    () => campus.get(user.campusId), [user.campusId], { skip: platform || !user.campusId });
 
   return (
-    <div className="app">
-      <header className="navbar">
-        <span className="brand">Perimity</span>
-        <div className="navbar-right">
-          <span className="who">
-            {user.name} · {ROLE_LABEL[user.role] ?? user.role}
-          </span>
-          <button onClick={signOut}>Log out</button>
-        </div>
-      </header>
-
-      <div className="body">
-        <nav className="sidebar">
-          {visible.map((item) => (
-            <NavLink key={item.to} to={item.to}>
-              {item.label}
-            </NavLink>
-          ))}
-          {visible.length === 0 && <span className="muted">No screens yet</span>}
-        </nav>
-
-        <main className="content">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+    <AppShell
+      items={items}
+      user={user.name}
+      roleLabel={ROLE_LABEL[user.role] ?? user.role}
+      onSignOut={signOut}
+      tone={platform ? 'platform' : 'campus'}
+      // The chip is the only thing telling two near-identical admin consoles
+      // apart at a glance. Suspending the wrong campus is unrecoverable.
+      scopeLabel={platform ? 'Platform' : myCampus?.name}
+    />
   );
 }

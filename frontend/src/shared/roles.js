@@ -26,10 +26,13 @@ export const ROLE_LABEL = {
 
 /** Where each role lands after login. Claim your own in the routes table. */
 export const HOME_FOR_ROLE = {
-  SUPER_ADMIN: '/admin',
-  CAMPUS_ADMIN: '/campus',
+  SUPER_ADMIN: '/platform',
+  CAMPUS_ADMIN: '/today',
   FACULTY: '/approvals',
-  STUDENT: '/my-pass',
-  VISITOR: '/my-pass',
-  GUARD: '/scan',
+  STUDENT: '/student',
+  VISITOR: '/visitor',
+  // A guard lands on gate selection, not the scanner. Scanning before choosing
+  // a gate would log entries against the wrong one, and nothing downstream
+  // could tell.
+  GUARD: '/guard/start-shift',
 };
