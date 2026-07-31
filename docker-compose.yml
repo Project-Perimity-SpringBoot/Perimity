@@ -6,10 +6,8 @@
 #   docker compose up --build
 #
 # The `version:` key was removed — Compose v2 ignores it and warns about it.
-
 services:
   # ---------- Infrastructure ----------
-
   postgres:
     image: postgres:16
     container_name: perimity-postgres
@@ -30,7 +28,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
   mongo:
     image: mongo:7
     container_name: perimity-mongo
@@ -44,7 +41,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: perimity-rabbitmq
@@ -62,7 +58,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   redis:
     image: redis:7
     container_name: perimity-redis
@@ -86,7 +81,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
   # ---------- Application services ----------
 #
 # Paste these UNDER the existing infra services (postgres, mongo, rabbitmq,
@@ -106,7 +100,18 @@ services:
 # env_file supplies JWT_SECRET, INTERNAL_API_KEY, QR_AES_KEY and the database
 # credentials from the repo-root .env, so no secret appears below.
 # ============================================================================
-
+  discovery-server:
+    build: ./discovery-server
+    container_name: perimity-discovery
+    restart: unless-stopped
+    env_file: .env
+    ports: ["8761:8761"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
   auth-service:
     build: ./auth-service
     container_name: perimity-auth
@@ -121,6 +126,7 @@ services:
       MAIL_PORT: 1025
       MAIL_SMTP_AUTH: "false"
       MAIL_STARTTLS: "false"
+      EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -131,7 +137,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   user-service:
     build: ./user-service
     container_name: perimity-user
@@ -144,6 +149,7 @@ services:
       RABBITMQ_HOST: rabbitmq
       GATEPASS_BASE_URL: http://gatepass-service:8083
       STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8082:8082"]
@@ -156,7 +162,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   gatepass-service:
     build: ./gatepass-service
     container_name: perimity-gatepass
@@ -171,6 +176,7 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       CAMPUS_SERVICE_URL: http://campus-service:8084
       STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8083:8083"]
@@ -183,7 +189,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   campus-service:
     build: ./campus-service
     container_name: perimity-campus
@@ -194,6 +199,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8084:8084"]
@@ -205,7 +211,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   qr-service:
     build: ./qr-service
     container_name: perimity-qr
@@ -222,6 +227,7 @@ services:
       MAIL_STARTTLS: "false"
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       QR_STORAGE_LOCAL_ROOT: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
     ports: ["8086:8086"]
@@ -234,7 +240,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   guard-service:
     build: ./guard-service
     container_name: perimity-guard
@@ -246,6 +251,7 @@ services:
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       CAMPUS_SERVICE_URL: http://campus-service:8084
       USER_SERVICE_URL: http://user-service:8082
+      EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8085:8085"]
     depends_on:
       mongo: { condition: service_healthy }
@@ -257,7 +263,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
 volumes:
   perimity_storage:
   postgres_data:
