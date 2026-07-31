@@ -1,5 +1,6 @@
 package com.perimity.user.config;
 
+import com.perimity.user.client.FeignPassPauseClient;
 import com.perimity.user.client.HttpPassPauseClient;
 import com.perimity.user.client.NoOpPassPauseClient;
 import com.perimity.user.client.PassPauseClient;
@@ -29,8 +30,19 @@ public class PassPauseClientConfig {
     public PassPauseClient passPauseClient(
             @Value("${perimity.services.gatepass-url}") String baseUrl,
             @Value("${perimity.services.timeout-ms}") long timeoutMs,
-            @Value("${perimity.internal.api-key}") String internalApiKey) {
+            @Value("${perimity.internal.api-key}") String internalApiKey,
+            @Value("${perimity.clients.mode:http}") String clientsMode,
+            // ObjectFactory, not a direct injection: the Feign client bean only
+            // exists when Feign is enabled, and asking for it directly would
+            // break startup in http mode.
+            org.springframework.beans.factory.ObjectFactory<
+                    com.perimity.user.client.GatepassFeignClient> gatepassFeignClient) {
 
+        if ("feign".equalsIgnoreCase(clientsMode)) {
+            // Feign resolves gatepass-service through Eureka, so an empty
+            // baseUrl is fine here - the registry supplies the address.
+            return new FeignPassPauseClient(gatepassFeignClient.getObject());
+        }
         if (baseUrl == null || baseUrl.isBlank()) {
             return new NoOpPassPauseClient();
         }

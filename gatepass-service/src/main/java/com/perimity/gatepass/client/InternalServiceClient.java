@@ -56,6 +56,18 @@ public class InternalServiceClient {
     private static final Logger log = LoggerFactory.getLogger(InternalServiceClient.class);
     private static final String KEY_HEADER = "X-Internal-Api-Key";
 
+    /**
+     * Feign delegates, present only when perimity.clients.mode=feign.
+     *
+     * ObjectProvider rather than direct injection: the Feign beans do not exist
+     * in http mode, and asking for them directly would break startup for anyone
+     * who has not switched over.
+     */
+    private final org.springframework.beans.factory.ObjectProvider<CampusFeignClient> campusFeign;
+    private final org.springframework.beans.factory.ObjectProvider<AuthFeignClient> authFeign;
+    private final org.springframework.beans.factory.ObjectProvider<UserFeignClient> userFeign;
+    private final boolean useFeign;
+
     private final RestClient auth;
     private final RestClient user;
     private final RestClient campus;
@@ -66,7 +78,19 @@ public class InternalServiceClient {
             @Value("${perimity.services.user-url}") String userUrl,
             @Value("${perimity.services.campus-url}") String campusUrl,
             @Value("${perimity.services.timeout-ms}") long timeoutMs,
-            @Value("${perimity.internal.api-key}") String apiKey) {
+            @Value("${perimity.internal.api-key}") String apiKey,
+            @Value("${perimity.clients.mode:http}") String clientsMode,
+            org.springframework.beans.factory.ObjectProvider<CampusFeignClient> campusFeign,
+            org.springframework.beans.factory.ObjectProvider<AuthFeignClient> authFeign,
+            org.springframework.beans.factory.ObjectProvider<UserFeignClient> userFeign) {
+
+        this.campusFeign = campusFeign;
+        this.authFeign = authFeign;
+        this.userFeign = userFeign;
+        this.useFeign = "feign".equalsIgnoreCase(clientsMode);
+        if (this.useFeign) {
+            log.info("InternalServiceClient is in FEIGN mode - peers resolved through Eureka.");
+        }
 
         var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
@@ -88,6 +112,10 @@ public class InternalServiceClient {
      * FIXED PATH. Was hitting the public controller and getting 401.
      */
     public Optional<CampusView> campusOf(Long campusId) {
+        if (useFeign) {
+            return viaFeign("campus", () -> campusFeign.getObject().campus(campusId))
+                    .map(CampusEnvelope::data);
+        }
         return get(campus, "/api/campus/internal/campuses/" + campusId,
                 CampusEnvelope.class, "campus").map(CampusEnvelope::data);
     }
@@ -131,6 +159,10 @@ public class InternalServiceClient {
      * since Day 8, just now it is visible in the log rather than silent.
      */
     public Optional<String> emailOf(Long userId) {
+        if (useFeign) {
+            return viaFeign("auth", () -> authFeign.getObject().email(userId))
+                    .map(EmailEnvelope::data).map(EmailView::email);
+        }
         return get(auth, "/api/internal/auth/users/" + userId + "/email",
                 EmailEnvelope.class, "auth").map(EmailEnvelope::data).map(EmailView::email);
     }
@@ -228,11 +260,34 @@ public class InternalServiceClient {
      * it starts working with no change here the moment he ships it.
      */
     public Optional<ProfileView> profileOf(Long userId) {
+        if (useFeign) {
+            return viaFeign("user", () -> userFeign.getObject().profile(userId))
+                    .map(ProfileEnvelope::data);
+        }
         return get(user, "/api/user/internal/profiles/" + userId + "/summary",
                 ProfileEnvelope.class, "user").map(ProfileEnvelope::data);
     }
 
     // ------------------------------------------------------------- plumbing
+
+    /**
+     * Fail-soft wrapper for Feign, mirroring get(...) exactly.
+     *
+     * Feign throws on any non-2xx or connection failure. Every one of these
+     * calls only ENRICHES a QR job with a name or an email, so a peer being
+     * down must not stop a pass being issued. Swallowing here is the whole
+     * reason the platform kept working this morning while two services were
+     * refusing connections.
+     */
+    private <T> Optional<T> viaFeign(String service, java.util.function.Supplier<T> call) {
+        try {
+            return Optional.ofNullable(call.get());
+        } catch (RuntimeException ex) {
+            log.warn("{}-service Feign call failed, continuing without it: {}",
+                    service, ex.getMessage());
+            return Optional.empty();
+        }
+    }
 
     private <T> Optional<T> get(RestClient client, String path, Class<T> type, String service) {
         try {
@@ -261,7 +316,7 @@ public class InternalServiceClient {
 
     public record CampusView(Long id, String code, String name) { }
 
-    public record CampusEnvelope(boolean success, CampusView data) { }
+    public static record CampusEnvelope(boolean success, CampusView data) { }
 
     public record ConfigView(String configKey, String configValue, String valueType) {
         public int asInt(int fallback) {
@@ -280,7 +335,7 @@ public class InternalServiceClient {
 
     public record EmailView(String email) { }
 
-    public record EmailEnvelope(boolean success, EmailView data) { }
+    public static record EmailEnvelope(boolean success, EmailView data) { }
 
     public record UserView(Long id, String email, String name, Long campusId) { }
 
@@ -292,5 +347,5 @@ public class InternalServiceClient {
 
     public record ProfileView(Long userId, String identifierCode, String photoS3Key) { }
 
-    public record ProfileEnvelope(boolean success, ProfileView data) { }
+    public static record ProfileEnvelope(boolean success, ProfileView data) { }
 }
