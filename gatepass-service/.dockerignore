@@ -1,0 +1,14 @@
+# Keep the build context small and the image reproducible.
+#
+# target/ matters most: without this line Docker copies your locally-built jar
+# into the context, and on a machine where that jar is stale you can ship an old
+# build that passes every check because the source that produced it is gone.
+
+target/
+.mvn/
+.settings/
+.factorypath
+.classpath
+.project
+*.iml
+.idea/
