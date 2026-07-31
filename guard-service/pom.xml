@@ -19,9 +19,51 @@
 
     <properties>
         <java.version>17</java.version>
+        <spring-cloud.version>2023.0.6</spring-cloud.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Cloud 2023.0.x is the release train for Spring Boot 3.3.x.
+                 Never pin individual Spring Cloud versions - this BOM keeps them
+                 consistent with each other and with Boot. -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+    <!-- ===== Service discovery (Eureka client) ===== -->
+    <!-- Registers this service with discovery-server on startup and heartbeats
+         every 10s. Optional at runtime: eureka.client.enabled=false turns it off
+         and the service behaves exactly as it did before. -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- ===== Declarative HTTP clients (OpenFeign) ===== -->
+    <!-- Only in services that CALL peers. Feign resolves
+         @FeignClient(name = "campus-service") through Eureka, so no URL
+         appears in the code. -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+
+    <!-- Required for the 'fallback' attribute on @FeignClient to be honoured.
+         Without a circuit breaker on the classpath Feign throws on failure and
+         the fail-soft behaviour is silently lost. -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+    </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
