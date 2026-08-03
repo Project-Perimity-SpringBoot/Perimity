@@ -6,10 +6,8 @@
 #   docker compose up --build
 #
 # The `version:` key was removed — Compose v2 ignores it and warns about it.
-
 services:
   # ---------- Infrastructure ----------
-
   postgres:
     image: postgres:16
     container_name: perimity-postgres
@@ -30,7 +28,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
   mongo:
     image: mongo:7
     container_name: perimity-mongo
@@ -44,7 +41,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: perimity-rabbitmq
@@ -62,7 +58,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   redis:
     image: redis:7
     container_name: perimity-redis
@@ -86,7 +81,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
   # ---------- Application services ----------
 #
 # Paste these UNDER the existing infra services (postgres, mongo, rabbitmq,
@@ -118,11 +112,22 @@ services:
     build: ./discovery-server
     container_name: perimity-discovery
     restart: unless-stopped
+    env_file: .env
     ports: ["8761:8761"]
     healthcheck:
-      # The Eureka dashboard, not /actuator/health. actuator is not a declared
-      # dependency here, so that path may 404 - and a healthcheck that can never
-      # pass would leave all six services waiting on it forever.
+      # The Eureka dashboard, not /actuator/health.
+      #
+      # discovery-server/pom.xml declares only
+      # spring-cloud-starter-netflix-eureka-server - there is no
+      # spring-boot-starter-actuator on its classpath, so the
+      # management.endpoints.web.exposure.include=health,info line in its
+      # properties has nothing to expose and /actuator/health 404s.
+      #
+      # A healthcheck that can never pass leaves this container permanently
+      # "starting", and every service below declares
+      # `depends_on: discovery-server: service_healthy` - so the whole stack
+      # would wait on it forever. "/" serves the dashboard and works whether or
+      # not actuator is ever added.
       test: ["CMD", "curl", "-f", "http://localhost:8761/"]
       interval: 10s
       timeout: 5s
@@ -155,7 +160,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   user-service:
     build: ./user-service
     container_name: perimity-user
@@ -182,7 +186,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   gatepass-service:
     build: ./gatepass-service
     container_name: perimity-gatepass
@@ -211,7 +214,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   campus-service:
     build: ./campus-service
     container_name: perimity-campus
@@ -235,7 +237,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   qr-service:
     build: ./qr-service
     container_name: perimity-qr
@@ -266,7 +267,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
   guard-service:
     build: ./guard-service
     container_name: perimity-guard
@@ -291,7 +291,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-
 volumes:
   perimity_storage:
   postgres_data:
