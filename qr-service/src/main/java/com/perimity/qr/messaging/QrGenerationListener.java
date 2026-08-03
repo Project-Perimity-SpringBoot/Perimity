@@ -250,6 +250,7 @@ public class QrGenerationListener {
                 .passId(message.passId())
                 .campusId(message.campusId())
                 .batchId(message.batchId())
+                .holderUserId(message.holderUserId())
                 .validFrom(message.validFrom())
                 .validTo(message.validTo())
                 .build();

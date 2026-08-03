@@ -64,6 +64,24 @@ public class QrRecord {
     private Long campusId;
 
     /**
+     * The user this pass belongs to. Used only to answer "is this yours?".
+     *
+     * PROPOSAL - see V3__ownership_scoping.sql. gatepass-service owns the fact
+     * that pass 41 belongs to user 7; this is a copy of it, kept here so an
+     * ownership check does not become a cross-service call on the read path
+     * every pass view performs. The value already arrives on every
+     * qr.generate.request as QrGenerationJob.holderUserId and was previously
+     * discarded.
+     *
+     * NULLABLE, and that is not laziness. Every row written before this column
+     * existed has no holder, and there is no way to derive one here. What
+     * happens on a null is the decision this proposal is asking for - see
+     * QrRecordService.assertMayRead.
+     */
+    @Column(name = "holder_user_id")
+    private Long holderUserId;
+
+    /**
      * SHA-256 of the encrypted token. Never the token itself.
      * The regex is a tripwire: if anything ever writes a non-hex value here,
      * validation fails loudly instead of silently storing a plain token.
