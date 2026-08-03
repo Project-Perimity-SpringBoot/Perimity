@@ -45,6 +45,11 @@ const VisitorRegisterPage = lazy(() => import('@features/auth/routes/VisitorRegi
 const GuardLoginPage = lazy(() => import('@features/auth/routes/GuardLoginPage'));
 const GateSessionPage = lazy(() => import('@features/auth/routes/GateSessionPage'));
 
+/* ── PHASE 6 · Guard ───────────────────────────────────────────────────── */
+const ScannerPage = lazy(() => import('@features/guard/routes/ScannerPage'));
+const GuardShiftEndPage = lazy(() => import('@features/guard/routes/ShiftEndPage'));
+const GuardManualEntryPage = lazy(() => import('@features/guard/routes/ManualEntryPage'));
+
 /* ── PHASE 2 · Campus Admin ── */
 const AdminOverview = lazy(() => import('@features/campus-admin/routes/AdminOverview'));
 const VisitorQueuePage = lazy(() => import('@features/campus-admin/routes/VisitorQueuePage'));
@@ -257,11 +262,16 @@ export const router = createBrowserRouter([
                   {
                     element: <GuardShell />,
                     children: [
-                      {
-                        path: '/guard',
-                        element: <PhasePending phase={6} owner="Palash" area="Scanner" screens={8} />,
-                      },
+                      /* The scanner IS the guard's home screen. There is no
+                         guard dashboard, deliberately — nothing competes with
+                         the viewfinder. */
+                      { path: '/guard', element: <ScannerPage /> },
                       { path: '/guard/session', element: <GateSessionPage /> },
+                      { path: '/guard/shift-end', element: <GuardShiftEndPage /> },
+                      /* Behind VITE_ENABLE_GUARD_MANUAL_LOOKUP (B8). The route
+                         exists either way so the link never 404s; the screen
+                         explains itself when the endpoints are missing. */
+                      { path: '/guard/manual', element: <GuardManualEntryPage /> },
                     ],
                   },
                 ],
