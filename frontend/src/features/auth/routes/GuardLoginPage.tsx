@@ -8,7 +8,7 @@ import { Button, Field, Input } from '@ui/index';
 import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { useAuth } from '@hooks/useAuth';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { loginSchema, type LoginValues } from '../schemas/auth.schemas';
 
 /**

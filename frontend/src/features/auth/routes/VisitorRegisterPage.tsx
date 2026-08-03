@@ -8,7 +8,7 @@ import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { config } from '@lib/config';
 import { visitorRegistrationSchema, type VisitorRegistrationValues } from '../schemas/auth.schemas';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 
 export default function VisitorRegisterPage() {
   const navigate = useNavigate();

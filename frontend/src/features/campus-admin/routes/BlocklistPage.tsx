@@ -14,7 +14,7 @@ import { authApi } from '@lib/api/services/auth.api';
 import { authKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
 import type { BlocklistEntryResponse } from '@/types/auth.types';
-import { useApiFormErrors } from '@features/auth/useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
 import { useDebouncedValue } from '@hooks/useDebouncedValue';
 import { useToast } from '@hooks/useToast';

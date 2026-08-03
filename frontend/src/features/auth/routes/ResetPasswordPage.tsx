@@ -8,7 +8,7 @@ import { Button, Field, Input } from '@ui/index';
 import { EmptyState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { resetPasswordSchema, type ResetPasswordValues } from '../schemas/auth.schemas';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { PasswordRulesList } from './PasswordRulesList';
 
 export default function ResetPasswordPage() {
