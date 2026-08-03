@@ -2,38 +2,42 @@ package com.perimity.qr.config;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
 
 /**
- * qr-service is the only service with NO CORS configuration.
+ * CORS for qr-service.
  *
- * The other five configure CORS inside their SecurityConfig. qr-service has no
- * spring-boot-starter-security at all — its InternalApiKeyFilter is registered
- * by hand — so there is no SecurityConfig for the CORS block to live in, and
- * nobody noticed the gap because nothing called qr-service from a browser until
- * the frontend arrived.
+ * Two screens depend on it, and both fail the same confusing way without it -
+ * the request never reaches the server, so the qr-service log is silent and
+ * only the browser console says anything:
  *
- * Two screens break without this, and both fail the same confusing way — the
- * request never reaches the server, so the qr-service log is silent and only
- * the browser console says anything:
- *
- *   Bulk Progress   GET /api/qr/jobs/batch/{batchId}/progress
+ *   Bulk progress   GET /api/qr/jobs/batch/{batchId}/progress
  *   Pass download   GET /api/qr/{passId}
  *
- * A CorsFilter rather than a WebMvcConfigurer, because it must run before
- * InternalApiKeyFilter — a rejected preflight is not a CORS problem the
- * browser can explain, it just says "blocked".
+ * ======================================================================
+ *  NOW A CorsConfigurationSource, NOT A STANDALONE CorsFilter
+ * ======================================================================
+ * This started life as a hand-registered CorsFilter, because qr-service had no
+ * SecurityConfig for a CORS block to live in - it had no spring-boot-starter
+ * -security at all. It has one now, so the bean below is consumed by
+ * SecurityConfig exactly the way the other five services do it.
  *
- * PUT THIS AT:
- *   qr-service/src/main/java/com/perimity/qr/config/QrCorsConfig.java
+ * That is not cosmetic. A standalone CorsFilter bean is auto-registered at
+ * LOWEST_PRECEDENCE, which puts it AFTER the Spring Security chain - so a
+ * preflight would be rejected by security before any CORS header was written,
+ * and the browser would report a bare "blocked" with no clue why. Handing the
+ * source to Spring Security instead puts CORS at the front of the chain, which
+ * is the only position where it works. Registering both would write duplicate
+ * Access-Control-Allow-Origin headers, which browsers reject outright.
  *
- * No other change needed. Nothing in this file affects the internal API key
- * path — preflights carry no credentials and are answered before it.
+ * Preflights are still answered before InternalApiKeyFilter, which is what the
+ * original note was protecting: an OPTIONS request carries no credentials and
+ * must never be asked for an API key.
  */
 @Configuration
 public class QrCorsConfig {
@@ -47,7 +51,7 @@ public class QrCorsConfig {
     }
 
     @Bean
-    public CorsFilter qrCorsFilter() {
+    public CorsConfigurationSource corsSource() {
         CorsConfiguration c = new CorsConfiguration();
         c.setAllowedOrigins(allowedOrigins);
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
@@ -56,6 +60,6 @@ public class QrCorsConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", c);
-        return new CorsFilter(source);
+        return source;
     }
 }
