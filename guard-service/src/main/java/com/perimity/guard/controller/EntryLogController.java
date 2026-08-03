@@ -36,45 +36,89 @@ import org.springframework.web.bind.annotation.*;
 public class EntryLogController {
 
     private final EntryLogService service;
+    private final com.perimity.guard.security.CurrentUser currentUser;
 
-    public EntryLogController(EntryLogService service) {
+    public EntryLogController(EntryLogService service,
+                              com.perimity.guard.security.CurrentUser currentUser) {
         this.service = service;
+        this.currentUser = currentUser;
+    }
+
+    /**
+     * The single place a campus id enters the read path.
+     *
+     * ======================================================================
+     * WHY A REQUEST NEVER CHOOSES ITS OWN CAMPUS
+     * ======================================================================
+     * For every role except SUPER_ADMIN this ignores whatever the caller asked
+     * for and returns the campus on their verified token. Not "checks it
+     * matches" - ignores it. A caller cannot express another campus, so there is
+     * no comparison to get wrong and nothing to forget on the next endpoint.
+     *
+     * SUPER_ADMIN has campusId null by design, so they are the one role that
+     * must name a campus, and the only one permitted to. Refusing rather than
+     * defaulting is deliberate: silently picking a campus for a platform-wide
+     * admin would produce confidently wrong figures.
+     */
+    private Long resolveCampus(Long requested) {
+        if (currentUser.require().isSuperAdmin()) {
+            if (requested == null) {
+                throw new com.perimity.guard.security.CurrentUser.ForbiddenException(
+                        "A Super Admin must name a campus with ?campusId= - the register is "
+                        + "read one campus at a time.");
+            }
+            return requested;
+        }
+        // Deliberately not compared against `requested`. See above.
+        return currentUser.campusId();
     }
 
     @PostMapping("/search")
-    @Operation(summary = "Search the register. Range is capped at 90 days.")
+    @Operation(summary = "Search the register. Range is capped at 90 days. "
+            + "Always scoped to the caller's campus.")
     public ApiResponse<PageResponse<EntryLogResponse>> search(
             @Valid @RequestBody EntryLogFilterDto filter,
+            @RequestParam(required = false) Long campusId,
             @PageableDefault(size = 50) Pageable pageable) {
 
-        return ApiResponse.ok(service.search(filter, pageable));
+        return ApiResponse.ok(service.search(resolveCampus(campusId), filter, pageable));
     }
 
     @PostMapping("/stats")
-    @Operation(summary = "Allowed and denied counts over a range")
-    public ApiResponse<EntryStatsResponse> stats(@Valid @RequestBody EntryLogFilterDto filter) {
-        return ApiResponse.ok(service.stats(filter));
+    @Operation(summary = "Allowed, amber and denied counts over a range")
+    public ApiResponse<EntryStatsResponse> stats(
+            @Valid @RequestBody EntryLogFilterDto filter,
+            @RequestParam(required = false) Long campusId) {
+
+        return ApiResponse.ok(service.stats(resolveCampus(campusId), filter));
     }
 
     @GetMapping("/holder/{holderUserId}")
-    @Operation(summary = "One person's movement history")
+    @Operation(summary = "One person's movement history, within the caller's campus")
     public ApiResponse<PageResponse<EntryLogResponse>> byHolder(
             @PathVariable @Positive Long holderUserId,
+            @RequestParam(required = false) Long campusId,
             @PageableDefault(size = 50) Pageable pageable) {
 
-        return ApiResponse.ok(service.byHolder(holderUserId, pageable));
+        return ApiResponse.ok(service.byHolder(resolveCampus(campusId), holderUserId, pageable));
     }
 
     @GetMapping("/pass/{passId}")
     @Operation(summary = "Every scan of one pass, refusals included")
-    public ApiResponse<List<EntryLogResponse>> byPass(@PathVariable @Positive Long passId) {
-        return ApiResponse.ok(service.byPass(passId));
+    public ApiResponse<List<EntryLogResponse>> byPass(
+            @PathVariable @Positive Long passId,
+            @RequestParam(required = false) Long campusId) {
+
+        return ApiResponse.ok(service.byPass(resolveCampus(campusId), passId));
     }
 
     @GetMapping("/session/{sessionId}")
     @Operation(summary = "Everything scanned during one shift. The handover view.")
-    public ApiResponse<List<EntryLogResponse>> bySession(@PathVariable @NotBlank String sessionId) {
-        return ApiResponse.ok(service.bySession(sessionId));
+    public ApiResponse<List<EntryLogResponse>> bySession(
+            @PathVariable @NotBlank String sessionId,
+            @RequestParam(required = false) Long campusId) {
+
+        return ApiResponse.ok(service.bySession(resolveCampus(campusId), sessionId));
     }
 
     @GetMapping("/events/{eventId}/attendance")
@@ -84,6 +128,7 @@ public class EntryLogController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) String eventName,
+            @RequestParam(required = false) Long campusId,
             @RequestParam(defaultValue = "0") @PositiveOrZero long registeredCount) {
 
         if (to.isBefore(from)) {
@@ -93,6 +138,10 @@ public class EntryLogController {
             throw new IllegalArgumentException("An event range may not exceed 90 days.");
         }
 
-        return ApiResponse.ok(service.attendance(eventId, eventName, from, to, registeredCount));
+        // FACULTY reach this path and no other entry-log path. An event id is a
+        // number they can change in a URL, so the campus term is what stops a
+        // lecturer counting another campus's event.
+        return ApiResponse.ok(service.attendance(
+                resolveCampus(campusId), eventId, eventName, from, to, registeredCount));
     }
 }

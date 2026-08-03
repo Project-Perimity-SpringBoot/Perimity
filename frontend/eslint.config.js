@@ -1,27 +1,15 @@
 // Boundaries are enforced by lint, not by convention — convention decays.
-//
-// The rules below are unchanged. What was added is the machinery they need to
-// run at all: until now `npm run lint` failed for everyone, because eslint was
-// not a dependency, nothing gave the flat config a TypeScript parser, and
-// `react/no-danger` named a plugin that was never registered. A boundary rule
-// that cannot execute is a comment.
-//
-// eslint is pinned to ^9 deliberately. eslint-plugin-react does not support
-// eslint 10 yet, and --legacy-peer-deps would install a combination nobody
-// tested rather than the one that works.
 import tseslint from 'typescript-eslint';
-import react from 'eslint-plugin-react';
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
-  },
-  {
     files: ['src/**/*.{ts,tsx}'],
+
+    // Required, not optional. ESLint's default parser cannot read TypeScript or
+    // JSX, so without this every file in src/ fails to parse before a single
+    // rule runs. This config declared .tsx from the start but never set a
+    // parser, which is one reason `npm run lint` had never worked.
     languageOptions: {
-      // Type-aware linting is NOT switched on. These four rules are syntactic,
-      // the type errors are already caught by `tsc -b` in the build, and a
-      // project-service parse would make lint minutes long for no extra catch.
       parser: tseslint.parser,
       parserOptions: {
         ecmaVersion: 'latest',
@@ -29,9 +17,10 @@ export default [
         ecmaFeatures: { jsx: true },
       },
     },
-    plugins: { react },
+
+    // Deliberately NOT typescript-eslint's recommended set. tsc already runs in
+    // strict mode; these are the rules tsc cannot express.
     rules: {
-      // The envelope must not escape the API layer.
       'no-restricted-imports': ['error', {
         patterns: [
           {
@@ -44,18 +33,67 @@ export default [
           },
         ],
       }],
-      // Server timestamps are zone-less LocalDateTime; parse via parseServerDateTime.
+
       'no-restricted-syntax': ['error', {
-        selector: "NewExpression[callee.name='Date'][arguments.length=1]",
+        // Server timestamps are zone-less LocalDateTime.
+        // :not(BinaryExpression) exempts epoch arithmetic - new Date(exp * 1000)
+        // on a JWT claim is correct and was being flagged.
+        selector:
+          "NewExpression[callee.name='Date'][arguments.length=1]:not([arguments.0.type='BinaryExpression'])",
         message: 'Use parseServerDateTime/parseServerDate — server times carry no zone.',
+      }, {
+        // Replaces react/no-danger without the plugin. eslint-plugin-react
+        // supports ESLint 9.7 at the latest; pulling it in for one rule would
+        // pin the whole toolchain backwards.
+        selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+        message: 'dangerouslySetInnerHTML is not permitted. Render text as children.',
+      }, {
+        // ==================================================================
+        // NO HAND-WRITTEN API PATHS. This is the rule that stops the endpoint
+        // problem from recurring.
+        // ==================================================================
+        // The build plan's "Backend verification" tables were wrong in every
+        // row - wrong prefixes, and in three cases the wrong service entirely.
+        // They were written before the controllers existed and never
+        // reconciled. Anyone typing a URL from that document gets a 404 that
+        // looks like a missing backend rather than a stale doc.
+        //
+        // The fix is not a better table. A table copied out of the controllers
+        // drifts the moment someone renames a mapping - which is exactly how
+        // this happened. src/lib/api/services/ cannot drift, because it is the
+        // thing being called.
+        //
+        // So: a path literal outside the API layer is an error. Add the
+        // function there instead and import it.
+        selector: "Literal[value=/^\\/api\\//]",
+        message:
+          'Do not hand-write API paths. Import from src/lib/api/services/ — those are the '
+          + 'only correct, current calls. If the function you need is missing, add it there.',
+      }, {
+        // Same rule for `/api/...` inside a template literal.
+        selector: "TemplateElement[value.raw=/^\\/api\\//]",
+        message:
+          'Do not hand-write API paths. Import from src/lib/api/services/ — those are the '
+          + 'only correct, current calls. If the function you need is missing, add it there.',
       }],
-      'react/no-danger': 'error',
     },
   },
+
+  // The API layer is the one place allowed to know both the wire shape and the
+  // paths. That is its entire job, and the restrictions above exist to protect
+  // it rather than to constrain it.
   {
-    // src/lib/api IS the API layer, so the envelope restriction cannot apply to
-    // it — normalize.ts exists precisely to unwrap those envelopes.
-    files: ['src/lib/api/**/*.{ts,tsx}'],
-    rules: { 'no-restricted-imports': 'off' },
+    files: ['src/lib/api/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['@features/*/**'],
+            message: 'The API layer must not import from features.',
+          },
+        ],
+      }],
+      'no-restricted-syntax': 'off',
+    },
   },
 ];
