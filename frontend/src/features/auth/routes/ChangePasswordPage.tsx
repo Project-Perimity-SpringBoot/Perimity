@@ -10,7 +10,7 @@ import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import { LANDING_ROUTE } from '@lib/auth/permissions';
 import { changePasswordSchema, type ChangePasswordValues } from '../schemas/auth.schemas';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { PasswordRulesList } from './PasswordRulesList';
 
 export default function ChangePasswordPage() {

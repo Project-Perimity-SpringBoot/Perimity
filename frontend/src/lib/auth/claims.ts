@@ -93,6 +93,13 @@ export function toIdentity(claims: PerimityClaims): Identity | null {
     role: claims.role,
     campusId: claims.campusId,
     tokenId: claims.jti,
+    /*
+     * A JWT `exp` is an RFC 7519 NumericDate — epoch SECONDS, a number, not a
+     * server LocalDateTime string. Epoch millis carry no zone ambiguity, so
+     * this is the correct construction and parseServerDateTime would be wrong
+     * here: it parses a zone-less timestamp string, which is not what this is.
+     */
+    // eslint-disable-next-line no-restricted-syntax
     expiresAt: new Date(claims.exp * 1000),
   };
 }

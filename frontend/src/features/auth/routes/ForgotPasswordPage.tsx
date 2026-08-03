@@ -8,7 +8,7 @@ import { Button, Field, Input } from '@ui/index';
 import { EmptyState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { forgotPasswordSchema, type ForgotPasswordValues } from '../schemas/auth.schemas';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 
 export default function ForgotPasswordPage() {
   const [formErrors, setFormErrors] = useState<string[]>([]);

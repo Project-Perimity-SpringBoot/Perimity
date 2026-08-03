@@ -13,7 +13,7 @@ import { ErrorState, FormError } from '@components/feedback';
 import { departmentApi } from '@lib/api/services/user.api';
 import { departmentKeys } from '@lib/query/keys';
 import type { DepartmentResponse } from '@/types/user.types';
-import { useApiFormErrors } from '@features/auth/useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import { departmentSchema, type DepartmentValues } from '../schemas/admin.schemas';

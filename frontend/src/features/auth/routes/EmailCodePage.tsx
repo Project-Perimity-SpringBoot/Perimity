@@ -8,7 +8,7 @@ import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { config } from '@lib/config';
 import { otpRequestSchema, type OtpRequestValues } from '../schemas/auth.schemas';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 
 export default function EmailCodePage() {
   const navigate = useNavigate();
