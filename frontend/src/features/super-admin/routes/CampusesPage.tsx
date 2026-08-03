@@ -15,7 +15,7 @@ import { authApi } from '@lib/api/services/auth.api';
 import { authKeys, campusKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
 import type { CampusResponse } from '@/types/campus.types';
-import { useApiFormErrors } from '@features/auth/useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import {

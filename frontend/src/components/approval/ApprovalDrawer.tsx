@@ -15,7 +15,7 @@ import { authApi } from '@lib/api/services/auth.api';
 import { authKeys, passKeys, requestKeys } from '@lib/query/keys';
 import { formatDateTime, formatValidity } from '@lib/format/datetime';
 import { flags } from '@lib/config';
-import { useApiFormErrors } from '@features/auth/useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { useToast } from '@hooks/useToast';
 import type { VisitorRequestResponse } from '@/types/gatepass.types';
 import { z } from 'zod';
