@@ -65,6 +65,12 @@ const StudentProfile = lazy(() => import('@features/student/routes/ProfilePage')
 const StudentProfileEdit = lazy(() => import('@features/student/routes/ProfileEditPage'));
 const StudentDocuments = lazy(() => import('@features/student/routes/DocumentsPage'));
 
+/* ── PHASE 5 · Visitor ─────────────────────────────────────────────────── */
+const VisitorDashboard = lazy(() => import('@features/visitor/routes/VisitorDashboard'));
+const VisitorApply = lazy(() => import('@features/visitor/routes/ApplyPage'));
+const VisitorSubmitted = lazy(() => import('@features/visitor/routes/RequestSubmittedPage'));
+const VisitorPass = lazy(() => import('@features/visitor/routes/PassPage'));
+
 /* ── PHASE 4 · Faculty ─────────────────────────────────────────────────── */
 const FacultyOverview = lazy(() => import('@features/faculty/routes/FacultyOverview'));
 const FacultyApprovals = lazy(() => import('@features/faculty/routes/ApprovalsPage'));
@@ -114,17 +120,41 @@ export const router = createBrowserRouter([
       {
         element: <PasswordChangeGate />,
         children: [
-          /* ── PHASE 5 · Sanjay · src/features/visitor/ ────────────────── */
+          /* ── PHASE 5 · Visitor · src/features/visitor/ · LANDED ─────────
+             Its own RoleRoute, VISITOR alone, for the same reason Phase 4 has
+             one: the block below admits five roles so a placeholder could
+             render for everybody, and these are no longer placeholders. A
+             student has a student pass and no business on the visitor
+             dashboard.
+
+             /visitor/submitted is a route rather than a toast because what
+             happens next happens by email, hours later — see the screen. */
+          {
+            element: <RoleRoute roles={['VISITOR']} />,
+            children: [
+              {
+                element: <AppShell />,
+                children: [
+                  { path: '/visitor', element: <VisitorDashboard /> },
+                  { path: '/visitor/apply', element: <VisitorApply /> },
+                  { path: '/visitor/submitted', element: <VisitorSubmitted /> },
+                  { path: '/visitor/pass', element: <VisitorPass /> },
+                ],
+              },
+            ],
+          },
+
+          /* NOTE for Mukul: the block below still admits VISITOR, FACULTY,
+             CAMPUS_ADMIN and SUPER_ADMIN to /student/**. That was fine while it
+             also held the /visitor placeholder; now it only holds real student
+             screens, so it wants roles={['STUDENT']}. Not changed here — not my
+             folder, and it is a one-word edit. */
           {
             element: <RoleRoute roles={['VISITOR', 'STUDENT', 'FACULTY', 'CAMPUS_ADMIN', 'SUPER_ADMIN']} />,
             children: [
               {
                 element: <AppShell />,
                 children: [
-                  {
-                    path: '/visitor',
-                    element: <PhasePending phase={5} owner="Sanjay" area="Visitor" screens={6} />,
-                  },
                   /* ── PHASE 3 · Mukul · src/features/student/ · LANDED ──
                      Paths match layouts/navigation.ts exactly. /student/passes
                      is the history list and /student/passes/:id its detail, so
