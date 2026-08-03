@@ -56,15 +56,21 @@ export default function EventsPage() {
       id: 'name',
       header: 'Event',
       accessorKey: 'name',
+      /* span, not div/p. DataTable renders mobilePrimaryColumn inside a <p> in
+         its stacked sub-640px form, and a <div> or <p> there is invalid HTML —
+         the browser re-parents the nodes and the card layout breaks. Only React's
+         console warning says so; the build and the types are perfectly happy. */
       cell: (info) => (
-        <div className="min-w-0">
-          <p className="text-body-md truncate text-[var(--ink-900)]">{info.row.original.name}</p>
+        <span className="block min-w-0">
+          <span className="text-body-md block truncate text-[var(--ink-900)]">
+            {info.row.original.name}
+          </span>
           {info.row.original.description ? (
-            <p className="text-caption truncate text-[var(--ink-500)]">
+            <span className="text-caption block truncate text-[var(--ink-500)]">
               {info.row.original.description}
-            </p>
+            </span>
           ) : null}
-        </div>
+        </span>
       ),
     },
     {

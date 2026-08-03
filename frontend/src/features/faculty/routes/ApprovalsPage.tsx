@@ -46,15 +46,17 @@ export default function ApprovalsPage() {
       id: 'visitorName',
       header: 'Visitor',
       accessorKey: 'visitorName',
+      /* span, not div/p — DataTable renders mobilePrimaryColumn inside a <p> in
+         its stacked sub-640px form. See the same note in EventsPage. */
       cell: (info) => (
-        <div className="min-w-0">
-          <p className="text-body-md truncate text-[var(--ink-900)]">
+        <span className="block min-w-0">
+          <span className="text-body-md block truncate text-[var(--ink-900)]">
             {info.row.original.visitorName}
-          </p>
-          <p className="text-caption truncate text-[var(--ink-500)]">
+          </span>
+          <span className="text-caption block truncate text-[var(--ink-500)]">
             {info.row.original.visitorEmail}
-          </p>
-        </div>
+          </span>
+        </span>
       ),
     },
     {
