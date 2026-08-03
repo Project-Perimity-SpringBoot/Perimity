@@ -1,0 +1,50 @@
+import { z } from 'zod';
+import { LIMITS, RX } from '@lib/validation/patterns';
+
+/**
+ * CampusCreateDto. `code` is IMMUTABLE after creation — it is embedded in every
+ * storage path for the campus, so renaming it would orphan every file that
+ * campus ever uploaded. The update DTO rejects it outright.
+ */
+export const campusSchema = z.object({
+  code: z
+    .string()
+    .min(LIMITS.campusCode.min, 'Codes are at least 2 characters')
+    .max(LIMITS.campusCode.max, 'Codes are at most 32 characters')
+    .regex(RX.CAMPUS_CODE, 'Letters, numbers and hyphens only'),
+  name: z
+    .string()
+    .min(1, 'A name is required')
+    .max(LIMITS.campusName.max, 'Names are at most 150 characters')
+    .regex(RX.DISPLAY_NAME, 'Use letters, numbers and basic punctuation'),
+  address: z.string().max(LIMITS.address.max, 'Keep the address under 250 characters').or(z.literal('')).optional(),
+  contactEmail: z.string().regex(RX.EMAIL, 'Enter a valid email address').or(z.literal('')).optional(),
+  contactPhone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+});
+export type CampusValues = z.infer<typeof campusSchema>;
+
+/** UserCreateDto, narrowed to the first Campus Admin of a new campus. */
+export const firstAdminSchema = z.object({
+  name: z
+    .string()
+    .min(LIMITS.personName.min, 'Name is required')
+    .max(LIMITS.personName.max, 'Name may be at most 120 characters')
+    .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .max(LIMITS.email.max, 'That address is too long')
+    .regex(RX.EMAIL, 'Enter a valid email address'),
+  temporaryPassword: z
+    .string()
+    .min(LIMITS.password.min, 'Use at least 8 characters')
+    .max(LIMITS.password.max, 'Passwords are capped at 72 characters')
+    .regex(RX.PASSWORD_POLICY, 'Include an uppercase letter, a lowercase letter and a number'),
+});
+export type FirstAdminValues = z.infer<typeof firstAdminSchema>;
+
+/**
+ * CampusStatusUpdateDto requires a reason of 3–500 characters. Kept here rather
+ * than inlined so the confirm button and the server agree on the threshold.
+ */
+export const statusChangeFallback = { minReason: LIMITS.reason.min } as const;

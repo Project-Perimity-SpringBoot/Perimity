@@ -1,6 +1,6 @@
 import {
   BadgeCheck, Building2, CalendarRange, ClipboardList, FileText, Gauge, IdCard,
-  LayoutDashboard, ListChecks, LogIn, ScanLine, ScrollText, Settings2, ShieldBan,
+  LayoutDashboard, ListChecks, LogIn, ScanLine, Settings2, ShieldBan,
   Users, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/types/enums';
@@ -22,7 +22,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { to: '/platform', label: 'Platform overview', icon: Gauge, end: true },
     { to: '/platform/campuses', label: 'Campuses', icon: Building2 },
     { to: '/platform/admins', label: 'Campus admins', icon: UsersRound },
-    { to: '/platform/audit', label: 'Platform audit', icon: ScrollText, capability: 'audit:view' },
   ],
   CAMPUS_ADMIN: [
     { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -32,7 +31,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { to: '/admin/gates', label: 'Gates', icon: LogIn },
     { to: '/admin/blocklist', label: 'Blocklist', icon: ShieldBan, capability: 'blocklist:manage' },
     { to: '/admin/policy', label: 'Policy', icon: Settings2, capability: 'config:manage' },
-    { to: '/admin/audit', label: 'Audit log', icon: ScrollText, capability: 'audit:view' },
     { to: '/admin/entry-logs', label: 'Entry logs', icon: ScanLine, capability: 'entrylog:view' },
   ],
   FACULTY: [
