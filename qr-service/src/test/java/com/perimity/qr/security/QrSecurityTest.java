@@ -68,6 +68,18 @@ class QrSecurityTest {
                 .andExpect(jsonPath("$.message").value("Authentication required"));
     }
 
+    /**
+     * The pass PDF is the entry credential in document form. If this endpoint
+     * ever answers without a token, anyone can download any holder's pass by
+     * counting through ids - worse than the metadata leak, because a PDF is
+     * immediately usable at a gate.
+     */
+    @Test
+    void pdfDownload_withoutAToken_is401() throws Exception {
+        mockMvc.perform(get("/api/qr/1/pdf"))
+                .andExpect(status().isUnauthorized());
+    }
+
     @Test
     @WithMockUser(roles = "STUDENT")
     void passLookup_withAToken_isAllowed() throws Exception {
