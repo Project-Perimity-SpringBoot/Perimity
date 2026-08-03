@@ -13,7 +13,7 @@ import { ErrorState, FormError } from '@components/feedback';
 import { gateApi } from '@lib/api/services/campus.api';
 import { campusKeys } from '@lib/query/keys';
 import type { CampusGateResponse } from '@/types/campus.types';
-import { useApiFormErrors } from '@features/auth/useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import { gateSchema, type GateValues } from '../schemas/admin.schemas';
