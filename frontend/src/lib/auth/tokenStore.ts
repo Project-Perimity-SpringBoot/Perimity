@@ -84,7 +84,6 @@ export const tokenStore = {
   expiresAt(): Date | null {
     // Epoch seconds from the JWT, not a server timestamp string — see the note
     // on the same construction in claims.ts.
-    // eslint-disable-next-line no-restricted-syntax
     return memoryClaims ? new Date(memoryClaims.exp * 1000) : null;
   },
 

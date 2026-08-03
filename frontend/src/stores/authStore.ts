@@ -45,7 +45,23 @@ function snapshot(profile: UserResponse | null) {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   ...snapshot(null),
-  status: tokenStore.isAuthenticated() ? 'authenticated' : 'unknown',
+  /*
+   * No token is a KNOWN state, not an unknown one.
+   *
+   * This read 'unknown' when there was no token, and nothing ever moved it on -
+   * 'anonymous' is only set by an explicit signOut(). ProtectedRoute renders a
+   * spinner while status is 'unknown', so opening ANY protected URL in a fresh
+   * browser hung forever instead of redirecting to /login. A bookmarked /guard,
+   * a deep link, or anyone opening the app signed out all saw a dead page.
+   *
+   * It stayed hidden because in normal use you sign in first, so the redirect
+   * path is never exercised. Neither tsc nor eslint can see it.
+   *
+   * 'unknown' means "there is a token and we have not confirmed it yet", which
+   * is exactly the window SessionBootstrap covers with its own spinner while
+   * GET /api/auth/me is in flight. Without a token there is nothing to confirm.
+   */
+  status: tokenStore.isAuthenticated() ? 'authenticated' : 'anonymous',
   signingOut: false,
 
   beginSignOut: () => set({ signingOut: true }),
