@@ -62,6 +62,16 @@ public class QrGenerateRequest {
     @Positive(message = "batchId must be a positive id when present")
     private Long batchId;
 
+    /**
+     * PROPOSAL. The holder, carried through so QrRecordService can persist it.
+     *
+     * Not @NotNull: gatepass-service is already sending this field, but a
+     * message published by an older build would not, and rejecting those to the
+     * DLQ would stop QR generation for a field nothing depended on until now.
+     */
+    @Positive(message = "holderUserId must be a positive id when present")
+    private Long holderUserId;
+
     @NotNull(message = "validFrom is required")
     private LocalDate validFrom;
 
