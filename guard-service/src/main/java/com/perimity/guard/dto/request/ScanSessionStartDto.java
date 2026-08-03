@@ -36,11 +36,21 @@ public class ScanSessionStartDto {
 
     // guardUserId is NOT here. It comes from the verified JWT (Day 7) - a guard
     // must not be able to open a shift in someone else's name.
-
-    @NotNull(message = "Campus is required")
-    @Positive(message = "Campus id must be a positive number")
-    @Schema(example = "1")
-    private Long campusId;
+    //
+    // campusId is NOT here either, for the same reason, though it took longer to
+    // notice. It used to be a @NotNull field on this DTO, which meant a guard
+    // could open a shift naming ANY campus - and because every scan inherits
+    // campus from the open session, that shift could then admit people against
+    // another campus's passes and write entry logs into another campus's
+    // register.
+    //
+    // Worse than reading another tenant's data: it writes into it. The register
+    // is meant to be evidence, and evidence a guard can file under someone
+    // else's institution is not evidence.
+    //
+    // ScanSessionController already had the right instinct on GET /open -
+    // "Campus comes from the token, never a parameter" - it simply was not
+    // applied here. It is now.
 
     @NotNull(message = "Gate is required")
     @Positive(message = "Gate id must be a positive number")

@@ -100,6 +100,14 @@ services:
 # env_file supplies JWT_SECRET, INTERNAL_API_KEY, QR_AES_KEY and the database
 # credentials from the repo-root .env, so no secret appears below.
 # ============================================================================
+
+  # ---------- Service discovery ----------
+  #
+  # Added Day 13. Every service registers here and Feign resolves by service
+  # name instead of URL. Note this is NOT what makes cross-service calls work in
+  # Docker - compose DNS already resolves container names - so if Eureka is down
+  # the http client mode below still functions. That is deliberate: the registry
+  # is an addition, not a single point of failure.
   discovery-server:
     build: ./discovery-server
     container_name: perimity-discovery
@@ -107,11 +115,25 @@ services:
     env_file: .env
     ports: ["8761:8761"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      # The Eureka dashboard, not /actuator/health.
+      #
+      # discovery-server/pom.xml declares only
+      # spring-cloud-starter-netflix-eureka-server - there is no
+      # spring-boot-starter-actuator on its classpath, so the
+      # management.endpoints.web.exposure.include=health,info line in its
+      # properties has nothing to expose and /actuator/health 404s.
+      #
+      # A healthcheck that can never pass leaves this container permanently
+      # "starting", and every service below declares
+      # `depends_on: discovery-server: service_healthy` - so the whole stack
+      # would wait on it forever. "/" serves the dashboard and works whether or
+      # not actuator is ever added.
+      test: ["CMD", "curl", "-f", "http://localhost:8761/"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 30s
+
   auth-service:
     build: ./auth-service
     container_name: perimity-auth
@@ -129,6 +151,7 @@ services:
       EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
     healthcheck:
@@ -154,6 +177,7 @@ services:
       - perimity_storage:/storage
     ports: ["8082:8082"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
@@ -181,6 +205,7 @@ services:
       - perimity_storage:/storage
     ports: ["8083:8083"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
@@ -204,6 +229,7 @@ services:
       - perimity_storage:/storage
     ports: ["8084:8084"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8084/api/campus/ping"]
@@ -232,6 +258,7 @@ services:
       - perimity_storage:/storage
     ports: ["8086:8086"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
@@ -254,6 +281,7 @@ services:
       EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8085:8085"]
     depends_on:
+      discovery-server: { condition: service_healthy }
       mongo: { condition: service_healthy }
     healthcheck:
       # guard-service is the only one with a real health endpoint, so its check

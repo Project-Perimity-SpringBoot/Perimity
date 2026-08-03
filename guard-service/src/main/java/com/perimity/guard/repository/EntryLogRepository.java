@@ -24,13 +24,32 @@ public interface EntryLogRepository extends MongoRepository<EntryLog, String> {
 
     List<EntryLog> findByAttributedEventId(Long attributedEventId);
 
-    /** One person's entry history. */
-    Page<EntryLog> findByHolderUserIdOrderByScannedAtDesc(Long holderUserId, Pageable pageable);
+    /*
+     * ======================================================================
+     * EVERY READ BELOW IS CAMPUS-SCOPED. THAT IS NOT DECORATION.
+     * ======================================================================
+     * The unscoped versions of these three - findByHolderUserId...,
+     * findByPassId..., findBySessionId... - were reachable from the controller
+     * with an id taken straight from the URL. Any authenticated guard could read
+     * any person's movement history on any campus by changing a number.
+     *
+     * They are scoped at the QUERY, not filtered after the fetch, and the
+     * difference matters: a post-fetch filter has already pulled another
+     * tenant's documents into this process before deciding it should not have.
+     *
+     * Do not add an unscoped finder here. If a caller has no campus - a Super
+     * Admin - the controller resolves one explicitly rather than the repository
+     * offering a way round.
+     */
 
-    List<EntryLog> findByPassIdOrderByScannedAtDesc(Long passId);
+    /** One person's entry history, within one campus. */
+    Page<EntryLog> findByCampusIdAndHolderUserIdOrderByScannedAtDesc(
+            Long campusId, Long holderUserId, Pageable pageable);
+
+    List<EntryLog> findByCampusIdAndPassIdOrderByScannedAtDesc(Long campusId, Long passId);
 
     /** All scans logged under one guard shift. */
-    List<EntryLog> findBySessionIdOrderByScannedAtAsc(String sessionId);
+    List<EntryLog> findByCampusIdAndSessionIdOrderByScannedAtAsc(Long campusId, String sessionId);
 
     /** Has this person already entered today? Drives the repeat-entry AMBER rule upstream. */
     boolean existsByHolderUserIdAndCampusIdAndScannedAtBetween(
@@ -52,10 +71,16 @@ public interface EntryLogRepository extends MongoRepository<EntryLog, String> {
      *
      * Written as "not denied" so any future permitting result is counted without
      * anyone having to remember this query exists.
+     *
+     * Campus-scoped like every other read. An event id is a number a faculty
+     * member can change in a URL, and attendance is the one entry-log path
+     * FACULTY may reach - so without the campus term, a lecturer could count
+     * the attendees of another campus's event.
      */
-    @Query(value = "{ 'attributedEventId': ?0, 'scanResult': { $ne: 'DENIED' }, 'scanDate': ?1 }",
+    @Query(value = "{ 'campusId': ?0, 'attributedEventId': ?1, "
+                 + "'scanResult': { $ne: 'DENIED' }, 'scanDate': ?2 }",
            fields = "{ 'holderUserId': 1 }")
-    List<EntryLog> findAttendeeIdsForEventDay(Long attributedEventId, String scanDate);
+    List<EntryLog> findAttendeeIdsForEventDay(Long campusId, Long attributedEventId, String scanDate);
 
     /** Denied attempts only - the security view. */
     Page<EntryLog> findByCampusIdAndScanResultOrderByScannedAtDesc(
