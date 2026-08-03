@@ -35,7 +35,7 @@ public class ScanSessionService {
      * the constraint is "at most one where state is OPEN", and a Mongo partial
      * index is more trouble than this rule is worth at this scale.
      */
-    public ScanSessionResponse start(ScanSessionStartDto dto, Long guardUserId) {
+    public ScanSessionResponse start(ScanSessionStartDto dto, Long guardUserId, Long campusId) {
         if (sessionRepository.existsByGuardUserIdAndState(guardUserId, SessionState.OPEN)) {
             throw new IllegalStateException(
                     "This guard already has an open shift. End it before starting another.");
@@ -43,7 +43,11 @@ public class ScanSessionService {
 
         ScanSession session = ScanSession.builder()
                 .guardUserId(guardUserId)
-                .campusId(dto.getCampusId())
+                // Both of these come from the verified token, never the body.
+                // Every scan in this shift inherits the campus from here, so a
+                // client-chosen value would let a guard write entry logs into
+                // another campus's register. See ScanSessionStartDto.
+                .campusId(campusId)
                 .gateId(dto.getGateId())
                 .gateName(dto.getGateName().trim())
                 .state(SessionState.OPEN)
