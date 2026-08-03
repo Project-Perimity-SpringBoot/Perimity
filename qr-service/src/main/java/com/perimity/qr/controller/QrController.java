@@ -9,6 +9,11 @@ import com.perimity.qr.service.QrRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Positive;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,10 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
  * Public read endpoints for qr-service, matching the GET rows of the Team
  * Guide's API table (section 4.6).
  *
- * The remaining rows - /download, and the two /api/internal endpoints - need
- * AES token handling, QR/PDF rendering and object storage, which is the Day 8
- * build. Their DTOs already exist in the dto package so the contract is fixed
- * and Palash can code guard-service's caller against it now.
+ * The service-to-service rows live in QrInternalController, behind the shared
+ * internal API key.
+ *
+ * Everything in this class requires a Bearer token - see SecurityConfig. It is
+ * authenticated but NOT ownership-scoped: a signed-in student can still read
+ * another holder's QR keys by changing the id. Closing that needs the holder's
+ * identity, which lives in gatepass-service, so it is a cross-service call on a
+ * read path rather than a matcher.
  *
  * @Validated at class level is what makes the @Positive on the path variables
  * below actually run. Without it the annotations are silently ignored - a
@@ -54,6 +63,44 @@ public class QrController {
     public ApiResponse<BatchProgressResponse> getBatchProgress(
             @PathVariable @Positive(message = "batchId must be a positive id") Long batchId) {
         return ApiResponse.ok(generationJobService.getBatchProgress(batchId));
+    }
+
+    /**
+     * The visitor's "Download PDF" action, and the student's equivalent.
+     *
+     * Returns the bytes rather than the pdfKey. QrRecordResponse already
+     * carries pdfKey, but that is an object-storage key, not a URL - the
+     * browser can do nothing with it, and handing out anything it could
+     * dereference directly would mean a public bucket. The service reads the
+     * object and this streams it, so storage stays private and moving to S3 on
+     * Day 22 changes nothing on this side.
+     *
+     * no-store, not the default. A pass PDF contains the QR whose token is the
+     * entry credential; a copy left in a shared proxy cache or a phone's disk
+     * cache is a working pass for whoever finds it.
+     *
+     * Declared before /{passId} for readability only. Spring ranks by
+     * specificity, not declaration order, so a two-segment template outranks
+     * the one-segment one regardless - but the file should read the way the
+     * router behaves.
+     */
+    @GetMapping(value = "/{passId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @Operation(summary = "Download the pass PDF for a pass")
+    public ResponseEntity<byte[]> downloadPdf(
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId) {
+
+        byte[] pdf = qrRecordService.download(passId, true);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .contentLength(pdf.length)
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename("pass-" + passId + ".pdf")
+                                .build()
+                                .toString())
+                .body(pdf);
     }
 
     /**
