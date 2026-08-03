@@ -56,6 +56,15 @@ const PolicyPage = lazy(() => import('@features/campus-admin/routes/PolicyPage')
 const EntryLogsPage = lazy(() => import('@features/campus-admin/routes/EntryLogsPage'));
 
 /* ── PHASE 2 · Super Admin ── */
+/* ── PHASE 3 · Student ─────────────────────────────────────────────────── */
+const StudentDashboard = lazy(() => import('@features/student/routes/StudentDashboard'));
+const StudentPassHistory = lazy(() => import('@features/student/routes/PassHistoryPage'));
+const StudentPassDetail = lazy(() => import('@features/student/routes/PassDetailPage'));
+const StudentEntryHistory = lazy(() => import('@features/student/routes/EntryHistoryPage'));
+const StudentProfile = lazy(() => import('@features/student/routes/ProfilePage'));
+const StudentProfileEdit = lazy(() => import('@features/student/routes/ProfileEditPage'));
+const StudentDocuments = lazy(() => import('@features/student/routes/DocumentsPage'));
+
 const PlatformOverview = lazy(() => import('@features/super-admin/routes/PlatformOverview'));
 const CampusesPage = lazy(() => import('@features/super-admin/routes/CampusesPage'));
 const CampusAdminsPage = lazy(() => import('@features/super-admin/routes/CampusAdminsPage'));
@@ -108,11 +117,17 @@ export const router = createBrowserRouter([
                     path: '/visitor',
                     element: <PhasePending phase={5} owner="Sanjay" area="Visitor" screens={6} />,
                   },
-                  /* ── PHASE 3 · Mukul · src/features/student/ ─────────── */
-                  {
-                    path: '/student',
-                    element: <PhasePending phase={3} owner="Mukul" area="Student" screens={8} />,
-                  },
+                  /* ── PHASE 3 · Mukul · src/features/student/ · LANDED ──
+                     Paths match layouts/navigation.ts exactly. /student/passes
+                     is the history list and /student/passes/:id its detail, so
+                     the sidebar item stays highlighted on both. */
+                  { path: '/student', element: <StudentDashboard /> },
+                  { path: '/student/passes', element: <StudentPassHistory /> },
+                  { path: '/student/passes/:id', element: <StudentPassDetail /> },
+                  { path: '/student/entries', element: <StudentEntryHistory /> },
+                  { path: '/student/profile', element: <StudentProfile /> },
+                  { path: '/student/profile/edit', element: <StudentProfileEdit /> },
+                  { path: '/student/documents', element: <StudentDocuments /> },
                   /* ── PHASE 4 · Tushar · src/features/faculty/ ────────── */
                   {
                     path: '/faculty',
