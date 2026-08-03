@@ -13,7 +13,7 @@ import { FileDropzone } from '@components/upload';
 import { departmentApi, studentApi } from '@lib/api/services/user.api';
 import { departmentKeys, passKeys, profileKeys } from '@lib/query/keys';
 import { UPLOAD_RULES } from '@lib/validation/patterns';
-import { useApiFormErrors } from '@features/auth/useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import { studentProfileSchema, type StudentProfileValues } from '../schemas/student.schemas';

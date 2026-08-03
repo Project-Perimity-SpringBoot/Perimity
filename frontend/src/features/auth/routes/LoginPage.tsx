@@ -13,7 +13,7 @@ import { authApi } from '@lib/api/services/auth.api';
 import { RateLimitError } from '@lib/api/errors';
 import { useAuth } from '@hooks/useAuth';
 import { loginSchema, type LoginValues } from '../schemas/auth.schemas';
-import { useApiFormErrors } from '../useApiForm';
+import { useApiFormErrors } from '@hooks/useApiForm';
 
 export default function LoginPage() {
   const navigate = useNavigate();
