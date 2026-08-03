@@ -1,0 +1,113 @@
+/* ============================================================================
+   PERIMITY DESIGN TOKENS
+   Every value below is the Batch 0 specification. No feature file may declare
+   a colour, size, radius or shadow — everything resolves to a token here.
+   ========================================================================= */
+
+:root {
+  /* ---- Ink ---- */
+  --ink-900: #16161c;
+  --ink-700: #374151;
+  --ink-500: #6b7280;
+  --ink-400: #9ca3af;
+
+  /* ---- Surfaces ---- */
+  --surface: #ffffff;
+  --surface-subtle: #fafafb;
+  --surface-sunken: #f0f0f1;
+  --desk: #e9e8e3;
+  --border: #e5e7eb;
+  --border-strong: #e0e0e6;
+
+  /* ---- Brand ---- */
+  --brand-600: #4f46e5;
+  --brand-300: #a5b4fc;
+  --brand-200: #c7d2fe;
+  --brand-50: #eef2ff;
+
+  /* ---- VERDICT. Guard scan results ONLY.
+         Never a status badge, never a dashboard stat. Using allow-green on a
+         stat card trains the guard's eye to stop treating green as meaningful. */
+  --allow-fg: #15803d;  --allow-bg: #dcfce7;  --allow-solid: #16a34a;
+  --deny-fg: #b91c1c;   --deny-bg: #fee2e2;   --deny-solid: #dc2626;
+  --review-fg: #b45309; --review-bg: #fef3c7; --review-solid: #d97706;
+
+  /* ---- Pass-type ribbons. The only other colour-as-meaning. ---- */
+  --pass-daily: #2563eb;
+  --pass-event: #7c3aed;
+  --pass-visitor: #0d9488;
+
+  /* ---- Neutral status. Every non-verdict badge. Differentiated by TEXT. ---- */
+  --status-fg: #374151;
+  --status-bg: #f0f0f1;
+  --status-border: #e0e0e6;
+
+  /* ---- Typography ---- */
+  --font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --t-display-size: 32px; --t-display-weight: 800; --t-display-tracking: -0.02em;
+  --t-h1-size: 24px;      --t-h1-weight: 700;      --t-h1-tracking: -0.02em;
+  --t-h2-size: 20px;      --t-h2-weight: 700;      --t-h2-tracking: -0.01em;
+  --t-h3-size: 16px;      --t-h3-weight: 600;      --t-h3-tracking: -0.01em;
+  --t-body-size: 15px;    --t-body-weight: 400;
+  --t-body-md-weight: 500;
+  --t-small-size: 13px;   --t-small-weight: 500;
+  --t-caption-size: 12px; --t-caption-weight: 500;
+  --t-label-size: 11px;   --t-label-weight: 600;   --t-label-tracking: 0.08em;
+  --t-mono-size: 13px;    --t-mono-weight: 600;    --t-mono-tracking: 0.02em;
+
+  /* ---- Spacing. 4px base. Only these eight. ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
+
+  /* ---- Radius. Only these five. ---- */
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px; --r-circle: 50%;
+
+  /* ---- Elevation. Two shadows. Depth is carried by hairlines. ---- */
+  --sh-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --sh-overlay: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+  /* ---- Motion ---- */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---- Layout ---- */
+  --sidebar-w: 248px;
+  --sidebar-rail-w: 64px;
+  --topbar-h: 56px;
+  --tabbar-h: 60px;
+  --guard-bar-h: 52px;
+}
+
+/* Guard shell only. The brief calls for a darker treatment built for a phone
+   held one-handed at a gate, so the tokens are overridden rather than a whole
+   second theme invented. Contrast targets 7:1 for direct sunlight. */
+[data-shell='guard'] {
+  --surface: #17171c;
+  --surface-subtle: #1e1e25;
+  --surface-sunken: #101014;
+  --desk: #0b0b0e;
+  --border: #2c2c36;
+  --border-strong: #3a3a46;
+  --ink-900: #f7f7f8;
+  --ink-700: #d4d4d9;
+  --ink-500: #a1a1ac;
+  --ink-400: #7b7b86;
+  --status-fg: #e5e5ea;
+  --status-bg: #26262f;
+  --status-border: #3a3a46;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-fast: 1ms; --motion-base: 1ms; --motion-slow: 1ms; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
