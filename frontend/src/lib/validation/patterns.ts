@@ -1,0 +1,121 @@
+/**
+ * Transcribed verbatim from each service's ValidationPatterns.java.
+ *
+ * A stricter client rule rejects input the server would accept. A looser one
+ * produces a 400 the user cannot act on. Neither is acceptable, so these are
+ * copies, not approximations.
+ */
+export const RX = {
+  /** Identical in all six services. */
+  EMAIL:
+    /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,24}$/,
+
+  /** E.164-ish: optional +, no leading zero, 7–15 digits. */
+  PHONE: /^\+?[1-9]\d{6,14}$/,
+
+  /** Unicode letters and marks. 2–120 characters. */
+  PERSON_NAME: /^[\p{L}\p{M}][\p{L}\p{M}\s.'-]{1,119}$/u,
+
+  /**
+   * 8–72, one lowercase, one uppercase, one digit. NO symbol is required and
+   * the minimum is 8, not 12 — the design mockup's checklist is wrong.
+   */
+  PASSWORD_POLICY: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,72}$/,
+
+  CAMPUS_CODE: /^[A-Za-z0-9][A-Za-z0-9-]{1,31}$/,
+  DISPLAY_NAME: /^[\p{L}\p{N}][\p{L}\p{N}\s.,'&()/-]{1,149}$/u,
+  CONFIG_KEY: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
+  IDENTIFIER_CODE: /^[A-Za-z0-9][A-Za-z0-9/-]{0,31}$/,
+  DEPARTMENT_CODE: /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,31}$/,
+
+  /** gatepass TITLE is 3–180; user-service TITLE is 1–150. They genuinely differ. */
+  TITLE_GATEPASS: /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}\s.,'&()+/-]{2,179}$/u,
+  TITLE_USER: /^[\p{L}\p{N}][\p{L}\p{N}\s.,'&()/-]{0,149}$/u,
+
+  GOV_ID: /^$|^\d{12}$/,
+  OTP_CODE: /^\d{6}$/,
+  SHA256_HEX: /^[a-f0-9]{64}$/i,
+  SPREADSHEET_FILENAME: /^[^\\/:*?"<>|\r\n]{1,255}\.(xlsx|xls|csv)$/i,
+
+  /** ScanRequestDto.token */
+  SCAN_TOKEN: /^[A-Za-z0-9+/=_.:-]+$/,
+
+  OBJECT_KEY_300: /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9!_.*'()/-]{0,299}$/,
+  OBJECT_KEY_512: /^(?!.*\.\.)(?!\/)[A-Za-z0-9!_.*'()/-]{1,512}$/,
+} as const;
+
+/** @Size bounds, so a Zod schema never guesses a number. */
+export const LIMITS = {
+  email: { max: 180 },
+  personName: { min: 2, max: 120 },
+  password: { min: 8, max: 72 },
+  purpose: { min: 5, max: 500 },
+  reason: { min: 3, max: 500 },
+  blocklistReason: { min: 5, max: 500 },
+  eventName: { min: 3, max: 180 },
+  eventDescription: { max: 1000 },
+  campusName: { max: 150 },
+  campusCode: { min: 2, max: 32 },
+  address: { max: 250 },
+  departmentName: { max: 150 },
+  departmentCode: { max: 32 },
+  identifierCode: { max: 32 },
+  designation: { max: 100 },
+  qualification: { max: 150 },
+  gateName: { max: 100 },
+  gateLocation: { max: 150 },
+  configKey: { max: 100 },
+  configValue: { max: 2000 },
+  fileName: { max: 255 },
+  scanToken: { max: 2048 },
+} as const;
+
+/** Enforced client-side so the user gets the good message, not the servlet's. */
+export const UPLOAD_RULES = {
+  photo: {
+    maxBytes: 2 * 1024 * 1024,
+    accept: ['image/png', 'image/jpeg', 'image/webp'] as const,
+    label: 'PNG, JPEG or WebP, up to 2 MB',
+  },
+  document: {
+    maxBytes: 5 * 1024 * 1024,
+    accept: ['application/pdf', 'image/png', 'image/jpeg'] as const,
+    label: 'PDF, PNG or JPEG, up to 5 MB',
+  },
+  campusLogo: {
+    maxBytes: 2 * 1024 * 1024,
+    accept: ['image/png', 'image/jpeg', 'image/webp'] as const,
+    label: 'PNG, JPEG or WebP, up to 2 MB',
+  },
+  bulkSheet: {
+    maxBytes: 5 * 1024 * 1024,
+    accept: [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+    ] as const,
+    label: 'XLSX, XLS or CSV, up to 5 MB',
+  },
+} as const;
+
+/** OTP behaviour, from auth-service application.properties. */
+export const OTP_RULES = {
+  length: 6,
+  expiryMinutes: 10,
+  maxAttempts: 5,
+  /** UI cooldown only. The server's real limit is 3 per email per hour. */
+  resendCooldownSeconds: 60,
+} as const;
+
+/** Bulk sheet columns, matched by header name. Position is irrelevant. */
+export const BULK_COLUMNS = {
+  required: ['name', 'email'] as const,
+  optional: ['phone', 'purpose'] as const,
+  aliases: {
+    name: ['name', 'fullName', 'attendeeName', 'visitorName', 'studentName'],
+    email: ['email', 'emailAddress', 'emailId'],
+    phone: ['phone', 'phoneNo', 'phoneNumber'],
+    purpose: ['purpose', 'purposeOfVisit'],
+  },
+  maxRows: 1000,
+} as const;
