@@ -107,16 +107,26 @@ code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
     && pass "guard -> gatepass  GET /api/gatepass/internal/passes/{id}  ($code)" \
     || fail "guard -> gatepass  GET /api/gatepass/internal/passes/{id}  ($code)"
 
-# The path guard-service actually calls today. If THIS is the one that
-# answers and the line above did not, the client is pointing at a route
-# that does not exist and every scan 404s at hop 2.
+# REGRESSION CHECK - this assertion is now INVERTED, on purpose.
+#
+# /api/internal/gatepass/passes/{id} is the path Team Guide section 5 documents
+# and gatepass-service has never served. guard-service called it for three days
+# and 404'd on every scan, which surfaced as a 503 outage card because a 404
+# from a hop is indistinguishable from that hop being down.
+#
+# HttpPassVerificationClient now calls /api/gatepass/internal/passes/{id} - the
+# line checked immediately above - so a 404 HERE is the correct and expected
+# result. It means nobody has re-introduced the documented-but-wrong prefix.
+#
+# If this ever returns 200, gatepass-service has started serving both spellings
+# and the ambiguity that caused the original bug is back.
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
     "http://localhost:8083/api/internal/gatepass/passes/1" \
     -H "X-Internal-Api-Key: $KEY" 2>/dev/null)
 if [ "$code" = "404" ]; then
-    fail "guard's ACTUAL call /api/internal/gatepass/passes/1 -> 404. See notes below."
+    pass "old wrong path /api/internal/gatepass/passes/1 is absent (404) - as it should be"
 else
-    pass "guard's actual call /api/internal/gatepass/passes/1 ($code)"
+    warn "old wrong path /api/internal/gatepass/passes/1 answered $code - two spellings now exist"
 fi
 
 # --- gatepass -> auth ---
