@@ -65,6 +65,14 @@ const StudentProfile = lazy(() => import('@features/student/routes/ProfilePage')
 const StudentProfileEdit = lazy(() => import('@features/student/routes/ProfileEditPage'));
 const StudentDocuments = lazy(() => import('@features/student/routes/DocumentsPage'));
 
+/* ── PHASE 4 · Faculty ─────────────────────────────────────────────────── */
+const FacultyOverview = lazy(() => import('@features/faculty/routes/FacultyOverview'));
+const FacultyApprovals = lazy(() => import('@features/faculty/routes/ApprovalsPage'));
+const FacultyOnboarding = lazy(() => import('@features/faculty/routes/OnboardingPage'));
+const FacultyBatchProgress = lazy(() => import('@features/faculty/routes/BatchProgressPage'));
+const FacultyEvents = lazy(() => import('@features/faculty/routes/EventsPage'));
+const FacultyEventAttendance = lazy(() => import('@features/faculty/routes/EventAttendancePage'));
+
 const PlatformOverview = lazy(() => import('@features/super-admin/routes/PlatformOverview'));
 const CampusesPage = lazy(() => import('@features/super-admin/routes/CampusesPage'));
 const CampusAdminsPage = lazy(() => import('@features/super-admin/routes/CampusAdminsPage'));
@@ -128,10 +136,44 @@ export const router = createBrowserRouter([
                   { path: '/student/profile', element: <StudentProfile /> },
                   { path: '/student/profile/edit', element: <StudentProfileEdit /> },
                   { path: '/student/documents', element: <StudentDocuments /> },
-                  /* ── PHASE 4 · Tushar · src/features/faculty/ ────────── */
+                ],
+              },
+            ],
+          },
+
+          /* ── PHASE 4 · Faculty · src/features/faculty/ · LANDED ─────────
+             Its OWN RoleRoute rather than a path inside the block above.
+             That block admits STUDENT and VISITOR so the /visitor placeholder
+             can render for everyone, which was harmless while /faculty was a
+             stub — a student reaching a "coming soon" card costs nothing. It
+             stops being harmless now that the path serves the approvals queue
+             and the bulk onboarding flow.
+
+             FACULTY alone, not FACULTY + CAMPUS_ADMIN: an admin approves
+             visitor requests on their own campus-wide queue at /admin/queue,
+             and bulk onboarding is not theirs to run. A wrong role lands on
+             its own dashboard, never a 403 — see RoleRoute.
+
+             Paths match layouts/navigation.ts exactly. The batch progress
+             screen is nested under /faculty/onboarding so the sidebar item
+             stays highlighted while a batch is being watched. */
+          {
+            element: <RoleRoute roles={['FACULTY']} />,
+            children: [
+              {
+                element: <AppShell />,
+                children: [
+                  { path: '/faculty', element: <FacultyOverview /> },
+                  { path: '/faculty/approvals', element: <FacultyApprovals /> },
+                  { path: '/faculty/onboarding', element: <FacultyOnboarding /> },
                   {
-                    path: '/faculty',
-                    element: <PhasePending phase={4} owner="Tushar" area="Faculty" screens={10} />,
+                    path: '/faculty/onboarding/batches/:batchId',
+                    element: <FacultyBatchProgress />,
+                  },
+                  { path: '/faculty/events', element: <FacultyEvents /> },
+                  {
+                    path: '/faculty/events/:eventId/attendance',
+                    element: <FacultyEventAttendance />,
                   },
                 ],
               },
