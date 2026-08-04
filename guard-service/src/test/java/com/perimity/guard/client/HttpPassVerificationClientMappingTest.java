@@ -25,13 +25,18 @@ import org.junit.jupiter.params.provider.CsvSource;
  * their responses would test my guess at their JSON rather than their JSON.
  *
  * Constructing with nulls is deliberate: these two methods touch no field, and
- * proving that is part of the point. If someone later reaches for `qr` or
- * `gatepass` inside them, this test fails immediately with an NPE and the
- * decision logic has quietly grown a network dependency.
+ * proving that is part of the point. If someone later reaches for `qr`,
+ * `gatepass` or either circuit breaker inside them, this test fails immediately
+ * with an NPE and the decision logic has quietly grown a network dependency.
+ *
+ * The two breaker arguments are null for the same reason as the two clients.
+ * Adding them widened the constructor but not the guarantee - a breaker is part
+ * of how a hop is called, and denialFor() still calls nothing.
  */
 class HttpPassVerificationClientMappingTest {
 
-    private final HttpPassVerificationClient client = new HttpPassVerificationClient(null, null);
+    private final HttpPassVerificationClient client =
+            new HttpPassVerificationClient(null, null, null, null);
 
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource({

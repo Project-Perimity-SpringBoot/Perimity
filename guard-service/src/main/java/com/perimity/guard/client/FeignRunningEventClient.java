@@ -20,6 +20,19 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "perimity.clients.mode", havingValue = "feign")
+// AND the stub must not have been asked for.
+//
+// Without this second condition, perimity.clients.mode=feign together with
+// perimity.guard.clients.events=stub registers BOTH this class and
+// StubRunningEventClient, and the context dies on NoUniqueBeanDefinitionException.
+// That pair is not hypothetical: it is what a developer working offline gets the
+// moment feign becomes the default.
+//
+// An explicit request for the stub wins over the transport choice, because
+// "stub" answers a different question - it says "do not call anybody" - and
+// which HTTP library we would have used is then irrelevant.
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
+        "'${perimity.guard.clients.events:http}' != 'stub'")
 public class FeignRunningEventClient implements RunningEventClient {
 
     private static final Logger log = LoggerFactory.getLogger(FeignRunningEventClient.class);

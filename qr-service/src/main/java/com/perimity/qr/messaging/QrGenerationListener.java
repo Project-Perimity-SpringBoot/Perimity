@@ -250,6 +250,11 @@ public class QrGenerationListener {
                 .passId(message.passId())
                 .campusId(message.campusId())
                 .batchId(message.batchId())
+                // The producer has always sent this; it used to be dropped here
+                // with the rest of the wide contract. It is kept now because
+                // GET /api/qr/{passId}/pdf has no other way to learn whose pass
+                // it is, and without it that endpoint handed any signed-in
+                // caller anyone's gate pass.
                 .holderUserId(message.holderUserId())
                 .validFrom(message.validFrom())
                 .validTo(message.validTo())

@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -59,6 +60,17 @@ class QrRecordOwnershipTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null,
                         List.of(new SimpleGrantedAuthority("ROLE_" + role))));
+    }
+
+    /**
+     * download() takes its caller as a parameter rather than reading the
+     * SecurityContext - the two read paths learn who is asking by different
+     * routes. This hands it the same principal signedInAs installed, so a test
+     * still expresses "the signed-in caller" once.
+     */
+    private PerimityPrincipal signedInPrincipal() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth == null ? null : (PerimityPrincipal) auth.getPrincipal();
     }
 
     private void givenPassHeldBy(Long holderUserId) {
@@ -107,9 +119,9 @@ class QrRecordOwnershipTest {
         givenPassHeldBy(OWNER);
         signedInAs(99L, "STUDENT");
 
-        assertThatThrownBy(() -> service().download(PASS, true))
+        assertThatThrownBy(() -> service().download(PASS, true, signedInPrincipal()))
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> service().download(PASS, false))
+        assertThatThrownBy(() -> service().download(PASS, false, signedInPrincipal()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

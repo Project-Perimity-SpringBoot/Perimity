@@ -14,6 +14,8 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import com.perimity.qr.security.PerimityPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -87,9 +89,13 @@ public class QrController {
     @GetMapping(value = "/{passId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     @Operation(summary = "Download the pass PDF for a pass")
     public ResponseEntity<byte[]> downloadPdf(
-            @PathVariable @Positive(message = "passId must be a positive id") Long passId) {
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId,
+            @AuthenticationPrincipal PerimityPrincipal caller) {
 
-        byte[] pdf = qrRecordService.download(passId, true);
+        // The service decides whether this caller may have these bytes. Passing
+        // the principal rather than checking here keeps the rule next to the
+        // row it is about - see QrRecordService.download.
+        byte[] pdf = qrRecordService.download(passId, true, caller);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
@@ -101,6 +107,45 @@ public class QrController {
                                 .build()
                                 .toString())
                 .body(pdf);
+    }
+
+    /**
+     * The QR image itself, for the pass view to render.
+     *
+     * Needed for the same reason as the PDF above: QrRecordResponse carries
+     * qrKey, which is a storage key the browser cannot dereference. Without
+     * this endpoint the visitor's approved-pass screen has a pass and no way to
+     * show the one thing the holder actually presents at the gate.
+     *
+     * inline, NOT attachment. This is rendered in the page, not downloaded -
+     * attachment would make the pass view trigger a file save instead of
+     * displaying anything. That single word is the whole difference between
+     * this method and downloadPdf.
+     *
+     * Still no-store. A QR image is the entry credential in its most directly
+     * usable form: anything that can read it off a cache can walk through a
+     * gate with it.
+     */
+    @GetMapping(value = "/{passId}/image", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "Get the QR PNG for a pass, for display in the pass view")
+    public ResponseEntity<byte[]> qrImage(
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId,
+            @AuthenticationPrincipal PerimityPrincipal caller) {
+
+        // Same caller check as downloadPdf - the image is the credential in its
+        // most usable form, so it cannot be the laxer of the two endpoints.
+        byte[] png = qrRecordService.download(passId, false, caller);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .contentLength(png.length)
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename("pass-" + passId + ".png")
+                                .build()
+                                .toString())
+                .body(png);
     }
 
     /**
