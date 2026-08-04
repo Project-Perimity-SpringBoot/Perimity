@@ -5,11 +5,13 @@ import com.perimity.qr.dto.QrInvalidateRequest;
 import com.perimity.qr.dto.QrRecordResponse;
 import com.perimity.qr.entity.QrRecord;
 import com.perimity.qr.repository.QrRecordRepository;
+import com.perimity.qr.security.PerimityPrincipal;
 import com.perimity.qr.storage.StorageService;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -113,6 +115,7 @@ public class QrRecordService {
         QrRecord saved = qrRecordRepository.save(QrRecord.builder()
                 .passId(request.getPassId())
                 .campusId(request.getCampusId())
+                .holderUserId(request.getHolderUserId())
                 .tokenHash(tokenHash)
                 .validFrom(request.getValidFrom())
                 .validTo(request.getValidTo())
@@ -155,12 +158,42 @@ public class QrRecordService {
                 + "/" + record.getId() + "." + extension;
     }
 
-    /** Reads a stored object back. Backs the Day 6 download endpoint. */
+    /**
+     * Reads a stored object back. Backs the Day 6 download endpoint.
+     *
+     * THE OWNERSHIP CHECK LIVES HERE, NOT IN THE CONTROLLER.
+     *
+     * This method hands back the bytes of a gate pass - a PDF carrying a QR
+     * that opens a gate. It previously took only a passId, so any signed-in
+     * account could count through pass ids and download somebody else's pass;
+     * the campus scope on the row is no defence, because every holder on a
+     * campus shares it. Putting the rule at the only place that loads the
+     * record means a future second caller cannot forget it.
+     *
+     * A null holderUserId is a row written before that column existed. It fails
+     * CLOSED - staff only - because "we do not know who owns this" must never
+     * read as "anyone may have it".
+     */
     @Transactional(readOnly = true)
-    public byte[] download(Long passId, boolean pdf) {
+    public byte[] download(Long passId, boolean pdf, PerimityPrincipal caller) {
         QrRecord record = qrRecordRepository.findByPassIdAndActiveTrue(passId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "No active QR record for passId " + passId));
+
+        boolean isHolder = record.getHolderUserId() != null
+                && caller != null
+                && record.getHolderUserId().equals(caller.userId());
+
+        if (!isHolder && (caller == null || !caller.isStaff())) {
+            /*
+             * Deliberately the same message whether the pass belongs to someone
+             * else or the row predates the column. Distinguishing them would
+             * confirm which pass ids exist and who holds them, which is the
+             * enumeration this check exists to stop.
+             */
+            throw new AccessDeniedException(
+                    "This pass belongs to another holder");
+        }
 
         String key = pdf ? record.getPdfKey() : record.getQrKey();
         if (key == null) {

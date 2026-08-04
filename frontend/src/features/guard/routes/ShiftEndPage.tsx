@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { Button, SkeletonText } from '@ui/index';
-import { ConfirmDialog, ErrorState } from '@components/feedback';
+import { ConfirmDialog, EmptyState, ErrorState } from '@components/feedback';
 import { DescriptionList, PageHeader } from '@components/data';
 import { sessionApi } from '@lib/api/services/guard.api';
 import { guardKeys } from '@lib/query/keys';
@@ -64,6 +64,18 @@ export default function ShiftEndPage() {
   }
   if (session.isError) {
     return <ErrorState error={session.error} onRetry={() => void session.refetch()} />;
+  }
+
+  // Null once the shift has been ended in another tab, or if this page is
+  // reached without one. GuardSessionGate normally prevents it; this keeps the
+  // page from throwing on a property of null if it slips through.
+  if (!session.data) {
+    return (
+      <EmptyState
+        heading="No open shift"
+        description="This shift has already ended. Start a new one to scan again."
+      />
+    );
   }
 
   const s = session.data;
