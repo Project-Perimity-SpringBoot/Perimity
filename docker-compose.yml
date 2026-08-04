@@ -144,10 +144,15 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
-      MAIL_SMTP_AUTH: "false"
-      MAIL_STARTTLS: "false"
+      # MailHog unless SMTP_* is set in .env. Deliberately NOT MAIL_HOST from
+      # .env: that one is localhost for an STS run, which inside a container
+      # means the container itself. Same split as SPRING_RABBITMQ_HOST above.
+      # To send real mail, set SMTP_HOST/SMTP_PORT/SMTP_AUTH/SMTP_STARTTLS plus
+      # MAIL_USERNAME and MAIL_PASSWORD in .env, then recreate this service.
+      MAIL_HOST: ${SMTP_HOST:-mailhog}
+      MAIL_PORT: ${SMTP_PORT:-1025}
+      MAIL_SMTP_AUTH: "${SMTP_AUTH:-false}"
+      MAIL_STARTTLS: "${SMTP_STARTTLS:-false}"
       EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
@@ -255,10 +260,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
-      MAIL_SMTP_AUTH: "false"
-      MAIL_STARTTLS: "false"
+      # Same SMTP_* override as auth-service. Both must agree: a pass email and
+      # its OTP arriving from different senders is worse than neither working.
+      MAIL_HOST: ${SMTP_HOST:-mailhog}
+      MAIL_PORT: ${SMTP_PORT:-1025}
+      MAIL_SMTP_AUTH: "${SMTP_AUTH:-false}"
+      MAIL_STARTTLS: "${SMTP_STARTTLS:-false}"
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       QR_STORAGE_LOCAL_ROOT: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
