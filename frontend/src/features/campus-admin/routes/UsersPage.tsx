@@ -28,6 +28,23 @@ import {
 const isRole = (value: string): value is Role => (ROLES as readonly string[]).includes(value);
 
 /**
+ * Mirrors the server matrix in auth-service UserAdminController.CREATABLE.
+ *
+ * The list used to be "every role except SUPER_ADMIN" for everybody, so a
+ * Campus Admin was offered Student, Visitor and Campus Admin and got a 403 only
+ * after filling the whole form. Offering a choice the server will refuse is a
+ * worse failure than not offering it.
+ *
+ * Kept as a plain constant rather than derived from capabilities: this is the
+ * org chart, and it should read like one next to the server's copy.
+ */
+const CREATABLE_ROLES: Partial<Record<Role, readonly Role[]>> = {
+  SUPER_ADMIN: ROLES.filter((role) => role !== 'SUPER_ADMIN'),
+  CAMPUS_ADMIN: ['FACULTY', 'GUARD'],
+  FACULTY: ['STUDENT'],
+};
+
+/**
  * Batch 5 screens 3 and 4 — user management.
  *
  * DEACTIVATE, NEVER DELETE. There is no delete endpoint and there should not
@@ -53,6 +70,11 @@ export default function UsersPage() {
   const [deactivating, setDeactivating] = useState<UserResponse | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
+  // Empty for any role the server lets nowhere near this endpoint, which is
+  // also the signal to hide "Add user" entirely rather than open a form with an
+  // empty dropdown.
+  const creatableRoles = identity?.role ? CREATABLE_ROLES[identity.role] ?? [] : [];
+
   const listQuery = { ...pageRequest, ...(isRole(roleParam) ? { role: roleParam } : {}) };
 
   const users = useQuery({
@@ -72,7 +94,12 @@ export default function UsersPage() {
 
   const createForm = useForm<UserCreateValues>({
     resolver: zodResolver(userCreateSchema),
-    defaultValues: { email: '', name: '', phone: '', role: 'STUDENT', temporaryPassword: '' },
+    // First role this account may actually create. Hardcoding STUDENT here left
+    // a Campus Admin pre-filled with the one role they are not allowed to make.
+    defaultValues: {
+      email: '', name: '', phone: '', temporaryPassword: '',
+      role: creatableRoles[0] ?? 'STUDENT',
+    },
   });
   const applyCreateErrors = useApiFormErrors<UserCreateValues>(createForm.setError, setFormErrors);
   const watchedRole = createForm.watch('role');
@@ -185,7 +212,9 @@ export default function UsersPage() {
       <PageHeader
         title="Users"
         description="Accounts at this campus. Deactivated accounts keep their history."
-        actions={<Button onClick={() => setCreating(true)}><Plus aria-hidden />Add user</Button>}
+        actions={creatableRoles.length > 0
+          ? <Button onClick={() => setCreating(true)}><Plus aria-hidden />Add user</Button>
+          : undefined}
       />
 
       <SearchFilterBar
@@ -259,7 +288,7 @@ export default function UsersPage() {
                 <Field label="Role" required error={createForm.formState.errors.role?.message}>
                   {({ id, describedBy }) => (
                     <NativeSelect id={id} aria-describedby={describedBy} {...createForm.register('role')}>
-                      {ROLES.filter((role) => role !== 'SUPER_ADMIN').map((role) => (
+                      {creatableRoles.map((role) => (
                         <option key={role} value={role}>{ROLE_LABEL[role]}</option>
                       ))}
                     </NativeSelect>
