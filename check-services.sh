@@ -76,7 +76,7 @@ echo "  $UP of 6 services reachable."
 if [ "$UP" -lt 6 ]; then
     echo ""
     echo "  Start a missing one with:"
-    echo "    cd <name>-service && ./mvnw spring-boot:run"
+    echo "    cd <name>-service && mvn spring-boot:run"
     echo ""
     echo "  Skipping contract checks - they need every service up."
     exit 1
