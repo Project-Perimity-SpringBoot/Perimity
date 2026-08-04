@@ -64,19 +64,16 @@ public class QrRecord {
     private Long campusId;
 
     /**
-     * The user this pass belongs to. Used only to answer "is this yours?".
+     * Whose pass this is. Cross-service reference by id, like passId.
      *
-     * PROPOSAL - see V3__ownership_scoping.sql. gatepass-service owns the fact
-     * that pass 41 belongs to user 7; this is a copy of it, kept here so an
-     * ownership check does not become a cross-service call on the read path
-     * every pass view performs. The value already arrives on every
-     * qr.generate.request as QrGenerationJob.holderUserId and was previously
-     * discarded.
+     * The download endpoint needs an owner to compare the caller against, and
+     * campus scope is not an answer - every holder on a campus shares it, which
+     * is exactly how any signed-in account could pull anyone's pass PDF.
      *
-     * NULLABLE, and that is not laziness. Every row written before this column
-     * existed has no holder, and there is no way to derive one here. What
-     * happens on a null is the decision this proposal is asking for - see
-     * QrRecordService.assertMayRead.
+     * NULLABLE on purpose. Rows written before this column existed have no
+     * holder and can never gain one retroactively, so the read path treats null
+     * as "unknown owner" and allows staff only. Re-issuing the pass (POST
+     * /api/gatepass/passes/{id}/republish) writes a fresh record that has it.
      */
     @Column(name = "holder_user_id")
     private Long holderUserId;

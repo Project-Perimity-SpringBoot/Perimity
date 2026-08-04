@@ -20,7 +20,9 @@ jobs:
       - name: No institution branding in source
         run: |
           if grep -rIn --exclude-dir=.git --exclude-dir=docs \
+               --exclude-dir=node_modules --exclude-dir=target --exclude-dir=dist \
                --exclude=docker-build.yml \
+               --exclude=package-lock.json --exclude='*.lock' \
                -iE 'c-?dac' . ; then
             echo "::error::Institution-specific branding found. Perimity is campus-agnostic."
             exit 1

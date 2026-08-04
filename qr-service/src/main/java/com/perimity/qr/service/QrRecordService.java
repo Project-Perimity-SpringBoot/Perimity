@@ -221,20 +221,42 @@ public class QrRecordService {
                 + "/" + record.getId() + "." + extension;
     }
 
-    /** Reads a stored object back. Backs the PDF and QR image endpoints. */
+    /**
+     * Reads a stored object back. Backs the Day 6 download endpoint.
+     *
+     * THE OWNERSHIP CHECK LIVES HERE, NOT IN THE CONTROLLER.
+     *
+     * This method hands back the bytes of a gate pass - a PDF carrying a QR
+     * that opens a gate. It previously took only a passId, so any signed-in
+     * account could count through pass ids and download somebody else's pass;
+     * the campus scope on the row is no defence, because every holder on a
+     * campus shares it. Putting the rule at the only place that loads the
+     * record means a future second caller cannot forget it.
+     *
+     * A null holderUserId is a row written before that column existed. It fails
+     * CLOSED - staff only - because "we do not know who owns this" must never
+     * read as "anyone may have it".
+     */
     @Transactional(readOnly = true)
-    public byte[] download(Long passId, boolean pdf) {
+    public byte[] download(Long passId, boolean pdf, PerimityPrincipal caller) {
         QrRecord record = qrRecordRepository.findByPassIdAndActiveTrue(passId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "No active QR record for passId " + passId));
 
-        /*
-         * PROPOSAL. The same rule as the metadata read, and more important
-         * here: the metadata leaks storage keys, but this hands over the pass
-         * PDF and the QR image themselves - the credential, not a description
-         * of it.
-         */
-        assertMayRead(record);
+        boolean isHolder = record.getHolderUserId() != null
+                && caller != null
+                && record.getHolderUserId().equals(caller.userId());
+
+        if (!isHolder && (caller == null || !caller.isStaff())) {
+            /*
+             * Deliberately the same message whether the pass belongs to someone
+             * else or the row predates the column. Distinguishing them would
+             * confirm which pass ids exist and who holds them, which is the
+             * enumeration this check exists to stop.
+             */
+            throw new AccessDeniedException(
+                    "This pass belongs to another holder");
+        }
 
         String key = pdf ? record.getPdfKey() : record.getQrKey();
         if (key == null) {

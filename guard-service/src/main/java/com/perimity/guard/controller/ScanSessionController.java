@@ -54,9 +54,12 @@ public class ScanSessionController {
     public ResponseEntity<ApiResponse<ScanSessionResponse>> start(
             @Valid @RequestBody ScanSessionStartDto dto) {
 
+        // Both identity and campus come from the verified token. The body only
+        // says which gate. See the note on GET /open below - this is the same
+        // rule, applied to the write that everything else inherits from.
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Shift started",
-                        service.start(dto, currentUser.userId())));
+                        service.start(dto, currentUser.userId(), currentUser.campusId())));
     }
 
     /**

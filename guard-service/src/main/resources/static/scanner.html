@@ -132,8 +132,11 @@
     <label>Guard token (JWT)</label>
     <textarea id="token" placeholder="Paste a GUARD token from auth-service Swagger"></textarea>
 
+    <!-- No campus field. The shift takes its campus from the guard's token, so
+         asking for it here would be a box whose value is discarded - and a
+         guard who typed 2 and saw entries filed under 1 would reasonably think
+         the register was broken. See ScanSessionStartDto. -->
     <div class="row">
-      <div><label>Campus</label><input id="campusId" type="number" value="1"></div>
       <div><label>Gate</label><input id="gateId" type="number" value="3"></div>
     </div>
 
@@ -199,7 +202,7 @@ $('startShift').onclick = async () => {
       method: 'POST',
       headers: { ...auth(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        campusId: +$('campusId').value,
+        // campusId is deliberately absent - the server takes it from the token.
         gateId:   +$('gateId').value,
         gateName: $('gateName').value,
         deviceInfo: { userAgent: navigator.userAgent.slice(0, 60), appVersion: '0.1-wireframe' }
@@ -331,10 +334,27 @@ function render(d) {
                            : colour === 'amber' ? 'SEEN AGAIN' : 'STOP';
   $('message').textContent = d.message || '';
 
+  // NEVER innerHTML HERE. holderName is a person's name that originated in
+  // auth-service, was copied onto the pass, and arrives as whatever they typed
+  // when they registered - or whatever was in a bulk-upload cell.
+  //
+  // This line used to be `innerHTML = bits.join('<br>')`, which made a name of
+  //     <img src=x onerror="...">
+  // execute in the GUARD's browser at the moment that person was scanned. The
+  // guard's JWT is in an input on this very page, so the payload could steal it
+  // and then post scans as that guard. Stored XSS straight into the one role
+  // that can write the entry log.
+  //
+  // textContent escapes; the <br> is built as an element instead of markup.
   const bits = [];
   if (d.holderName) bits.push(d.holderName);
   if (d.passId) bits.push('Pass #' + d.passId);
-  $('who').innerHTML = bits.join('<br>');
+  const who = $('who');
+  who.textContent = '';
+  bits.forEach((bit, i) => {
+    if (i) who.appendChild(document.createElement('br'));
+    who.appendChild(document.createTextNode(bit));
+  });
 
   // The reason is always shown on a refusal. "No" with no reason forces the
   // guard to improvise, which is what the paper register did badly.

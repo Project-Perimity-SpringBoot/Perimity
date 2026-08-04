@@ -63,11 +63,14 @@ public class QrGenerateRequest {
     private Long batchId;
 
     /**
-     * PROPOSAL. The holder, carried through so QrRecordService can persist it.
+     * Whose pass this is. Carried so the download endpoint can answer "may THIS
+     * caller have this PDF" without a call into gatepass-service.
      *
-     * Not @NotNull: gatepass-service is already sending this field, but a
-     * message published by an older build would not, and rejecting those to the
-     * DLQ would stop QR generation for a field nothing depended on until now.
+     * Deliberately no @NotNull: a job published before this field existed is
+     * still a valid job, and rejecting it would turn a security improvement
+     * into an outage on the generation queue. A record that ends up with a null
+     * holder simply fails closed at read time - staff only. @Positive still
+     * applies when it IS present, and Bean Validation skips nulls for it.
      */
     @Positive(message = "holderUserId must be a positive id when present")
     private Long holderUserId;

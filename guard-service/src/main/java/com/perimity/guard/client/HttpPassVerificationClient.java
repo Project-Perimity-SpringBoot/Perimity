@@ -56,11 +56,26 @@ public class HttpPassVerificationClient implements PassVerificationClient {
     private final RestClient qr;
     private final RestClient gatepass;
 
-    public HttpPassVerificationClient(@Qualifier("qrRestClient") RestClient qr,
-                                      @Qualifier("gatepassRestClient") RestClient gatepass) {
+    /**
+     * One breaker per hop. See ScanBreakerConfig for why they are separate and
+     * why 4xx does not count as a failure.
+     */
+    private final io.github.resilience4j.circuitbreaker.CircuitBreaker qrBreaker;
+    private final io.github.resilience4j.circuitbreaker.CircuitBreaker gatepassBreaker;
+
+    public HttpPassVerificationClient(
+            @Qualifier("qrRestClient") RestClient qr,
+            @Qualifier("gatepassRestClient") RestClient gatepass,
+            @Qualifier("qrDecryptBreaker")
+            io.github.resilience4j.circuitbreaker.CircuitBreaker qrBreaker,
+            @Qualifier("gatepassPassBreaker")
+            io.github.resilience4j.circuitbreaker.CircuitBreaker gatepassBreaker) {
         this.qr = qr;
         this.gatepass = gatepass;
-        log.info("HttpPassVerificationClient active - real qr-service and gatepass-service calls.");
+        this.qrBreaker = qrBreaker;
+        this.gatepassBreaker = gatepassBreaker;
+        log.info("HttpPassVerificationClient active - real qr-service and gatepass-service calls, "
+                + "both hops behind a circuit breaker.");
     }
 
     @Override
@@ -72,6 +87,7 @@ public class HttpPassVerificationClient implements PassVerificationClient {
         }
 
         DecryptEnvelope decrypted = call(
+                qrBreaker,
                 () -> qr.post()
                         .uri("/api/qr/internal/decrypt")
                         .body(new DecryptRequest(token, null))
@@ -97,6 +113,7 @@ public class HttpPassVerificationClient implements PassVerificationClient {
         // ever standardises the prefix, this line and HttpRunningEventClient move
         // together - they are the only two callers.
         PassEnvelope passEnvelope = call(
+                gatepassBreaker,
                 () -> gatepass.get()
                         .uri("/api/gatepass/internal/passes/{id}", d.passId())
                         .retrieve()
@@ -175,9 +192,33 @@ public class HttpPassVerificationClient implements PassVerificationClient {
      * not know" into a red card would put a refusal in the register against
      * someone who may hold a perfectly good pass.
      */
-    private <T> T call(java.util.function.Supplier<T> request, String what) {
+    /**
+     * Runs one hop through its breaker.
+     *
+     * The outcome is identical whether the breaker was open or the call was
+     * attempted and failed: PassVerificationUnavailableException, a 503, and
+     * the outage card. That is intentional - "we could not verify this pass" is
+     * one situation for the guard standing at the gate, and splitting it into
+     * two messages would be describing our plumbing to somebody holding a phone.
+     *
+     * The difference is entirely in cost and in the log. An open breaker
+     * refuses in microseconds without touching the network, and says so.
+     */
+    private <T> T call(io.github.resilience4j.circuitbreaker.CircuitBreaker breaker,
+                       java.util.function.Supplier<T> request,
+                       String what) {
         try {
-            return request.get();
+            return breaker.executeSupplier(request);
+
+        } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
+            // Not logged at error: this is the breaker working. The transition
+            // that opened it was already logged once, with the reason. Logging
+            // every suppressed call would bury that line under the queue it is
+            // there to protect us from.
+            log.debug("{} suppressed - circuit breaker '{}' is open.", what, breaker.getName());
+            throw new PassVerificationUnavailableException(
+                    "Cannot verify passes right now - " + what + " is unreachable.", ex);
+
         } catch (RuntimeException ex) {
             log.error("{} failed: {}", what, ex.getMessage());
             throw new PassVerificationUnavailableException(
