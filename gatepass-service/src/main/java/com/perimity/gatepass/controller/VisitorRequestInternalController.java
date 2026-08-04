@@ -7,7 +7,9 @@ import com.perimity.gatepass.service.VisitorRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,5 +45,23 @@ public class VisitorRequestInternalController {
             @Valid @RequestBody VisitorEmailVerifiedDto dto) {
 
         return ApiResponse.ok("Email verified", service.markEmailVerified(id, dto));
+    }
+
+    /**
+     * PROPOSAL. The same operation keyed by the visitor's email.
+     *
+     * The sibling above cannot be called by the only service that would ever
+     * call it: auth-service has an email after an OTP, never a request id. This
+     * is the shape that makes the integration expressible. See
+     * VisitorRequestService.markEmailVerifiedByEmail for why identity still
+     * comes from the body rather than the path.
+     */
+    @PostMapping("/by-email/{email}/verified")
+    @Operation(summary = "auth-service confirms the email OTP, addressing the request by email")
+    public ApiResponse<VisitorRequestResponse> markVerifiedByEmail(
+            @PathVariable @NotBlank @Size(max = 180) String email,
+            @Valid @RequestBody VisitorEmailVerifiedDto dto) {
+
+        return ApiResponse.ok("Email verified", service.markEmailVerifiedByEmail(email, dto));
     }
 }

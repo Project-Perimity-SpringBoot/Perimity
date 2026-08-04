@@ -153,6 +153,8 @@ services:
       MAIL_PORT: ${SMTP_PORT:-1025}
       MAIL_SMTP_AUTH: "${SMTP_AUTH:-false}"
       MAIL_STARTTLS: "${SMTP_STARTTLS:-false}"
+      # PROPOSAL. Container name, not localhost - see GatepassVisitorClient.
+      GATEPASS_BASE_URL: http://gatepass-service:8083
       EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
