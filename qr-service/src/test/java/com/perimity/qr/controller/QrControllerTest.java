@@ -61,6 +61,7 @@ class QrControllerTest {
     private JwtService jwtService;
 
     private static final byte[] PDF_BYTES = "%PDF-1.4 fake pass".getBytes();
+    private static final byte[] PNG_BYTES = {(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10};
 
     @Autowired
     private MockMvc mockMvc;
@@ -144,6 +145,60 @@ class QrControllerTest {
                 .andExpect(jsonPath("$.message").value("Validation failed"));
 
         verifyNoInteractions(qrRecordService);
+    }
+
+    // ---------------------------------------------------------------
+    // GET /{passId}/image - the QR PNG the pass view renders
+    // ---------------------------------------------------------------
+
+    @Test
+    void qrImage_returnsPngBytes() throws Exception {
+        given(qrRecordService.download(eq(41L), eq(false), any())).willReturn(PNG_BYTES);
+
+        mockMvc.perform(get("/api/qr/41/image"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(content().bytes(PNG_BYTES));
+    }
+
+    /**
+     * inline, not attachment. If this ever flips, the visitor's pass view stops
+     * showing a QR and starts triggering a file download instead - a broken
+     * screen that throws no error anywhere.
+     */
+    @Test
+    void qrImage_isServedInlineNotAsADownload() throws Exception {
+        given(qrRecordService.download(eq(41L), eq(false), any())).willReturn(PNG_BYTES);
+
+        mockMvc.perform(get("/api/qr/41/image"))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"pass-41.png\""))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"));
+    }
+
+    /**
+     * The PNG and the PDF are two different stored objects behind one boolean.
+     * Passing the wrong one here would serve a PDF with an image/png content
+     * type, which renders as a broken image rather than as an error.
+     */
+    @Test
+    void qrImage_asksForTheQrObjectNotThePdf() throws Exception {
+        given(qrRecordService.download(anyLong(), eq(false), any())).willReturn(PNG_BYTES);
+
+        mockMvc.perform(get("/api/qr/41/image")).andExpect(status().isOk());
+
+        verify(qrRecordService).download(eq(41L), eq(false), any());
+        verify(qrRecordService, never()).download(eq(41L), eq(true), any());
+    }
+
+    @Test
+    void qrImage_missingRecordReturnsJsonNotFound() throws Exception {
+        given(qrRecordService.download(eq(41L), eq(false), any()))
+                .willThrow(new EntityNotFoundException("No active QR record for passId 41"));
+
+        mockMvc.perform(get("/api/qr/41/image"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
 
     // ---------------------------------------------------------------
