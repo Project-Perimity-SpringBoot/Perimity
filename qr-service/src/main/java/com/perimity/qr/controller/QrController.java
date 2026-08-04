@@ -110,6 +110,45 @@ public class QrController {
     }
 
     /**
+     * The QR image itself, for the pass view to render.
+     *
+     * Needed for the same reason as the PDF above: QrRecordResponse carries
+     * qrKey, which is a storage key the browser cannot dereference. Without
+     * this endpoint the visitor's approved-pass screen has a pass and no way to
+     * show the one thing the holder actually presents at the gate.
+     *
+     * inline, NOT attachment. This is rendered in the page, not downloaded -
+     * attachment would make the pass view trigger a file save instead of
+     * displaying anything. That single word is the whole difference between
+     * this method and downloadPdf.
+     *
+     * Still no-store. A QR image is the entry credential in its most directly
+     * usable form: anything that can read it off a cache can walk through a
+     * gate with it.
+     */
+    @GetMapping(value = "/{passId}/image", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "Get the QR PNG for a pass, for display in the pass view")
+    public ResponseEntity<byte[]> qrImage(
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId,
+            @AuthenticationPrincipal PerimityPrincipal caller) {
+
+        // Same caller check as downloadPdf - the image is the credential in its
+        // most usable form, so it cannot be the laxer of the two endpoints.
+        byte[] png = qrRecordService.download(passId, false, caller);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .contentLength(png.length)
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename("pass-" + passId + ".png")
+                                .build()
+                                .toString())
+                .body(png);
+    }
+
+    /**
      * Declared last on purpose. Spring ranks a literal path segment above a
      * variable one, so /api/qr/jobs/... and /api/qr/ping both resolve
      * correctly regardless of order - but keeping the catch-all template at

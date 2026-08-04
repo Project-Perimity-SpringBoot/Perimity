@@ -81,6 +81,12 @@ class QrSecurityTest {
     }
 
     @Test
+    void qrImage_withoutAToken_is401() throws Exception {
+        mockMvc.perform(get("/api/qr/1/image"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @WithMockUser(roles = "STUDENT")
     void passLookup_withAToken_isAllowed() throws Exception {
         given(qrRecordService.getActiveByPassId(1L)).willReturn(

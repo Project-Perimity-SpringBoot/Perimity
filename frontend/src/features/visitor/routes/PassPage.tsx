@@ -149,10 +149,10 @@ function QrPanel({ pass }: { pass: GatePassResponse }) {
   });
 
   /*
-   * B1 is closed on the backend — qr-service now serves both endpoints — but
-   * the flag stays off until those merge. An honest panel rather than a broken
-   * image: the pass details above are still readable, and a gate can act on
-   * them.
+   * B1 is closed and the flag now defaults on, so this is the kill-switch path
+   * rather than the normal one. Kept because it is the honest fallback: an
+   * explanation rather than a broken image, with the pass details above still
+   * readable and actionable at a gate.
    */
   if (!flags.passDownload) {
     return (
