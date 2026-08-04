@@ -1,6 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut, KeyRound, ChevronDown } from 'lucide-react';
+import { LogOut, KeyRound, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router';
 import { Avatar, Badge, Button } from '@ui/index';
 import { useAuth } from '@hooks/useAuth';
 import { campusApi } from '@lib/api/services/campus.api';
@@ -27,6 +28,20 @@ export function TopBar({ title }: { title?: string }) {
       style={{ height: 'var(--topbar-h)' }}
     >
       <div className="flex min-w-0 items-center gap-[var(--sp-3)]">
+        {/*
+          Back to the role picker without signing out. The session is deliberately
+          kept: HomePage already decides what happens next — the card for the role
+          you are signed in as offers Continue, any other card signs you out first.
+          Clearing the session here would make that distinction impossible.
+        */}
+        <Button asChild variant="ghost" size="sm" className="-ml-[var(--sp-1)] shrink-0 gap-[var(--sp-2)]">
+          <Link to="/">
+            <ArrowLeft aria-hidden />
+            <span className="hidden sm:inline">Home</span>
+            <span className="sr-only sm:hidden">Back to home</span>
+          </Link>
+        </Button>
+        <span className="h-5 w-px shrink-0 bg-[var(--border)]" aria-hidden />
         {title && <p className="text-body-md truncate text-[var(--ink-900)]">{title}</p>}
         {campus.data && <Badge tone="neutral">{campus.data.name}</Badge>}
       </div>
