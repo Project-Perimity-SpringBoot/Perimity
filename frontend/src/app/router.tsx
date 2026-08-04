@@ -90,7 +90,9 @@ export const router = createBrowserRouter([
       // Sits OUTSIDE PasswordChangeGate: it is the one route a user holding a
       // temporary password is allowed to reach.
       {
-        element: <AuthLayout />,
+        // No back button: this route is mandatory, and PasswordChangeGate
+        // would return the user here immediately.
+        element: <AuthLayout showBack={false} />,
         children: [{ path: '/change-password', element: <ChangePasswordPage /> }],
       },
 
