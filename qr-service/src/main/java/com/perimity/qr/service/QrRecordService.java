@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +55,68 @@ public class QrRecordService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "No active QR record for passId " + passId));
 
+        assertMayRead(qrRecord);
         return toResponse(qrRecord);
+    }
+
+    /**
+     * PROPOSAL - the ownership rule. This is the part that needs a decision.
+     *
+     * Authentication already stops anonymous reads. This stops a signed-in
+     * holder reading somebody else's pass by changing the id, which
+     * authentication alone does not.
+     *
+     * Staff pass through. A guard on a manual lookup, a campus admin in the
+     * audit log and a faculty member checking a batch are all legitimately
+     * looking at passes that are not theirs; scoping them out would break the
+     * product rather than secure it.
+     *
+     * ==================================================================
+     *  THE OPEN QUESTION: what to do when holderUserId is null
+     * ==================================================================
+     * Every row written before this column existed has no holder, and nothing
+     * here can derive one. Two choices, and they are not equivalent:
+     *
+     *   FAIL OPEN (implemented below) - a null holder is readable by any
+     *   authenticated user. Nothing breaks on deploy, and every existing pass
+     *   stays exactly as exposed as it is today until it is re-issued. The hole
+     *   closes gradually and silently, which means it is easy to believe it is
+     *   shut when it is not.
+     *
+     *   FAIL CLOSED - a null holder is readable by staff only. The gap is shut
+     *   the moment this deploys, and every pass issued before it stops loading
+     *   for its own holder until gatepass-service backfills the column. That is
+     *   a visible outage for real holders, not a silent one.
+     *
+     * Fail-open is implemented because a backfill has to come from
+     * gatepass-service and does not exist yet. It should not stay this way: the
+     * backfill and the flip to fail-closed belong in the same change.
+     */
+    private void assertMayRead(QrRecord qrRecord) {
+        PerimityPrincipal principal = currentPrincipal();
+
+        if (principal == null || principal.isStaff()) {
+            return;
+        }
+        if (qrRecord.getHolderUserId() == null) {
+            return;
+        }
+        if (!qrRecord.getHolderUserId().equals(principal.userId())) {
+            throw new AccessDeniedException("This pass belongs to another holder");
+        }
+    }
+
+    /**
+     * Null when nothing authenticated the request - the queue consumer and the
+     * internal API-key endpoints both reach this service with no SecurityContext,
+     * and neither is a person whose ownership could be checked.
+     */
+    private PerimityPrincipal currentPrincipal() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof PerimityPrincipal principal)) {
+            return null;
+        }
+        return principal;
     }
 
     /**
