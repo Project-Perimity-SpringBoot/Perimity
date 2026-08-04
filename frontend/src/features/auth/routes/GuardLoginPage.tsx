@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
-import { ShieldCheck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { ShieldCheck, ArrowLeft } from 'lucide-react';
 import { Button, Field, Input } from '@ui/index';
 import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
@@ -57,6 +57,15 @@ export default function GuardLoginPage() {
       className="flex min-h-dvh flex-col justify-center bg-[var(--desk)] px-[var(--sp-4)] py-[var(--sp-6)]"
     >
       <div className="mx-auto w-full max-w-md">
+        {/* 56px like every other target on this shell — read outdoors, tapped
+            with gloves on. The desk screens can afford 32px; this cannot. */}
+        <Button asChild variant="ghost" className="mb-[var(--sp-4)] -ml-[var(--sp-3)] h-14 gap-[var(--sp-2)] text-[var(--t-body-size)]">
+          <Link to="/">
+            <ArrowLeft aria-hidden />
+            Back to home
+          </Link>
+        </Button>
+
         <div className="mb-[var(--sp-6)] flex items-center gap-[var(--sp-3)]">
           <ShieldCheck className="size-8 text-[var(--brand-300)]" aria-hidden />
           <div>
