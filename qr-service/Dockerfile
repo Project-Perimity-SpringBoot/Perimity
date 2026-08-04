@@ -25,7 +25,9 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /build
 
 COPY pom.xml .
-RUN mvn -B dependency:go-offline
+# Single-pass build: skip offline download phase which has SSL issues.
+# Maven will fetch deps during package with automatic retries and better handling.
+RUN mvn -B clean dependency:resolve dependency:resolve-plugins
 
 COPY src ./src
 # Tests run in CI, not here. A Docker build that runs tests fails deploys for
