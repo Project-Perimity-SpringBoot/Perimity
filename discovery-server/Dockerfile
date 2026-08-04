@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # discovery-server image. Same two-stage build as the six services, with the
 # /storage volume removed - a service registry writes nothing to disk.
 #
@@ -29,17 +30,52 @@
 # means a source-only change reuses the cached dependency layer instead of
 # re-downloading Spring Boot every build. First build is slow; the rest are not.
 
+#
+# ==========================================================================
+# WHY THE MAVEN CACHE IS MOUNTED RATHER THAN BAKED INTO A LAYER
+# ==========================================================================
+# Without the --mount=type=cache below, every one of the seven images resolves
+# Spring Boot's whole dependency tree - roughly 200MB - into its own isolated
+# layer. `docker compose build` runs them in PARALLEL by default, so a single
+# home connection is asked for that download seven times at once. It does not
+# fail cleanly; it times out, and looks like a hang.
+#
+# The cache mount gives all seven builds one shared /root/.m2. The first
+# service populates it, the other six reuse it. Seven downloads become one, and
+# a rebuild after a code change skips dependency resolution entirely instead of
+# fetching it again.
+#
+# It also stops `dependency:go-offline` mattering. That goal is famously
+# incomplete - it misses plugin dependencies - so `mvn package` re-downloads a
+# chunk of what the previous step just fetched. With a shared cache, the second
+# fetch is a cache hit rather than a network call.
+#
+# Requires BuildKit, which is the default in Docker Desktop and in Docker
+# Engine 23+. The syntax directive on line 1 pins the Dockerfile frontend that
+# understands the flag.
+
+#
+# sharing=locked, deliberately. The default is sharing=shared, which lets all
+# seven builds write this one Maven repository CONCURRENTLY - they then contend
+# inside Maven's own locking and the build appears to hang. `locked` makes them
+# queue explicitly, which is honest about what is happening.
+#
+# The practical consequence: populate the cache with ONE build first
+#   docker compose build auth-service
+# then `docker compose up -d --build` - the other six are cache hits and the
+# parallelism costs nothing.
+
 # ---------- build ----------
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /build
 
 COPY pom.xml .
-RUN mvn -B dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2,sharing=locked mvn -B dependency:go-offline
 
 COPY src ./src
 # Tests run in CI, not here. A Docker build that runs tests fails deploys for
 # reasons unrelated to deployment, and doubles the build time on every retry.
-RUN mvn -B clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2,sharing=locked mvn -B clean package -DskipTests
 
 # ---------- run ----------
 FROM eclipse-temurin:17-jre
