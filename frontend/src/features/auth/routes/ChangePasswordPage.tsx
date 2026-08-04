@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Field, Input } from '@ui/index';
 import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
+import { authKeys } from '@lib/query/keys';
+import { useAuthStore } from '@stores/authStore';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import { LANDING_ROUTE } from '@lib/auth/permissions';
@@ -16,6 +18,8 @@ import { PasswordRulesList } from './PasswordRulesList';
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const queryClient = useQueryClient();
+  const setProfile = useAuthStore((s) => s.setProfile);
   const { role, profile } = useAuth();
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
@@ -32,7 +36,29 @@ export default function ChangePasswordPage() {
 
   const change = useMutation({
     mutationFn: (values: ChangePasswordValues) => authApi.changePassword(values),
-    onSuccess: () => {
+    /*
+     * Refresh the profile BEFORE navigating, and wait for it.
+     *
+     * `profile` is a store snapshot taken at sign-in, so after a forced change
+     * it still carries mustChangePassword: true. PasswordChangeGate reads that
+     * flag and sends every other route back here — so navigating first left the
+     * user pinned to this screen with a cleared form and no error, even though
+     * the password had in fact been changed. Only a full page reload escaped,
+     * because that is what re-runs SessionBootstrap.
+     *
+     * fetchQuery (not invalidate) because the gate must see the new value on
+     * the very next render; an invalidate races the navigation and loses.
+     */
+    onSuccess: async () => {
+      try {
+        setProfile(await queryClient.fetchQuery({
+          queryKey: authKeys.me(),
+          queryFn: () => authApi.me(),
+        }));
+      } catch {
+        // The password DID change. Failing to re-read the profile is not a
+        // reason to strand the user here - the gate resolves on next load.
+      }
       toast.success('Password changed');
       navigate(role ? LANDING_ROUTE[role] : '/', { replace: true });
     },

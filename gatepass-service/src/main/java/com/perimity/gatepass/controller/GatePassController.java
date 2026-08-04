@@ -85,7 +85,16 @@ public class GatePassController {
     @GetMapping("/{id}")
     @Operation(summary = "One pass on your campus")
     public ApiResponse<GatePassResponse> getOne(@PathVariable @Positive Long id) {
-        return ApiResponse.ok(service.getOne(currentUser.campusId(), id));
+        GatePassResponse pass = service.getOne(currentUser.campusId(), id);
+
+        // Campus scope alone is NOT authorisation. Without this, any signed-in
+        // account could walk pass ids across its own campus and read every
+        // holder's name, pass type and status - plus qrKey and pdfKey, which
+        // are the storage paths to their QR image and PDF. Same rule as
+        // /holder/{id} below; this endpoint simply has to read the pass first
+        // to learn whose it is.
+        currentUser.requireSelfOrStaff(pass.holderUserId());
+        return ApiResponse.ok(pass);
     }
 
     @GetMapping("/holder/{holderUserId}")

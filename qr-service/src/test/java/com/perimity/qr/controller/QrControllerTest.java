@@ -1,5 +1,6 @@
 package com.perimity.qr.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -72,7 +73,7 @@ class QrControllerTest {
 
     @Test
     void downloadPdf_returnsPdfBytesAsAnAttachment() throws Exception {
-        given(qrRecordService.download(41L, true)).willReturn(PDF_BYTES);
+        given(qrRecordService.download(eq(41L), eq(true), any())).willReturn(PDF_BYTES);
 
         mockMvc.perform(get("/api/qr/41/pdf"))
                 .andExpect(status().isOk())
@@ -90,11 +91,11 @@ class QrControllerTest {
      */
     @Test
     void downloadPdf_asksForThePdfObjectNotTheQrPng() throws Exception {
-        given(qrRecordService.download(anyLong(), eq(true))).willReturn(PDF_BYTES);
+        given(qrRecordService.download(anyLong(), eq(true), any())).willReturn(PDF_BYTES);
 
         mockMvc.perform(get("/api/qr/41/pdf")).andExpect(status().isOk());
 
-        verify(qrRecordService).download(41L, true);
+        verify(qrRecordService).download(eq(41L), eq(true), any());
     }
 
     /**
@@ -103,7 +104,7 @@ class QrControllerTest {
      */
     @Test
     void downloadPdf_isNotCacheable() throws Exception {
-        given(qrRecordService.download(41L, true)).willReturn(PDF_BYTES);
+        given(qrRecordService.download(eq(41L), eq(true), any())).willReturn(PDF_BYTES);
 
         mockMvc.perform(get("/api/qr/41/pdf"))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"));
@@ -122,7 +123,7 @@ class QrControllerTest {
      */
     @Test
     void downloadPdf_missingRecordReturnsJsonNotFoundNotA406() throws Exception {
-        given(qrRecordService.download(41L, true))
+        given(qrRecordService.download(eq(41L), eq(true), any()))
                 .willThrow(new EntityNotFoundException("No active QR record for passId 41"));
 
         mockMvc.perform(get("/api/qr/41/pdf"))
@@ -174,7 +175,7 @@ class QrControllerTest {
                 .andExpect(jsonPath("$.data.pdfKey").value("1/pdf/41/7.pdf"));
 
         verify(qrRecordService).getActiveByPassId(41L);
-        verify(qrRecordService, never()).download(anyLong(), anyBoolean());
+        verify(qrRecordService, never()).download(anyLong(), anyBoolean(), any());
     }
 
     @Test
@@ -211,7 +212,7 @@ class QrControllerTest {
      */
     @Test
     void pdfRoute_isNotSwallowedByTheSingleSegmentTemplate() throws Exception {
-        given(qrRecordService.download(41L, true)).willReturn(PDF_BYTES);
+        given(qrRecordService.download(eq(41L), eq(true), any())).willReturn(PDF_BYTES);
 
         mockMvc.perform(get("/api/qr/41/pdf"))
                 .andExpect(status().isOk())

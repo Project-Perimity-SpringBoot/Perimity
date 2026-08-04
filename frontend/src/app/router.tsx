@@ -1,7 +1,6 @@
 import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import { AppShell, AuthLayout, GuardShell } from '@/layouts';
-import { PhasePending } from '@components/feedback';
 import {
   GuardSessionGate, PasswordChangeGate, ProtectedRoute, PublicOnlyRoute, RoleRoute,
 } from './guards';
