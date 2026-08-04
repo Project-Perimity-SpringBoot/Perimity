@@ -196,6 +196,14 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
+      # gatepass-service/application.properties pins spring.rabbitmq.host to
+      # localhost on purpose (so an STS run does not try to resolve "rabbitmq")
+      # and documents that Docker must override it with SPRING_RABBITMQ_HOST.
+      # RABBITMQ_HOST above is NOT read by that file, so without this line the
+      # service dials localhost inside its own container, never connects, and
+      # every pass sits at PENDING because qr.generate.request is never
+      # published and qr.generate.result is never consumed.
+      SPRING_RABBITMQ_HOST: rabbitmq
       AUTH_SERVICE_URL: http://auth-service:8081
       USER_SERVICE_URL: http://user-service:8082
       CAMPUS_SERVICE_URL: http://campus-service:8084

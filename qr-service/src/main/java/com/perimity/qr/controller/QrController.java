@@ -14,6 +14,8 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import com.perimity.qr.security.PerimityPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -87,9 +89,13 @@ public class QrController {
     @GetMapping(value = "/{passId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     @Operation(summary = "Download the pass PDF for a pass")
     public ResponseEntity<byte[]> downloadPdf(
-            @PathVariable @Positive(message = "passId must be a positive id") Long passId) {
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId,
+            @AuthenticationPrincipal PerimityPrincipal caller) {
 
-        byte[] pdf = qrRecordService.download(passId, true);
+        // The service decides whether this caller may have these bytes. Passing
+        // the principal rather than checking here keeps the rule next to the
+        // row it is about - see QrRecordService.download.
+        byte[] pdf = qrRecordService.download(passId, true, caller);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
