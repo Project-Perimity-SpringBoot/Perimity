@@ -80,10 +80,27 @@ function toTypedError(error: AxiosError, service: string): ApiError {
   const method = config?.method?.toUpperCase();
 
   if (!error.response) {
-    logger.error('Network failure', { service, method, path, requestId: id, errorClass: 'NetworkError' });
+    /*
+     * A blocked preflight looks identical to an offline network here: the
+     * browser refuses to hand us the response either way. But "check your
+     * connection" is actively misleading when the server is healthy and the
+     * real cause is that this ORIGIN is not on its allow-list - it sends
+     * whoever is debugging to look at the wrong thing entirely.
+     *
+     * We cannot know which it was, so the message names both instead of
+     * guessing, and mentions the origin because that is the part a developer
+     * can act on. A visitor sees the same words and follows the first half.
+     */
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    logger.error('Network failure or blocked origin', {
+      service, method, path, requestId: id, origin, errorClass: 'NetworkError',
+    });
     return new NetworkError({
       status: 0,
-      message: 'Could not reach the server. Check your connection and try again.',
+      message:
+        'Could not reach the server. Check your connection — or, if you are '
+        + `running this locally, that ${origin || 'this address'} is allowed by `
+        + 'the API (CORS_ALLOWED_ORIGINS).',
       ...(id !== undefined ? { requestId: id } : {}),
       cause: error,
     });

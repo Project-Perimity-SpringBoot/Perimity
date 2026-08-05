@@ -3,6 +3,7 @@ package com.perimity.auth.config;
 import com.perimity.auth.security.InternalApiKeyFilter;
 import com.perimity.auth.security.JwtAuthenticationFilter;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -47,11 +48,14 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final InternalApiKeyFilter internalApiKeyFilter;
+    private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter,
-                          InternalApiKeyFilter internalApiKeyFilter) {
+                          InternalApiKeyFilter internalApiKeyFilter,
+                          @Value("${perimity.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtFilter = jwtFilter;
         this.internalApiKeyFilter = internalApiKeyFilter;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -116,11 +120,21 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** Tighten to the real frontend origin before deployment. */
+    /**
+     * Origins come from CORS_ALLOWED_ORIGINS, defaulting to localhost:5173.
+     *
+     * They were hardcoded to localhost, which meant the same app served from
+     * 127.0.0.1 or a LAN address was refused at the preflight - the browser
+     * blocked the request before sending it, and the UI reported "could not
+     * reach the server" while the server was healthy and idle. Teammates
+     * opening the app by IP could not register at all.
+     *
+     * Matches the pattern user-service and guard-service already use.
+     */
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration c = new CorsConfiguration();
-        c.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        c.setAllowedOrigins(allowedOrigins);
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         c.setAllowedHeaders(List.of("*"));
         c.setAllowCredentials(true);
