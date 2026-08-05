@@ -10,6 +10,8 @@ import { ProfileVerificationBadge } from '@components/pass/StatusBadge';
 import { studentApi } from '@lib/api/services/user.api';
 import { passApi } from '@lib/api/services/gatepass.api';
 import { profileKeys, passKeys } from '@lib/query/keys';
+import { formatDate } from '@lib/format/datetime';
+import { GENDER_LABELS } from '@/types/enums';
 import { useAuth } from '@hooks/useAuth';
 import { PausedBanner } from '../components/PausedBanner';
 
@@ -171,7 +173,12 @@ export default function ProfilePage() {
         )}
       </section>
 
-      <section className="surface-card p-[var(--sp-6)]">
+      {/*
+        SET BY THE INSTITUTION — assigned at enrolment, not chosen by the
+        student, and read-only everywhere in the student portal.
+      */}
+      <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <h2 className="text-h3 text-[var(--ink-900)]">Set by your institution</h2>
         <DescriptionList
           items={[
             { label: 'Roll number', value: p.rollNo ?? '—' },
@@ -189,14 +196,67 @@ export default function ProfilePage() {
                 'Not provided'
               ),
             },
+          ]}
+        />
+      </section>
+
+      {/*
+        YOUR OWN DETAILS — everything the student enters on /profile/details.
+        Every field below was already in StudentProfileResponse and simply was
+        not rendered, so a student filled in eight fields, submitted them for
+        verification, and their profile went on showing four unrelated ones.
+        Nothing here needed a backend change.
+
+        Shown even when empty, with a dash, rather than hidden when null: a
+        missing field is information — it is what the student still has to do
+        — and a form that quietly omits blank rows makes that invisible.
+      */}
+      <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <div className="flex flex-wrap items-center justify-between gap-[var(--sp-3)]">
+          <h2 className="text-h3 text-[var(--ink-900)]">Your details</h2>
+          <Button variant="ghost" asChild>
+            <Link to="/student/profile/details">Edit these</Link>
+          </Button>
+        </div>
+
+        <DescriptionList
+          items={[
+            {
+              label: 'Full name',
+              value: [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ') || '—',
+            },
+            { label: 'Date of birth', value: formatDate(p.dateOfBirth) },
+            { label: 'Gender', value: p.gender ? GENDER_LABELS[p.gender] : '—' },
+            {
+              label: 'Phone',
+              value: p.phoneNumber ? `${p.phoneCountryCode ?? ''} ${p.phoneNumber}`.trim() : '—',
+            },
+            {
+              label: 'Another phone',
+              value: p.altPhoneNumber
+                ? `${p.altPhoneCountryCode ?? ''} ${p.altPhoneNumber}`.trim()
+                : '—',
+            },
             { label: 'Address', value: p.address ?? '—', wide: true },
           ]}
         />
       </section>
 
+      {/*
+        Corrected against StudentProfileService. The previous wording was wrong
+        in both directions: it named "name or department" as pausing (neither
+        does) and said the roll number does not (it does). The service adds to
+        sensitiveChanges for exactly three fields - rollNo, govId, photoS3Key -
+        and calls PassPauseClient only when that list is non-empty.
+
+        The second sentence is a different mechanism and worth separating:
+        updateOwnDetails clears an existing VERIFIED status when a student edits
+        their own details, which is not a pause and does not stop them at a gate.
+      */}
       <p className="text-caption text-[var(--ink-500)]">
-        Changing your name, photo, government ID or department pauses your passes until
-        staff re-verify them. Your roll number and address do not.
+        Changing your photo, government ID or roll number pauses your passes until staff
+        re-verify them. Your name, address and phone numbers do not — but editing them
+        after verification means your details need checking again.
       </p>
     </div>
   );

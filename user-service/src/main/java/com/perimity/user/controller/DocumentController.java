@@ -133,9 +133,20 @@ public class DocumentController {
                 decided.verified() ? "Document verified" : "Document rejected", decided);
     }
 
+    /**
+     * No @PreAuthorize, deliberately - the rule is about the RECORD, not the role.
+     *
+     * An administrator may remove any unverified document. The owner may remove
+     * their own while it is still awaiting review, which is the "I uploaded the
+     * wrong file" case and previously had no remedy at all.
+     *
+     * A role annotation cannot express either half: it cannot say "your own",
+     * and it cannot say "only while nobody has ruled on it". DocumentService
+     * owns both checks, and a verified document stays undeletable for everyone.
+     */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN')")
-    @Operation(summary = "Delete an unverified document and its file. A verified one cannot be deleted.")
+    @Operation(summary = "Delete an unverified document and its file. "
+            + "Owners may remove their own while it is awaiting review; a verified one is never deletable.")
     public ApiResponse<Void> delete(@PathVariable @Positive Long id) {
         documentService.delete(id);
         return ApiResponse.ok("Document removed", null);
