@@ -45,6 +45,23 @@ public final class ValidationPatterns {
      */
     public static final String PHONE = "^\\+?[1-9]\\d{6,14}$";
 
+    /**
+     * An Indian mobile number: ten digits, first one 6-9, no country code.
+     *
+     * Deliberately NOT a change to PHONE above. That one is shared with fields
+     * owned by other services - a campus contact number is often a landline
+     * with an STD code, and tightening it here would reject rows those services
+     * accept. This applies only where a visitor types their own mobile.
+     *
+     * Ten digits with no +91 because that is what a person reads off their own
+     * phone. Accepting both spellings means the same number is stored two ways
+     * and never matches itself.
+     */
+    public static final String PHONE_IN = "^[6-9][0-9]{9}$";
+
+    public static final String PHONE_IN_MESSAGE =
+            "Enter a 10-digit mobile number starting with 6, 7, 8 or 9";
+
     public static final String PHONE_MESSAGE =
             "Enter a valid phone number in international format, digits only, optional leading +";
 

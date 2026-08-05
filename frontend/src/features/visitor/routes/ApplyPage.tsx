@@ -12,6 +12,10 @@ import { campusKeys, requestKeys } from '@lib/query/keys';
 import { LIMITS } from '@lib/validation/patterns';
 import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
+import {
+  GENDERS, GENDER_LABELS, ID_TYPES, ID_TYPE_LABELS,
+  PURPOSE_TYPES, PURPOSE_TYPE_LABELS, VISITOR_TYPES, VISITOR_TYPE_LABELS,
+} from '@/types/enums';
 import { visitorRequestSchema, type VisitorRequestValues } from '../schemas/visitor.schemas';
 
 /**
@@ -62,7 +66,9 @@ export default function ApplyPage() {
   } = useForm<VisitorRequestValues>({
     resolver: zodResolver(visitorRequestSchema),
     defaultValues: {
-      visitorName: '', visitorEmail: identity?.email ?? '', visitorPhone: '', purpose: '',
+      visitorName: identity?.name ?? '', visitorEmail: identity?.email ?? '', visitorPhone: '', purpose: '',
+      purposeType: undefined, visitorType: undefined, gender: '', dateOfBirth: '',
+      idType: '', idNumber: '',
       campusId: undefined, visitFrom: '', visitTo: '',
     },
   });
@@ -75,10 +81,18 @@ export default function ApplyPage() {
         visitorEmail: values.visitorEmail,
         // Empty string would store a blank phone rather than none.
         visitorPhone: values.visitorPhone ? values.visitorPhone : null,
-        purpose: values.purpose,
+        purpose: values.purpose || null,
         // Chosen by the visitor now. The server validates that it exists and
         // scopes the approval queue to it.
         campusId: values.campusId,
+        purposeType: values.purposeType,
+        visitorType: values.visitorType,
+        // '' is "not answered". Sending it would store a blank rather than
+        // nothing, and an empty string is not a valid enum server-side.
+        gender: values.gender || null,
+        dateOfBirth: values.dateOfBirth || null,
+        idType: values.idType || null,
+        idNumber: values.idNumber || null,
         visitFrom: values.visitFrom,
         visitTo: values.visitTo,
       }),
@@ -107,7 +121,12 @@ export default function ApplyPage() {
       >
         <FormError messages={formErrors} />
 
-        <Field label="Full name" required error={errors.visitorName?.message}>
+        <Field
+          label="Full name"
+          required
+          hint="From your account. Correct it here if it should read differently on your pass."
+          error={errors.visitorName?.message}
+        >
           {({ id, describedBy }) => (
             <Input
               id={id} aria-describedby={describedBy} autoComplete="name"
@@ -137,14 +156,16 @@ export default function ApplyPage() {
 
         <Field
           label="Phone"
-          hint="Optional. Useful if your host needs to reach you on the day."
+          hint="Optional. 10 digits, no country code."
           error={errors.visitorPhone?.message}
         >
           {({ id, describedBy }) => (
             <Input
               id={id} type="tel" aria-describedby={describedBy} autoComplete="tel"
               invalid={Boolean(errors.visitorPhone)}
-              placeholder="+919876543210"
+              placeholder="9876543210"
+              maxLength={10}
+              inputMode="numeric"
               {...register('visitorPhone')}
             />
           )}
@@ -175,7 +196,110 @@ export default function ApplyPage() {
           )}
         </Field>
 
-        <Field label="Purpose of visit" required error={errors.purpose?.message}>
+        <Field
+          label="Type of visitor"
+          required
+          error={errors.visitorType?.message}
+        >
+          {({ id, describedBy }) => (
+            <NativeSelect
+              id={id} aria-describedby={describedBy}
+              invalid={Boolean(errors.visitorType)}
+              {...register('visitorType')}
+            >
+              <option value="">Choose…</option>
+              {VISITOR_TYPES.map((v) => (
+                <option key={v} value={v}>{VISITOR_TYPE_LABELS[v]}</option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+
+        <Field
+          label="Purpose of visit"
+          required
+          error={errors.purposeType?.message}
+        >
+          {({ id, describedBy }) => (
+            <NativeSelect
+              id={id} aria-describedby={describedBy}
+              invalid={Boolean(errors.purposeType)}
+              {...register('purposeType')}
+            >
+              <option value="">Choose…</option>
+              {PURPOSE_TYPES.map((v) => (
+                <option key={v} value={v}>{PURPOSE_TYPE_LABELS[v]}</option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+
+        <Field
+          label="Gender"
+          hint="Optional."
+          error={errors.gender?.message}
+        >
+          {({ id, describedBy }) => (
+            <NativeSelect
+              id={id} aria-describedby={describedBy}
+              invalid={Boolean(errors.gender)}
+              {...register('gender')}
+            >
+              <option value="">Prefer not to answer</option>
+              {GENDERS.map((v) => (
+                <option key={v} value={v}>{GENDER_LABELS[v]}</option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+
+        <Field
+          label="Date of birth"
+          hint="Optional. Used to confirm your identity at the gate."
+          error={errors.dateOfBirth?.message}
+        >
+          {({ id, describedBy }) => (
+            <Input
+              id={id} type="date" aria-describedby={describedBy}
+              invalid={Boolean(errors.dateOfBirth)}
+              max={new Date().toISOString().slice(0, 10)}
+              {...register('dateOfBirth')}
+            />
+          )}
+        </Field>
+
+        <Field
+          label="ID type"
+          hint="Optional, but bring the document you name here."
+          error={errors.idType?.message}
+        >
+          {({ id, describedBy }) => (
+            <NativeSelect
+              id={id} aria-describedby={describedBy}
+              invalid={Boolean(errors.idType)}
+              {...register('idType')}
+            >
+              <option value="">None</option>
+              {ID_TYPES.map((v) => (
+                <option key={v} value={v}>{ID_TYPE_LABELS[v]}</option>
+              ))}
+            </NativeSelect>
+          )}
+        </Field>
+
+        <Field label="ID number" error={errors.idNumber?.message}>
+          {({ id, describedBy }) => (
+            <Input
+              id={id} aria-describedby={describedBy}
+              invalid={Boolean(errors.idNumber)}
+              maxLength={40}
+              autoComplete="off"
+              {...register('idNumber')}
+            />
+          )}
+        </Field>
+
+        <Field label="Anything else your host should know" error={errors.purpose?.message}>
           {({ id, describedBy }) => (
             <Textarea
               id={id} rows={3} aria-describedby={describedBy}
