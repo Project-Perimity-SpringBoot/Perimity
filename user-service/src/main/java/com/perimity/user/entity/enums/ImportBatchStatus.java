@@ -49,9 +49,28 @@ public enum ImportBatchStatus {
      */
     FAILED;
 
-    /** Only a validated batch may be confirmed. */
+    /**
+     * May confirm run on this batch?
+     *
+     * VALIDATED is the normal case. FAILED is included deliberately, and it is
+     * the more important one.
+     *
+     * A confirm that dies partway - a timeout, a restart, auth-service
+     * disappearing after it had already created ninety accounts - leaves the
+     * batch FAILED while some of the work landed. If FAILED were terminal, the
+     * only options would be re-uploading the sheet, which starts a second batch
+     * describing the same students, or editing the database. Both are worse
+     * than resuming.
+     *
+     * Resuming is safe because confirm skips rows that already have an outcome
+     * and auth-service matches on email, so a row that got through the first
+     * time is recognised rather than duplicated.
+     *
+     * PROCESSING is NOT confirmable: a batch that is mid-flight has a live
+     * caller, and a second confirm would race it.
+     */
     public boolean isConfirmable() {
-        return this == VALIDATED;
+        return this == VALIDATED || this == FAILED;
     }
 
     public boolean isFinished() {
