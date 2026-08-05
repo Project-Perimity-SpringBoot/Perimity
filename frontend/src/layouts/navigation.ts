@@ -1,5 +1,5 @@
 import {
-  BadgeCheck, Building2, CalendarRange, ClipboardList, FileText, Gauge, IdCard,
+  BadgeCheck, Building2, CalendarRange, ClipboardList, FileSpreadsheet, FileText, Gauge, IdCard,
   LayoutDashboard, ListChecks, LogIn, ScanLine, Settings2, ShieldBan,
   UserPen, UserPlus, Users, UsersRound, type LucideIcon,
 } from 'lucide-react';
@@ -49,6 +49,15 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
       icon: BadgeCheck,
       capability: 'profile:createStudent',
       badge: 'pendingStudentVerification',
+    },
+    /* Bulk onboarding from an intake form. Same capability as adding one
+       student, because an import is the same act at volume - it must not be a
+       way to do what the single path forbids. */
+    {
+      to: '/faculty/students/import',
+      label: 'Import students',
+      icon: FileSpreadsheet,
+      capability: 'profile:createStudent',
     },
     { to: '/faculty/onboarding', label: 'Onboarding', icon: ListChecks, capability: 'bulk:run' },
     { to: '/faculty/events', label: 'Events', icon: CalendarRange, capability: 'event:manage' },

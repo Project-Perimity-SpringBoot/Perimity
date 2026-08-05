@@ -164,7 +164,15 @@ services:
       discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
+      # service_started, NOT service_healthy, and the difference matters.
+      #
+      # auth-service publishes user.created but does not need the broker to do
+      # its job: UserEventPublisher swallows a publish failure precisely so a
+      # RabbitMQ hiccup cannot fail account creation. Waiting for the broker to
+      # be HEALTHY before starting would undo that at the other end - a broken
+      # RabbitMQ would stop auth-service booting, and nobody could sign in to
+      # anything. Login must not depend on a message queue.
+      rabbitmq: { condition: service_started }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/auth/ping"]
       interval: 10s
@@ -181,11 +189,38 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
+      # GATEPASS_SERVICE_URL, from main, and it is a fix rather than a rename
+      # for its own sake: user-service reads ${GATEPASS_SERVICE_URL} while this
+      # file used to set GATEPASS_BASE_URL. The two never matched, and nothing
+      # broke only because Eureka resolves the service by name and the url
+      # property is just a fallback - so it would have bitten the first person
+      # to run with EUREKA_ENABLED=false.
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      # Bulk student onboarding asks auth-service to create the accounts.
+      # Container name, not localhost - inside a container localhost is the
+      # container itself.
+      AUTH_SERVICE_URL: http://auth-service:8081
+      # Google Drive - fetches passport photos submitted through the intake
+      # form. The key is mounted read-only from a path OUTSIDE the repo; only
+      # its location is configured here, never its contents.
+      #
+      # Set GOOGLE_DRIVE_ENABLED=false in .env to run the whole import without
+      # Drive. Students then import without photos and are prompted for one in
+      # the app, which is also what happens if Drive is unreachable - an outage
+      # must delay passes, not strand an intake.
+      GOOGLE_DRIVE_ENABLED: ${GOOGLE_DRIVE_ENABLED:-true}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-drive.json
       STORAGE_LOCAL_DIR: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
+      # The service-account key, read-only, from wherever the developer keeps
+      # it. GOOGLE_CREDENTIALS_PATH is set in .env and differs per machine, so
+      # no path to anyone's home directory is committed.
+      #
+      # :ro because this container only ever reads it. A credential a process
+      # can overwrite is a credential a compromised process can replace.
+      - ${GOOGLE_CREDENTIALS_PATH:-./docker/noop-credentials.json}:/run/secrets/google-drive.json:ro
     ports: ["8082:8082"]
     depends_on:
       discovery-server: { condition: service_healthy }

@@ -1,8 +1,28 @@
+# =========================================================
+#  CREDENTIALS - never committed, no exceptions
+# =========================================================
+# The Google service-account key for reading Drive photo uploads. It lives
+# OUTSIDE the repo (~/perimity-secrets/) and is mounted into the container, so
+# these patterns should never match anything. They exist because a key that
+# gets copied "just for a minute" into the project folder is exactly how one
+# ends up in a public repository, and a leaked service-account key cannot be
+# rotated by changing a password - it has to be revoked in Cloud Console.
+google-drive.json
+*service-account*.json
+*-credentials.json
+secrets/
+perimity-secrets/
+
 # Scratch image written by check-profile-verification.sh. It lives beside the
 # script rather than in /tmp because Git Bash's curl is a Windows binary and
 # cannot open a POSIX /tmp path. Removed on exit, but ignored so an interrupted
 # run cannot leave it staged.
 perimity-test-photo.*.png
+
+# Excel lock files. Created whenever a spreadsheet is open and deleted when it
+# closes - one got committed already, because `git add -A` while a sheet was
+# open picks them up and the name is odd enough not to notice in a file list.
+~$*
 
 # Java / Spring Boot
 target/
@@ -62,3 +82,6 @@ user-service/.factorypath
 
 storage-dev/
 .claude/launch.json
+test-import-responses.xlsx
+test-resume-responses.xlsx
+test-welcome-responses.xlsx

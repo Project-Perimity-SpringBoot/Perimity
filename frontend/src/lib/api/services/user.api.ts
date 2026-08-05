@@ -1,6 +1,7 @@
 import { userClient } from '../client';
 import { unwrap, unwrapList, unwrapPage, unwrapScalar, SCALAR_KEYS } from '../normalize';
-import type { Paged, PageRequest } from '@/types/api';
+import { fetchFile } from '../download';
+import type { DownloadedFile, Paged, PageRequest } from '@/types/api';
 import type { DocumentType } from '@/types/enums';
 import type {
   DepartmentCreateRequest, DepartmentResponse, DepartmentUpdateRequest,
@@ -9,6 +10,8 @@ import type {
   PresignedUrlResponse,
   StudentProfileCreateRequest, StudentProfileResponse, StudentProfileUpdateRequest,
   StudentSelfDetailsRequest, StudentVerificationDecisionRequest,
+  ImportBatchResponse, ImportRowResponse, ImportRowOutcome,
+  ImportSettingsRequest, ImportSettingsResponse,
 } from '@/types/user.types';
 
 const STUDENTS = '/api/user/students';
@@ -132,6 +135,103 @@ export const studentApi = {
   ): Promise<StudentProfileResponse> {
     const { data } = await userClient.patch<unknown>(`${STUDENTS}/${id}/verification`, body);
     return unwrap<StudentProfileResponse>(data);
+  },
+};
+
+/**
+ * Bulk onboarding from a Google Form responses sheet.
+ *
+ * Upload and confirm are TWO calls on purpose. Nothing is created until a
+ * person has read the preview and pressed confirm — rows import as VERIFIED
+ * and verifiedBy records whoever confirmed, so there has to be a moment a
+ * named human took responsibility. See docs/BULK_STUDENT_ONBOARDING.md.
+ */
+export const studentImportApi = {
+  /**
+   * Upload a sheet and validate every row. Creates no accounts.
+   *
+   * A batch that comes back FAILED is still a successful request — the answer
+   * is "this sheet cannot be used, here is why". Read `status`, not the HTTP
+   * code, to decide what to show.
+   */
+  async upload(file: File): Promise<ImportBatchResponse> {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await userClient.post<unknown>(`${STUDENTS}/import`, form);
+    return unwrap<ImportBatchResponse>(data);
+  },
+
+  async getBatch(id: number): Promise<ImportBatchResponse> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/import/${id}`);
+    return unwrap<ImportBatchResponse>(data);
+  },
+
+  /**
+   * Rows of a batch. Defaults to REJECTED only, which is what a person opening
+   * the preview actually wants — a list of 197 fine rows is not worth reading.
+   * Pass 'ALL' for everything.
+   */
+  async rows(
+    id: number,
+    outcome: ImportRowOutcome | 'ALL' = 'REJECTED',
+    query: PageRequest = {},
+  ): Promise<Paged<ImportRowResponse>> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/import/${id}/rows`, {
+      params: { ...query, outcome },
+    });
+    return unwrapPage<ImportRowResponse>(data);
+  },
+
+  /**
+   * Create the accounts. The only call here that writes.
+   *
+   * Safe to retry: a batch that failed partway resumes from the rows that were
+   * never written, and matching on email means nothing is duplicated.
+   */
+  async confirm(id: number): Promise<ImportBatchResponse> {
+    const { data } = await userClient.post<unknown>(`${STUDENTS}/import/${id}/confirm`);
+    return unwrap<ImportBatchResponse>(data);
+  },
+
+  async list(query: PageRequest = {}): Promise<Paged<ImportBatchResponse>> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/import`, { params: query });
+    return unwrapPage<ImportBatchResponse>(data);
+  },
+
+  /* ---------------------------------------------------------------- form */
+
+  async settings(): Promise<ImportSettingsResponse> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/import/settings`);
+    return unwrap<ImportSettingsResponse>(data);
+  },
+
+  /**
+   * Both fields take whole URLs. The server extracts the ids, and refuses a
+   * form link pasted where the responses sheet belongs — they are both
+   * docs.google.com addresses with the id in the same place, so nothing about
+   * the shape tells them apart.
+   */
+  async saveSettings(body: ImportSettingsRequest): Promise<ImportSettingsResponse> {
+    const { data } = await userClient.put<unknown>(`${STUDENTS}/import/settings`, body);
+    return unwrap<ImportSettingsResponse>(data);
+  },
+
+  /**
+   * Read the latest responses straight from Drive and check every row.
+   *
+   * Same parser, validator and preview as an upload — only the source differs.
+   * It exists because downloading a file and immediately uploading it again is
+   * a round trip the server can do itself, and every manual step is a chance
+   * to import last month's copy out of a downloads folder.
+   */
+  async pull(): Promise<ImportBatchResponse> {
+    const { data } = await userClient.post<unknown>(`${STUDENTS}/import/pull`);
+    return unwrap<ImportBatchResponse>(data);
+  },
+
+  /** The responses sheet as a file, for reading in Excel before importing. */
+  async download(): Promise<DownloadedFile> {
+    return fetchFile(userClient, `${STUDENTS}/import/download`);
   },
 };
 
