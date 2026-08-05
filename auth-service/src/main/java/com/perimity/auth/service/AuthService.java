@@ -11,6 +11,7 @@ import com.perimity.auth.entity.OtpVerification;
 import com.perimity.auth.entity.User;
 import com.perimity.auth.entity.enums.AuditAction;
 import com.perimity.auth.entity.enums.OtpPurpose;
+import com.perimity.auth.entity.enums.Role;
 import com.perimity.auth.exception.AuthenticationFailedException;
 import com.perimity.auth.exception.RateLimitedException;
 import com.perimity.auth.repository.OtpVerificationRepository;
@@ -290,18 +291,26 @@ public class AuthService {
                 user.getCampusId(), "user:" + user.getId(), "Signed in with a one-time code");
 
         /*
-         * PROPOSAL. Tell gatepass-service the address is confirmed.
+         * Tell gatepass-service the address is confirmed.
          *
-         * Only for VISITOR_VERIFICATION: a LOGIN or PASS_RETRIEVAL code proves
-         * the same thing about the address, but there is no request waiting on
-         * it, and calling for those would turn a normal sign-in into a 404 and
-         * an ERROR line every time.
+         * KEYED ON ROLE, NOT PURPOSE. It used to fire only for
+         * VISITOR_VERIFICATION - an enum value no client ever sends. Every
+         * visitor screen requests and verifies with purpose LOGIN, so the call
+         * could never happen, otpVerified stayed false on every request, and
+         * approval was refused with "this visitor has not verified their email
+         * yet". The gate was so precise it could not fire.
+         *
+         * A visitor's login OTP proves exactly what a verification OTP proves
+         * about the address. Scoping on VISITOR also answers the original
+         * concern properly: staff sign-ins never reach this, and for a visitor
+         * a pending request is the normal case rather than the exception.
          *
          * After the audit record and before the token on purpose. The visitor
          * gets their token whatever gatepass says - see GatepassVisitorClient
          * for why this cannot be allowed to fail a sign-in.
          */
-        if (dto.getPurpose() == OtpPurpose.VISITOR_VERIFICATION) {
+        if (user.getRole() == Role.VISITOR
+                || dto.getPurpose() == OtpPurpose.VISITOR_VERIFICATION) {
             gatepassVisitorClient.markEmailVerified(user.getEmail(), user.getId());
         }
 
