@@ -120,24 +120,21 @@ public class VisitorRequest {
     private IdType idType;
 
     /**
-     * The identity document number.
+     * The LAST FOUR characters of the document number, never the whole thing.
      *
-     * ==================================================================
-     *  STORED IN FULL TODAY. THAT SHOULD NOT SURVIVE THIS PROJECT.
-     * ==================================================================
-     * IdType.AADHAAR means this column can hold a full Aadhaar number, which is
-     * regulated personal data in India - the Aadhaar Act restricts who may
-     * store it and obliges them to protect it. A campus gate log is not a
-     * lawful reason to keep one.
+     * The full value is validated on the way in - @ValidIdDocument checks it
+     * against its type, Aadhaar's Verhoeff checksum included - and then
+     * VisitorRequestService reduces it before this row is written. The number
+     * is proven real without being retained.
      *
-     * What a gate actually needs is "the guard checked a document and it
-     * matched": the last four digits plus the type is enough for that, and a
-     * breach of four digits is not a breach of an identity. Recording the full
-     * value buys nothing at the gate and creates a liability in the database.
+     * A gate asks "did a guard check a document, and did it match". Four
+     * characters and a type answer that: the visitor reads them off the card in
+     * front of them. A leak of four digits is not a leak of an identity, and a
+     * campus gate log has no lawful basis to hold a full Aadhaar.
      *
-     * Left whole here because the requirement asked for the field, and
-     * truncating without saying so would hide the decision. Flagged for the
-     * team rather than decided unilaterally.
+     * Column left at 40 rather than shrunk to 4 - a narrower column would have
+     * to be widened again the day someone stores something else here, and it
+     * buys nothing. See db/migration/V3__mask_stored_id_numbers.sql.
      */
     @Size(max = 40)
     @Pattern(regexp = "^$|^[A-Za-z0-9-]{4,40}$",
