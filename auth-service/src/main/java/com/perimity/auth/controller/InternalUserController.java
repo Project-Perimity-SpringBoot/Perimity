@@ -2,6 +2,7 @@ package com.perimity.auth.controller;
 
 import com.perimity.auth.dto.ApiResponse;
 import com.perimity.auth.dto.request.InternalIdentityBatchDto;
+import com.perimity.auth.dto.request.InternalStudentBatchDto;
 import com.perimity.auth.dto.request.InternalIdentityCreateDto;
 import com.perimity.auth.dto.response.IdentityBatchResponseDto;
 import com.perimity.auth.dto.response.UserResponse;
@@ -115,5 +116,42 @@ public class InternalUserController {
                             + " rows. The maximum is " + maxRows + ".");
         }
         return ApiResponse.ok("Batch resolved", service.resolveOrCreateBatch(dto));
+    }
+
+    /**
+     * Create or resolve STUDENT accounts for user-service's bulk import.
+     *
+     * ==================================================================
+     *  A SEPARATE ENDPOINT, NOT A ROLE PARAMETER ON /batch
+     * ==================================================================
+     * The obvious design was one endpoint taking a role. It was rejected on
+     * purpose.
+     *
+     * The internal API key is shared by all six services. /batch can only ever
+     * produce a passwordless VISITOR - the weakest identity here - so a leaked
+     * key buys an attacker very little. Add a role parameter and that same key
+     * can mint a CAMPUS_ADMIN.
+     *
+     * Two endpoints, each able to create exactly one kind of account, keeps the
+     * damage a leaked key can do proportional to what the endpoints are for.
+     * The cost is one extra method. That is a good trade.
+     *
+     * The role is STUDENT because this is the students endpoint. The request
+     * body has no role field at all - not one that is validated, and not one
+     * that is ignored, because an ignored field is one somebody eventually
+     * trusts.
+     */
+    @PostMapping("/students")
+    @Operation(summary = "Create or resolve STUDENT accounts for a bulk import. "
+            + "Returns 200 with per-row outcomes - one bad row never fails the batch.")
+    public ApiResponse<IdentityBatchResponseDto> resolveOrCreateStudents(
+            @Valid @RequestBody InternalStudentBatchDto dto) {
+
+        if (dto.getRows().size() > maxRows) {
+            throw new IllegalArgumentException(
+                    "This request has " + dto.getRows().size()
+                            + " rows. The maximum is " + maxRows + ".");
+        }
+        return ApiResponse.ok("Students resolved", service.resolveOrCreateStudents(dto));
     }
 }
