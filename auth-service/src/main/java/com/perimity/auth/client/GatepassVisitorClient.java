@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -74,11 +75,20 @@ public class GatepassVisitorClient {
             log.info("Visitor {} email verified in gatepass-service", visitorUserId);
             return true;
 
+        } catch (HttpClientErrorException.NotFound notFound) {
+            /*
+             * Ordinary, not a fault. A visitor signs in with an OTP whenever
+             * they come back, and most of those times nothing is pending. Now
+             * that every visitor sign-in reaches this, logging it at ERROR
+             * would bury the real failures under routine noise.
+             */
+            log.debug("No visitor request awaiting verification for {}", visitorEmail);
+            return false;
+
         } catch (RestClientException ex) {
-            // 404 lands here too, and it is not always a fault: a visitor can
-            // verify a LOGIN code without any request pending. Same log either
-            // way - this service cannot tell the two apart, and gatepass has
-            // the context to say which it was.
+            // Anything else IS a fault: gatepass down, a bad key, a timeout.
+            // The visitor is signed in either way and will wait for a pass
+            // that is not coming, so this line is the only trace of why.
             log.error("Could not mark visitor {} ({}) verified in gatepass-service. "
                             + "Their pass will not be issued until this is retried: {}",
                     visitorUserId, visitorEmail, ex.getMessage());
