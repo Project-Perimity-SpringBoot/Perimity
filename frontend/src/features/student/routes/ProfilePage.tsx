@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { BadgeCheck, Pencil } from 'lucide-react';
 import { Avatar, Button, SkeletonText } from '@ui/index';
 import { ErrorState } from '@components/feedback';
+import { NotFoundError } from '@lib/api/errors';
 import { DescriptionList, PageHeader } from '@components/data';
 import { AuthedImage } from '@components/upload';
 import { ProfileVerificationBadge } from '@components/pass/StatusBadge';
@@ -33,9 +34,13 @@ import { PausedBanner } from '../components/PausedBanner';
 export default function ProfilePage() {
   const { identity } = useAuth();
 
+  // retry: false - a 404 here is a real answer ("no profile yet"), not a
+  // transient failure, and retrying it three times only delays the screen that
+  // tells the student what to do.
   const profile = useQuery({
     queryKey: profileKeys.myStudent(),
     queryFn: () => studentApi.me(),
+    retry: false,
   });
 
   // Only so the paused banner can render here too - it belongs on every
@@ -55,6 +60,34 @@ export default function ProfilePage() {
   if (profile.isPending) {
     return <div className="surface-card p-[var(--sp-6)]"><SkeletonText lines={8} /></div>;
   }
+
+  /*
+   * A 404 means the account has no profile row yet, which is a state plenty of
+   * student accounts are in: the account lives in auth-service and the profile
+   * in user-service, and only the faculty Add Student screen ever created the
+   * second one.
+   *
+   * "Not found. No student profile exists for account 21" is accurate and
+   * useless — it reads like a broken system and gives the student nothing to
+   * do. Saving the details form creates the row, so point at it.
+   */
+  if (profile.error instanceof NotFoundError) {
+    return (
+      <div className="surface-card flex flex-col items-start gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <div>
+          <h1 className="text-h2 text-[var(--ink-900)]">Your profile is not set up yet</h1>
+          <p className="text-body mt-[var(--sp-2)] text-[var(--ink-500)]">
+            Fill in your details and they will be sent to faculty to check. You need
+            this before a pass can be issued to you.
+          </p>
+        </div>
+        <Button asChild>
+          <Link to="/student/profile/details">Fill in my details</Link>
+        </Button>
+      </div>
+    );
+  }
+
   if (profile.isError) {
     return <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />;
   }
