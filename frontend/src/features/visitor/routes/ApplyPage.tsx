@@ -12,7 +12,7 @@ import { campusKeys, requestKeys } from '@lib/query/keys';
 import { LIMITS } from '@lib/validation/patterns';
 import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
-import { ID_HINTS } from '@lib/validation/idDocuments';
+import { ID_HINTS, ID_MAX_LENGTH, ID_NUMERIC_ONLY } from '@lib/validation/idDocuments';
 import {
   GENDERS, GENDER_LABELS, ID_TYPES, ID_TYPE_LABELS,
   PURPOSE_TYPES, PURPOSE_TYPE_LABELS, VISITOR_TYPES, VISITOR_TYPE_LABELS,
@@ -386,6 +386,9 @@ export default function ApplyPage() {
                 for three of the four. */}
             <Field
               label="ID number"
+              /* maxLength follows the chosen document, so a 13th digit cannot be
+                 typed at all. The old catch-all of 40 let you overrun every
+                 format and only complained afterwards. */
               hint={selectedIdType ? ID_HINTS[selectedIdType] : 'Choose an ID type first.'}
               error={errors.idNumber?.message}
             >
@@ -393,7 +396,10 @@ export default function ApplyPage() {
                 <Input
                   id={id} aria-describedby={describedBy}
                   invalid={Boolean(errors.idNumber)}
-                  maxLength={40}
+                  maxLength={selectedIdType ? ID_MAX_LENGTH[selectedIdType] : 20}
+                  inputMode={selectedIdType && ID_NUMERIC_ONLY[selectedIdType] ? 'numeric' : 'text'}
+                  disabled={!selectedIdType}
+                  className={selectedIdType && !ID_NUMERIC_ONLY[selectedIdType] ? 'uppercase' : undefined}
                   autoComplete="off"
                   {...register('idNumber')}
                 />
