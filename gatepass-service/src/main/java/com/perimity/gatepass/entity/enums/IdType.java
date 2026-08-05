@@ -1,17 +1,19 @@
 package com.perimity.gatepass.entity.enums;
 
 /**
- * The kind of identity document a visitor presents at the gate.
+ * The identity documents a visitor may present at the gate.
  *
- * OTHER exists because a guard cannot turn someone away for holding a document
- * this list did not anticipate - a foreign national's residence card, a service
- * ID. The number is still recorded; only its type is unlisted.
+ * Four, deliberately. DRIVING_LICENCE and OTHER were dropped: a licence number
+ * has no single national format (each state issues its own), and OTHER meant a
+ * number nobody could validate or check against anything at the gate.
+ *
+ * Each of these four has one published format, which IdDocumentValidator
+ * enforces - see it for the per-type rules and why they are checked there
+ * rather than as a regex on the field.
  */
 public enum IdType {
     AADHAAR,
     PAN,
-    DRIVING_LICENCE,
     PASSPORT,
-    VOTER_ID,
-    OTHER
+    VOTER_ID
 }
