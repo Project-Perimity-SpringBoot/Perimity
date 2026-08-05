@@ -83,6 +83,32 @@ public class VisitorRequestService {
      */
     @Transactional
     public VisitorRequestResponse submit(VisitorRequestCreateDto dto) {
+        return submit(dto, null);
+    }
+
+    /**
+     * @param verifiedVisitorUserId the signed-in VISITOR's id, or null when the
+     *        caller is not a visitor (staff filing on someone's behalf).
+     *
+     * A visitor reaching this endpoint is signed in, and a visitor can only
+     * sign in with an email OTP - they never have a password. Their address is
+     * therefore already proven, and the request is created verified.
+     *
+     * This replaces a cross-service dance that could not work. auth-service
+     * told gatepass "this email is verified" at sign-in, which happens BEFORE
+     * the visitor fills the form: there was no request to mark, so the call
+     * 404'd and the request created a minute later was stamped unverified
+     * forever. Approving it was then refused with "this visitor has not
+     * verified their email yet" - on a visitor who had just proved they owned
+     * that address.
+     *
+     * Observed: verified 19:59:00, request created 19:59:57.
+     *
+     * The auth-service call still earns its place for the other order - a
+     * visitor who applies, then verifies - so both directions are covered.
+     */
+    @Transactional
+    public VisitorRequestResponse submit(VisitorRequestCreateDto dto, Long verifiedVisitorUserId) {
 
         /*
          * The campus must exist. It is client-chosen since the campus-queue
@@ -131,7 +157,8 @@ public class VisitorRequestService {
                 .eventId(dto.getEventId())
                 .visitFrom(dto.getVisitFrom())
                 .visitTo(dto.getVisitTo())
-                .otpVerified(false)
+                .otpVerified(verifiedVisitorUserId != null)
+                .visitorUserId(verifiedVisitorUserId)
                 .status(RequestStatus.PENDING)
                 .build();
 
