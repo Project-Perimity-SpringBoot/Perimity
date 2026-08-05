@@ -127,27 +127,59 @@ other's bulk engine.
 
 ## Progress
 
-**Done:**
+**The backend is built and proven end to end.** A test sheet has been through
+the whole pipeline: parse, validate, preview, confirm, account, profile,
+verified.
 
-- `ImportBatchStatus`, `ImportRowOutcome` enums
-- `StudentImportBatch`, `StudentImportRow` entities + repositories
-- `FormColumn` — fuzzy header matching, so reordering a form question does not
-  break the import
-- `ResponseSheetParser` — POI, every cell read as text, Drive ids extracted
-- POI 5.3.0 added to user-service, version-locked to gatepass-service
+Done:
 
-**Next, in order:**
+- `ImportBatchStatus`, `ImportRowOutcome`, `StudentImportBatch`,
+  `StudentImportRow` and their repositories
+- `FormColumn` — fuzzy header matching. Verified against Google's real output,
+  including its own `Timestamp` and `Email Address` columns and the
+  `(File responses)` suffix on upload questions
+- `ResponseSheetParser` — POI, every cell read as text except dates
+- `GenderLabels`, `ImportRowValidator`
+- `TemporaryPasswords` — one per student, SecureRandom, no ambiguous characters
+- `POST /api/internal/auth/users/students` in auth-service, role hard-coded
+- `AuthFeignClient`, `StudentImportService`, `StudentImportController`
+- `DrivePhotoFetcher` behind `GOOGLE_DRIVE_ENABLED`
 
-- `ImportRowValidator` — same rules as `StudentSelfDetailsDto`, plus roll-number
-  uniqueness and department resolution
-- `StudentImportService` — validate pass, then confirm pass
-- Controller: upload, preview, confirm, progress
-- Drive photo fetch behind `GOOGLE_DRIVE_ENABLED`
-- Passes and email
-- Faculty screens
+Left:
 
-**Not compiled yet.** POI is newly added to user-service, so the first
-`docker compose build user-service` after this is the real test.
+- Faculty screens: form question list, upload, preview, progress
+- Emailing each student their sign-in details
+- Passes
+
+## Two things learned the hard way
+
+**resilience4j's TimeLimiter defaults to ONE SECOND.** With
+`circuitbreaker.enabled=true`, every Feign call runs under it, so the first
+import was cancelled at 1s and reported as `No fallback available` — a message
+that says nothing about a timeout and sends you looking at Eureka and API keys.
+Configured on `configs.default`, because Spring Cloud OpenFeign names breakers
+after the method signature rather than the contextId, and instance-keyed config
+silently fails to apply.
+
+**Account creation is slow by design.** bcrypt is ~100ms per password, so a
+200-row batch is 20 seconds of hashing before auth-service answers. The Feign
+readTimeout for this client is 120s.
+
+## Known weakness — FAILED can under-report
+
+When the first confirm timed out, auth-service had *already created the
+account*. The batch said FAILED and the account existed.
+
+It recovered because confirm matches on email and the retry reported UPDATED
+rather than creating a duplicate. But the reporting is misleading: if
+auth-service had created 150 of 200 accounts before the client gave up, an
+operator would see FAILED with no indication that 150 landed.
+
+Confirm being idempotent makes this safe to retry. Making it *honest* would
+mean a FAILED batch is re-checkable rather than terminal — reconciling what
+exists against what the sheet asked for, and reporting the difference.
+
+Worth fixing before this is used on a real intake.
 
 ## Build order
 
