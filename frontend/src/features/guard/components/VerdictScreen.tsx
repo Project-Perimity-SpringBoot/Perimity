@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { AlertTriangle, CalendarCheck, Check, X } from 'lucide-react';
 import { Avatar, Button } from '@ui/index';
+import { AuthedImage } from '@components/upload';
 import { formatTime } from '@lib/format/datetime';
 import type { DenialReason } from '@/types/enums';
 import type { ScanResponse } from '@/types/guard.types';
@@ -86,15 +86,6 @@ export function VerdictScreen({
 }) {
   const v = VERDICT[scan.result];
 
-  /*
-   * A signed URL that expired between the scan and the render is a real case,
-   * not a hypothetical — the link is short-lived by design. onError flips this
-   * and we fall back to initials, so the guard sees a name rather than a broken
-   * image icon. Keyed by nothing: a verdict lives for two seconds and is
-   * replaced wholesale by the next scan.
-   */
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const photo = photoFailed ? null : scan.holderPhotoUrl;
   const reason = denialText(scan.denialReason);
 
   return (
@@ -146,25 +137,24 @@ export function VerdictScreen({
             somebody else's pass scans perfectly. The face is the only check
             that closes that, which is why FR-SCAN-9 asks for it.
 
-            Falls back to initials rather than a broken image. Null is the
-            normal case, not an error: visitors have no profile at all, and
-            user-service returns null rather than stalling a queue when storage
-            is slow. A broken image icon at a gate reads as "the system failed",
-            which is worse than "no photo was ever taken".
+            AuthedImage, NOT a plain <img>. This was a plain img and it never
+            worked: in local-storage mode presignedReadUrl returns
+            "/api/user/storage/local/{key}", a path back through user-service
+            behind .authenticated(), and a browser sends no Authorization header
+            with an image request. Every photo 401'd and fell back to initials —
+            silently, which is why it looked deliberate rather than broken.
 
-            onError covers the third case — a link that expired between the scan
-            and the render. Same outcome, same reasoning.
+            AuthedImage fetches through the API client, so the interceptor adds
+            the token, and it passes absolute S3 URLs straight through for when
+            storage moves. Avatar stays as the fallback, so a visitor with no
+            profile sees exactly what they saw before.
           */}
-          {photo ? (
-            <img
-              src={photo}
-              alt={`Photo of ${scan.holderName}`}
-              className="size-24 rounded-[var(--r-circle)] object-cover"
-              onError={() => setPhotoFailed(true)}
-            />
-          ) : (
-            <Avatar name={scan.holderName} className="size-16" />
-          )}
+          <AuthedImage
+            url={scan.holderPhotoUrl}
+            alt={`Photo of ${scan.holderName}`}
+            className="size-24 rounded-[var(--r-circle)] object-cover"
+            fallback={<Avatar name={scan.holderName} className="size-16" />}
+          />
           <p className="text-h2 text-[var(--ink-900)]">{scan.holderName}</p>
         </div>
       )}
