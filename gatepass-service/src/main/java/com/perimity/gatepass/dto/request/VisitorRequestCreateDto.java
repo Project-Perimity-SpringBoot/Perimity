@@ -79,8 +79,8 @@ public class VisitorRequestCreateDto {
     @Schema(example = "anita.deshmukh@example.com")
     private String visitorEmail;
 
-    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
-    @Schema(example = "+919876543210")
+    @Pattern(regexp = ValidationPatterns.PHONE_IN, message = ValidationPatterns.PHONE_IN_MESSAGE)
+    @Schema(example = "9876543210")
     private String visitorPhone;
 
     /**

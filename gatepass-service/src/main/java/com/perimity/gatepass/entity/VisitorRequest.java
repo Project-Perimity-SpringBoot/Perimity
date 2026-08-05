@@ -77,7 +77,7 @@ public class VisitorRequest {
     @Column(name = "visitor_email", nullable = false, length = 180)
     private String visitorEmail;
 
-    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
+    @Pattern(regexp = ValidationPatterns.PHONE_IN, message = ValidationPatterns.PHONE_IN_MESSAGE)
     @Column(name = "visitor_phone", length = 20)
     private String visitorPhone;
 

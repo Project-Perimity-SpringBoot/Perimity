@@ -66,7 +66,7 @@ export default function ApplyPage() {
   } = useForm<VisitorRequestValues>({
     resolver: zodResolver(visitorRequestSchema),
     defaultValues: {
-      visitorName: '', visitorEmail: identity?.email ?? '', visitorPhone: '', purpose: '',
+      visitorName: identity?.name ?? '', visitorEmail: identity?.email ?? '', visitorPhone: '', purpose: '',
       purposeType: undefined, visitorType: undefined, gender: '', dateOfBirth: '',
       idType: '', idNumber: '',
       campusId: undefined, visitFrom: '', visitTo: '',
@@ -121,7 +121,12 @@ export default function ApplyPage() {
       >
         <FormError messages={formErrors} />
 
-        <Field label="Full name" required error={errors.visitorName?.message}>
+        <Field
+          label="Full name"
+          required
+          hint="From your account. Correct it here if it should read differently on your pass."
+          error={errors.visitorName?.message}
+        >
           {({ id, describedBy }) => (
             <Input
               id={id} aria-describedby={describedBy} autoComplete="name"
@@ -151,14 +156,16 @@ export default function ApplyPage() {
 
         <Field
           label="Phone"
-          hint="Optional. Useful if your host needs to reach you on the day."
+          hint="Optional. 10 digits, no country code."
           error={errors.visitorPhone?.message}
         >
           {({ id, describedBy }) => (
             <Input
               id={id} type="tel" aria-describedby={describedBy} autoComplete="tel"
               invalid={Boolean(errors.visitorPhone)}
-              placeholder="+919876543210"
+              placeholder="9876543210"
+              maxLength={10}
+              inputMode="numeric"
               {...register('visitorPhone')}
             />
           )}
