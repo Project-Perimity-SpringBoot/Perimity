@@ -247,19 +247,52 @@ public class StudentImportService {
         }
 
         List<StudentImportRow> rows = rowRepository.findByBatchIdOrderByRowNumberAsc(batchId);
+
+        /*
+         * PENDING only - not "everything that is not REJECTED".
+         *
+         * This is what makes a failed confirm resumable. A batch that died
+         * partway has rows already marked CREATED or UPDATED, and those are
+         * finished: their accounts exist and their profiles are written.
+         * Re-processing them would be harmless (auth-service matches on email,
+         * and applyRow is idempotent) but it would also re-count them, so a
+         * resumed batch would report more students than the sheet contains.
+         *
+         * Taking only PENDING means confirm picks up exactly where it stopped.
+         */
         List<StudentImportRow> usable = rows.stream()
-                .filter(r -> r.getOutcome() != ImportRowOutcome.REJECTED)
+                .filter(r -> r.getOutcome() == ImportRowOutcome.PENDING)
                 .toList();
 
+        boolean resuming = batch.getStatus() == ImportBatchStatus.FAILED;
+        if (resuming) {
+            log.info("Batch {} is being resumed. {} of {} rows still to process.",
+                    batchId, usable.size(), rows.size());
+        }
+
         if (usable.isEmpty()) {
+            /*
+             * Nothing left to do. Either every row was rejected at validation,
+             * or this is a resume of a batch that actually finished its work
+             * before failing to report it - which is exactly the case that used
+             * to leave an operator unable to tell what had landed.
+             */
             batch.setStatus(ImportBatchStatus.COMPLETED);
-            batch.setConfirmedAt(LocalDateTime.now());
+            batch.setFailureReason(null);
+            if (batch.getConfirmedAt() == null) {
+                batch.setConfirmedAt(LocalDateTime.now());
+            }
             batch.setFinishedAt(LocalDateTime.now());
             return batchRepository.save(batch);
         }
 
         batch.setStatus(ImportBatchStatus.PROCESSING);
-        batch.setConfirmedAt(LocalDateTime.now());
+        // Preserved across a resume - the first confirm is when a person took
+        // responsibility, and that is the moment the verification record means.
+        if (batch.getConfirmedAt() == null) {
+            batch.setConfirmedAt(LocalDateTime.now());
+        }
+        batch.setFailureReason(null);
         batchRepository.save(batch);
 
         /*
@@ -310,9 +343,29 @@ public class StudentImportService {
              */
             log.error("Batch {} could not reach auth-service: {}", batchId, rootCause(ex), ex);
             batch.setStatus(ImportBatchStatus.FAILED);
+
+            /*
+             * The message must not claim nothing happened.
+             *
+             * It used to say "No accounts were created", and that was a guess
+             * dressed as a fact - the very first real import proved it wrong.
+             * The call timed out on this side while auth-service went ahead and
+             * created the account, so the batch reported FAILED and a student
+             * existed.
+             *
+             * What is actually true is that this ATTEMPT did not complete. Rows
+             * already written keep their outcomes, and confirming again resumes
+             * from whatever is still PENDING.
+             */
+            int done = batch.getCreatedCount() + batch.getUpdatedCount();
             batch.setFailureReason(truncate(
-                    "Could not reach the accounts service. No accounts were created. "
-                            + "Try confirming again once it is back."));
+                    "The accounts service did not answer in time. "
+                            + (done > 0
+                                    ? done + " student(s) were already imported and are kept. "
+                                    : "")
+                            + usable.size() + " row(s) are still waiting. "
+                            + "Confirm again to carry on from where it stopped - "
+                            + "nothing will be duplicated."));
             batch.setFinishedAt(LocalDateTime.now());
             return batchRepository.save(batch);
         }
@@ -324,10 +377,17 @@ public class StudentImportService {
             }
         }
 
-        int created = 0;
-        int updated = 0;
+        /*
+         * Seeded from the batch, not from zero.
+         *
+         * On a resume, rows written by the earlier attempt are no longer in
+         * `usable`, so counting from zero would report only the second half of
+         * the work and silently lose the first. These carry forward instead.
+         */
+        int created = batch.getCreatedCount();
+        int updated = batch.getUpdatedCount();
         int rejected = batch.getRejectedCount();
-        int missingPhoto = 0;
+        int missingPhoto = batch.getMissingPhotoCount();
 
         for (StudentImportRow row : usable) {
             AuthFeignClient.RowResult accountResult = byRow.get(row.getRowNumber());
