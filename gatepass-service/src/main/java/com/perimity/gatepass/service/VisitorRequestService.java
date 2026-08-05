@@ -14,6 +14,7 @@ import com.perimity.gatepass.exception.ResourceNotFoundException;
 import com.perimity.gatepass.repository.EventRepository;
 import com.perimity.gatepass.repository.GatePassRepository;
 import com.perimity.gatepass.repository.VisitorRequestRepository;
+import com.perimity.gatepass.validation.IdDocumentValidator;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -152,7 +153,14 @@ public class VisitorRequestService {
                 .gender(dto.getGender())
                 .dateOfBirth(dto.getDateOfBirth())
                 .idType(dto.getIdType())
-                .idNumber(dto.getIdNumber())
+                /*
+                 * ONLY THE LAST FOUR. @ValidIdDocument has already checked the
+                 * whole number against its type - Verhoeff included - so it was
+                 * proven real before this line throws the rest away. A gate
+                 * needs "a guard checked a document and it matched", which four
+                 * digits and a type carry. See IdDocumentValidator.lastFour.
+                 */
+                .idNumber(IdDocumentValidator.lastFour(dto.getIdNumber()))
                 .hostUserId(dto.getHostUserId())
                 .eventId(dto.getEventId())
                 .visitFrom(dto.getVisitFrom())

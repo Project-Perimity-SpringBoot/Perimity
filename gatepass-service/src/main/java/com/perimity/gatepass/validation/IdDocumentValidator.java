@@ -101,6 +101,28 @@ public final class IdDocumentValidator {
         return c == 0;
     }
 
+    /**
+     * The only part of a document number worth keeping.
+     *
+     * A gate asks "did a guard check a document, and did it match". The last
+     * four digits plus the type answers that: the visitor reads them off the
+     * card in front of them, and a leak of four digits is not a leak of an
+     * identity. The full number is validated first - checksum included - and
+     * then discarded, so the number was proven real without being retained.
+     *
+     * Aadhaar is the reason this exists. Storing one in full puts regulated
+     * personal data in a campus gate log, which has no lawful basis to hold it.
+     * The same rule is applied to all four types because none of them need to
+     * be whole either.
+     */
+    public static String lastFour(String number) {
+        if (number == null || number.isBlank()) {
+            return null;
+        }
+        String value = number.trim().toUpperCase();
+        return value.length() <= 4 ? value : value.substring(value.length() - 4);
+    }
+
     /** What to tell someone who got it wrong. Names the shape, not the rule. */
     public static String messageFor(IdType type) {
         return switch (type) {
