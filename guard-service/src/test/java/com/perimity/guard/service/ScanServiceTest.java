@@ -376,11 +376,17 @@ class ScanServiceTest {
                             LocalDate.now().minusDays(1), LocalDate.now().plusDays(1)));
             when(holderProfiles.profileFor(HOLDER_ID)).thenReturn(Optional.of(
                     new HolderProfileClient.HolderProfile(HOLDER_ID, "S-1042",
-                            "profiles/user-108/photo.jpg")));
+                            "profiles/user-108/photo.jpg",
+                            "https://storage.example/profiles/user-108/photo.jpg?sig=abc")));
 
             ScanResponse response = scanService.scan(request("t"), GUARD_ID);
 
             assertThat(response.holderPhotoKey()).isEqualTo("profiles/user-108/photo.jpg");
+            // The URL is the one the gate renders. Asserted separately from the
+            // key because they are allowed to differ - and because a regression
+            // that dropped the URL again would still pass a key-only check.
+            assertThat(response.holderPhotoUrl())
+                    .isEqualTo("https://storage.example/profiles/user-108/photo.jpg?sig=abc");
         }
 
         @Test
@@ -394,6 +400,7 @@ class ScanServiceTest {
             ScanResponse response = scanService.scan(request("t"), GUARD_ID);
 
             assertThat(response.holderPhotoKey()).isNull();
+            assertThat(response.holderPhotoUrl()).isNull();
             // Not merely absent from the response - never requested. A red path
             // must not pay for a call it has no use for.
             verify(holderProfiles, never()).profileFor(any());
@@ -412,6 +419,7 @@ class ScanServiceTest {
 
             assertThat(response.result()).isEqualTo(ScanResult.ALLOWED);
             assertThat(response.holderPhotoKey()).isNull();
+            assertThat(response.holderPhotoUrl()).isNull();
         }
     }
 
