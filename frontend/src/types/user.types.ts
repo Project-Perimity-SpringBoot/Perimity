@@ -85,6 +85,68 @@ export interface StudentVerificationDecisionRequest {
   remarks?: string | null;
 }
 
+/* ======================================================================
+ * BULK STUDENT IMPORT
+ * ====================================================================== */
+
+export const IMPORT_BATCH_STATUSES = [
+  'VALIDATING', 'VALIDATED', 'PROCESSING', 'COMPLETED', 'FAILED',
+] as const;
+export type ImportBatchStatus = (typeof IMPORT_BATCH_STATUSES)[number];
+
+export const IMPORT_ROW_OUTCOMES = ['PENDING', 'CREATED', 'UPDATED', 'REJECTED'] as const;
+export type ImportRowOutcome = (typeof IMPORT_ROW_OUTCOMES)[number];
+
+export interface ImportBatchResponse {
+  id: number;
+  campusId: number;
+  uploadedBy: number;
+  filename: string | null;
+  status: ImportBatchStatus;
+
+  totalRows: number;
+  /** Rows that passed validation. Eligible to be written on confirm. */
+  validRows: number;
+  createdCount: number;
+  updatedCount: number;
+  rejectedCount: number;
+
+  /**
+   * Imported, but with no photo. These students have an account and verified
+   * details and CANNOT hold a pass until a photo exists, so this is shown as
+   * its own number rather than folded into a success count.
+   */
+  missingPhotoCount: number;
+
+  failureReason: string | null;
+  confirmedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+
+  /**
+   * Whether confirm may run. True for VALIDATED and also for FAILED — a
+   * confirm that died partway is resumable, and re-running it picks up only
+   * the rows that were never written.
+   */
+  confirmable: boolean;
+}
+
+export interface ImportRowResponse {
+  id: number;
+  /** 1-based, counting the header, so it matches the spreadsheet on screen. */
+  rowNumber: number;
+  email: string | null;
+  fullName: string | null;
+  rollNo: string | null;
+  departmentLabel: string | null;
+  /** Whether a Drive link was found. Not whether the image downloaded. */
+  hasPhoto: boolean;
+  outcome: ImportRowOutcome;
+  /** Why a row was rejected, written for a person with the sheet open. */
+  message: string | null;
+  userId: number | null;
+}
+
 export interface FacultyProfileResponse {
   id: number;
   userId: number;
