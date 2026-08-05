@@ -42,6 +42,16 @@
   --status-bg: #f0f0f1;
   --status-border: #e0e0e6;
 
+  /* ---- AUTH SCREENS ---------------------------------------------------
+     The sign-in surfaces are dark and full-bleed: one lit card on a dark
+     field, so the eye lands on the form and nothing else. Same reasoning as
+     the guard shell, different reason — there it is sunlight, here it is
+     focus. */
+  --auth-bg: linear-gradient(155deg, #1e3a8a 0%, #172554 55%, #0f172a 100%);
+  --auth-ink: #c7d2fe;
+  --auth-tile: rgba(255, 255, 255, 0.07);
+  --auth-tile-border: rgba(255, 255, 255, 0.12);
+
   /* ---- Typography ---- */
   --font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
@@ -161,6 +171,10 @@
 
   --home-footer: linear-gradient(180deg, #12121a 0%, #08080c 100%);
   --home-footer-ink: #a1a1ac;
+
+  --auth-bg: linear-gradient(155deg, #14141c 0%, #0d0d13 55%, #08080c 100%);
+  --auth-ink: #a1a1ac;
+
 
   --ink-400: #7b7b86;
   --status-fg: #e5e5ea;
