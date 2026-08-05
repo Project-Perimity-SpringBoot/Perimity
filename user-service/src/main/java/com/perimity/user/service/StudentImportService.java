@@ -299,7 +299,16 @@ public class StudentImportService {
              * Deliberately NOT left in PROCESSING: a batch stuck in a
              * transitional state is one nobody can retry or clear.
              */
-            log.error("Batch {} could not reach auth-service: {}", batchId, ex.getMessage());
+            /*
+             * The ROOT cause, not ex.getMessage().
+             *
+             * spring.cloud.openfeign.circuitbreaker.enabled=true wraps every
+             * Feign client, so a client with no fallback surfaces every failure
+             * as NoFallbackAvailableException("No fallback available") - which
+             * says nothing about whether the host was unreachable, the key was
+             * rejected, or the call timed out. The real exception is underneath.
+             */
+            log.error("Batch {} could not reach auth-service: {}", batchId, rootCause(ex), ex);
             batch.setStatus(ImportBatchStatus.FAILED);
             batch.setFailureReason(truncate(
                     "Could not reach the accounts service. No accounts were created. "
@@ -480,6 +489,21 @@ public class StudentImportService {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * The deepest cause with a message, so a wrapped failure names itself.
+     *
+     * Bounded at ten hops rather than looping until getCause() is null: a
+     * self-referencing cause chain is rare but real, and an infinite loop
+     * inside error handling is a worse failure than the one being reported.
+     */
+    private static String rootCause(Throwable ex) {
+        Throwable current = ex;
+        for (int i = 0; i < 10 && current.getCause() != null; i++) {
+            current = current.getCause();
+        }
+        return current.getClass().getSimpleName() + ": " + current.getMessage();
     }
 
     private static String truncate(String message) {
