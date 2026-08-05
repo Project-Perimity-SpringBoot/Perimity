@@ -1,5 +1,6 @@
 package com.perimity.auth.service;
 
+import com.perimity.auth.messaging.UserEventPublisher;
 import com.perimity.auth.dto.request.InternalIdentityBatchDto;
 import com.perimity.auth.dto.request.InternalIdentityCreateDto;
 import com.perimity.auth.dto.request.PasswordChangeDto;
@@ -61,6 +62,7 @@ public class UserAccountService {
     private final RateLimiter rateLimiter;
     private final AuditService audit;
     private final EmailService emailService;
+    private final UserEventPublisher userEvents;
     private final int resetExpiryMinutes;
     private final int resetPerEmailPerDay;
     private final String resetUrlBase;
@@ -72,6 +74,7 @@ public class UserAccountService {
                               RateLimiter rateLimiter,
                               AuditService audit,
                               EmailService emailService,
+                              UserEventPublisher userEvents,
                               @Value("${perimity.password.reset-link-expiry-minutes}") int resetExpiryMinutes,
                               @Value("${perimity.ratelimit.reset.per-email-per-day}") int resetPerEmailPerDay,
                               @Value("${perimity.frontend.reset-password-url}") String resetUrlBase) {
@@ -82,6 +85,7 @@ public class UserAccountService {
         this.rateLimiter = rateLimiter;
         this.audit = audit;
         this.emailService = emailService;
+        this.userEvents = userEvents;
         this.resetExpiryMinutes = resetExpiryMinutes;
         this.resetPerEmailPerDay = resetPerEmailPerDay;
         this.resetUrlBase = resetUrlBase;
@@ -124,6 +128,21 @@ public class UserAccountService {
         audit.record(AuditAction.ACCOUNT_CREATED, actorUserId, actorRole,
                 user.getCampusId(), "user:" + user.getId(),
                 "Created " + user.getRole() + " account");
+
+        /*
+         * A STUDENT or FACULTY account needs a matching profile in user-service.
+         * This announces the account; user-service provisions the profile.
+         *
+         * It used to be the CALLER's job - the React Add Student screen made a
+         * second API call after this one returned. Any account created any other
+         * way, or whose second call failed, ended up able to sign in with no
+         * profile and no way for anyone to create one. Several accounts on this
+         * system are still in that state.
+         *
+         * Published after commit, and a broker failure does not fail account
+         * creation. See UserEventPublisher.
+         */
+        userEvents.publishCreatedAfterCommit(user);
 
         return UserResponse.from(user);
     }

@@ -144,7 +144,18 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
-        
+
+        <!--
+          AMQP - publishes user.created so user-service can provision the
+          profile for a new STUDENT or FACULTY account. Before this, the profile
+          was created by a second API call from the browser, and any account
+          whose second call did not happen could sign in with no profile.
+          gatepass-service and qr-service already carry this dependency.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
 
     </dependencies>
 
