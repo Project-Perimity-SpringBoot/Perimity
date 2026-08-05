@@ -48,8 +48,19 @@ public final class ValidationPatterns {
     public static final String QR_TOKEN_MESSAGE =
             "Token must be URL-safe Base64, 24 to 512 characters";
 
-    /** Unicode-aware: Devanagari, Arabic and accented Latin names all pass. */
-    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M}\\s.'-]{1,119}$";
+    /**
+     * Unicode-aware: Devanagari, Arabic and accented Latin names all pass.
+     *
+     * LITERAL SPACE, not \s - inside a character class \s also matches \n, \r
+     * and \t. A name reaching this service is rendered into a QR payload and
+     * written to logs, and a name carrying a newline splits one log field into
+     * two lines with the second under the writer's control.
+     *
+     * Kept identical to auth-service's copy on purpose. These patterns are a
+     * cross-service contract: a name auth-service accepts must not be rejected
+     * here, or a valid account becomes unable to hold a pass.
+     */
+    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]{1,119}$";
     public static final String PERSON_NAME_MESSAGE =
             "Name may contain letters, spaces, apostrophes, hyphens and full stops only";
 }
