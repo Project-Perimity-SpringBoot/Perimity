@@ -3,6 +3,8 @@ package com.perimity.user.controller;
 import com.perimity.user.dto.ApiResponse;
 import com.perimity.user.dto.request.StudentProfileCreateDto;
 import com.perimity.user.dto.request.StudentProfileUpdateDto;
+import com.perimity.user.dto.request.StudentSelfDetailsDto;
+import com.perimity.user.dto.request.StudentVerificationDecisionDto;
 import com.perimity.user.dto.response.PageResponse;
 import com.perimity.user.dto.response.StudentProfileResponse;
 import com.perimity.user.dto.response.PresignedUrlResponse;
@@ -133,6 +135,113 @@ public class StudentProfileController {
             @Valid @RequestBody StudentProfileUpdateDto dto) {
 
         return ApiResponse.ok("Student profile updated", studentProfileService.update(id, dto));
+    }
+
+    // =========================================================
+    //  SELF-DECLARED DETAILS AND VERIFICATION
+    //
+    //  Two audiences, deliberately separate paths. Everything under
+    //  /me is the student acting on themselves and needs no id in the
+    //  URL, because taking the id from the token is the one way it
+    //  cannot be swapped for somebody else's.
+    // =========================================================
+
+    /**
+     * The student filling in their own particulars.
+     *
+     * No id anywhere - not in the path, not in the body. The account comes from
+     * the token, so there is nothing to tamper with. A PUT /students/{id}/details
+     * would need an ownership check on every call and would be one forgotten
+     * check away from letting any student rewrite another's record.
+     *
+     * Allowed while DRAFT or REJECTED. Refused while SUBMITTED. Allowed while
+     * VERIFIED but clears the verification - see the service.
+     */
+    @PutMapping("/me/details")
+    @PreAuthorize("hasRole('STUDENT')")
+    @Operation(summary = "Save your own details",
+               description = "Whole-object save. Editing verified details clears the verification "
+                       + "and returns them to draft. Refused while faculty are reviewing them.")
+    public ApiResponse<StudentProfileResponse> updateOwnDetails(
+            @Valid @RequestBody StudentSelfDetailsDto dto) {
+
+        return ApiResponse.ok("Details saved",
+                studentProfileService.updateOwnDetails(currentUser.userId(), dto));
+    }
+
+    /**
+     * Hand the details to faculty.
+     *
+     * POST rather than PUT: this is not idempotent. It stamps submittedAt, which
+     * is what orders the reviewer's queue, and the service refuses a second call
+     * so a double click cannot send the student to the back of that queue.
+     *
+     * No body. The only input is "who is asking", and that is the token.
+     */
+    @PostMapping("/me/details/submit")
+    @PreAuthorize("hasRole('STUDENT')")
+    @Operation(summary = "Submit your details for verification",
+               description = "Everything mandatory must be filled in first. "
+                       + "Your details are locked until faculty decide.")
+    public ApiResponse<StudentProfileResponse> submitOwnDetails() {
+        return ApiResponse.ok("Sent to faculty for checking",
+                studentProfileService.submitOwnDetails(currentUser.userId()));
+    }
+
+    /**
+     * The reviewer's queue - students waiting for a decision, oldest first.
+     *
+     * GUARD is absent from the role list on purpose. A guard reads a profile at
+     * the gate to check a person against it; nothing about that job involves
+     * approving the details.
+     */
+    @GetMapping("/pending")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "Students waiting for their details to be checked",
+               description = "Oldest submission first, so nobody is left at the back of a backlog.")
+    public ApiResponse<PageResponse<StudentProfileResponse>> listPending(
+            @RequestParam(required = false) @Positive Long campusId,
+            // No Sort parameter: the repository method already ends in
+            // OrderBySubmittedAtAsc, and adding one emits two ORDER BY clauses.
+            @PageableDefault(size = 20) Pageable pageable) {
+
+        Long scope = currentUser.resolveCampusForListing(campusId);
+        return ApiResponse.ok(studentProfileService.listPendingVerification(scope, pageable));
+    }
+
+    /** The badge count for the faculty dashboard, without pulling a whole page. */
+    @GetMapping("/pending/count")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "How many students are waiting for a decision")
+    public ApiResponse<Map<String, Long>> countPending(
+            @RequestParam(required = false) @Positive Long campusId) {
+
+        Long scope = currentUser.resolveCampusForListing(campusId);
+        return ApiResponse.ok(
+                Map.of("count", studentProfileService.countPendingVerification(scope)));
+    }
+
+    /**
+     * Accept or refuse a student's submitted details.
+     *
+     * The body says approved and (on a refusal) why. It does NOT say who is
+     * deciding - that comes from the token. StudentVerificationDecisionDto has
+     * no verifiedBy field so that a caller cannot claim to be someone else, and
+     * so that no future maintainer can start trusting one.
+     */
+    @PatchMapping("/{id}/verification")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "Approve or reject a student's submitted details",
+               description = "Only details in the SUBMITTED state can be decided. "
+                       + "Remarks are required when rejecting - the student reads them.")
+    public ApiResponse<StudentProfileResponse> decideVerification(
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody StudentVerificationDecisionDto dto) {
+
+        StudentProfileResponse decided = studentProfileService.decideVerification(id, dto);
+        return ApiResponse.ok(
+                Boolean.TRUE.equals(dto.getApproved()) ? "Details verified" : "Details returned to the student",
+                decided);
     }
 
     // ------------------------------------------------------------- photo

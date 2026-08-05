@@ -56,6 +56,42 @@ export function formatTime(value: string | null | undefined): string {
   return parseServerDateTime(value)?.format('HH:mm:ss') ?? '—';
 }
 
+/**
+ * How long something has been waiting, for a queue.
+ *
+ * "Waiting 3 days" answers the question a reviewer actually has; the exact
+ * minute a student pressed Submit does not. The precise timestamp stays
+ * available on the detail view for anyone who needs it.
+ *
+ * Written out rather than using dayjs' relativeTime plugin, which is not
+ * loaded here and would round "26 hours" to "a day" — for a queue measured in
+ * days, that rounding is in the wrong direction.
+ */
+export function formatWaitingFor(value: string | null | undefined): string {
+  const since = parseServerDateTime(value);
+  if (!since) return '—';
+
+  const now = dayjs().tz(CAMPUS_TZ);
+  const minutes = now.diff(since, 'minute');
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = now.diff(since, 'hour');
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+
+  const days = now.diff(since, 'day');
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/** Past this, a queue item has been ignored rather than merely queued. */
+export const STALE_QUEUE_DAYS = 3;
+
+export function isWaitingTooLong(value: string | null | undefined): boolean {
+  const since = parseServerDateTime(value);
+  if (!since) return false;
+  return dayjs().tz(CAMPUS_TZ).diff(since, 'day') >= STALE_QUEUE_DAYS;
+}
+
 export function formatValidity(from: string, to: string | null): string {
   const start = parseServerDate(from);
   if (!start) return '—';

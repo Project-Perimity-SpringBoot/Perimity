@@ -194,7 +194,28 @@ export const MOCK_DEPARTMENTS: DepartmentResponse[] = [
 export const MOCK_STUDENT_PROFILE: StudentProfileResponse = {
   id: 501, userId: 108, campusId: 1, departmentId: 2, departmentName: 'Data Science',
   rollNo: 'S-20418', govIdMasked: '********9012', govIdPresent: true,
-  address: null, photoS3Key: null,
+  photoS3Key: null,
+
+  firstName: 'Anjali', middleName: 'Sunil', lastName: 'Rao',
+  displayName: 'Anjali Sunil Rao',
+  dateOfBirth: '2004-08-19', gender: 'FEMALE',
+  address: '12 Example Road',
+  phoneCountryCode: '+91', phoneNumber: '9876543210',
+  altPhoneCountryCode: null, altPhoneNumber: null,
+
+  /*
+   * VERIFIED rather than DRAFT, so the mocked profile screens render the
+   * finished state. A fixture in DRAFT would leave every screenshot showing an
+   * unverified badge and a Submit button, which is the exception rather than
+   * what a student normally sees.
+   */
+  verificationStatus: 'VERIFIED',
+  editable: true,
+  submittedAt: '2026-01-14T09:00:00',
+  verifiedBy: 42,
+  verifiedAt: '2026-01-15T11:30:00',
+  verificationRemarks: null,
+
   createdAt: '2026-01-12T10:00:00', updatedAt: null,
 };
 

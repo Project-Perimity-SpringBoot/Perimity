@@ -13,7 +13,7 @@ import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { authKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
-import { ROLES, type Role } from '@/types/enums';
+import { ROLES, creatableRolesFor, type Role } from '@/types/enums';
 import type { UserResponse } from '@/types/auth.types';
 import { ROLE_LABEL } from '@/layouts/navigation';
 import { useApiFormErrors } from '@hooks/useApiForm';
@@ -27,22 +27,16 @@ import {
 
 const isRole = (value: string): value is Role => (ROLES as readonly string[]).includes(value);
 
-/**
- * Mirrors the server matrix in auth-service UserAdminController.CREATABLE.
+/*
+ * The role matrix that lived here has MOVED to @/types/enums as CREATABLE_ROLES,
+ * read through creatableRolesFor(). Deleted rather than left in place: main and
+ * this branch each grew a copy of the same table, and two mirrors of one server
+ * constant is how they end up disagreeing.
  *
- * The list used to be "every role except SUPER_ADMIN" for everybody, so a
- * Campus Admin was offered Student, Visitor and Campus Admin and got a 403 only
- * after filling the whole form. Offering a choice the server will refuse is a
- * worse failure than not offering it.
- *
- * Kept as a plain constant rather than derived from capabilities: this is the
- * org chart, and it should read like one next to the server's copy.
+ * The table is a mirror of auth-service's UserAdminController.CREATABLE. A
+ * Campus Admin gets FACULTY and GUARD - not STUDENT, and not another
+ * CAMPUS_ADMIN. Change the server first, then the mirror.
  */
-const CREATABLE_ROLES: Partial<Record<Role, readonly Role[]>> = {
-  SUPER_ADMIN: ROLES.filter((role) => role !== 'SUPER_ADMIN'),
-  CAMPUS_ADMIN: ['FACULTY', 'GUARD'],
-  FACULTY: ['STUDENT'],
-};
 
 /**
  * Batch 5 screens 3 and 4 — user management.
@@ -70,10 +64,22 @@ export default function UsersPage() {
   const [deactivating, setDeactivating] = useState<UserResponse | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
-  // Empty for any role the server lets nowhere near this endpoint, which is
-  // also the signal to hide "Add user" entirely rather than open a form with an
-  // empty dropdown.
-  const creatableRoles = identity?.role ? CREATABLE_ROLES[identity.role] ?? [] : [];
+  /*
+   * What this admin may actually create, per UserAdminController.CREATABLE.
+   * A CAMPUS_ADMIN gets FACULTY and GUARD - not STUDENT (faculty create their
+   * own students) and not another CAMPUS_ADMIN (that is the Super Admin's call).
+   *
+   * Empty for any role the server lets nowhere near this endpoint, which is
+   * also the signal to hide "Add user" entirely rather than open a form with an
+   * empty dropdown.
+   *
+   * MERGE NOTE: main and this branch fixed the same bug independently and both
+   * survived, leaving two variables for one value. Kept main's NAME, because
+   * other lines in this file already read it, and this branch's ACCESSOR -
+   * creatableRolesFor() handles a null role internally, where the direct map
+   * lookup needed CREATABLE_ROLES imported and it was not.
+   */
+  const creatableRoles = creatableRolesFor(identity?.role);
 
   const listQuery = { ...pageRequest, ...(isRole(roleParam) ? { role: roleParam } : {}) };
 
@@ -94,11 +100,22 @@ export default function UsersPage() {
 
   const createForm = useForm<UserCreateValues>({
     resolver: zodResolver(userCreateSchema),
-    // First role this account may actually create. Hardcoding STUDENT here left
-    // a Campus Admin pre-filled with the one role they are not allowed to make.
     defaultValues: {
-      email: '', name: '', phone: '', temporaryPassword: '',
-      role: creatableRoles[0] ?? 'STUDENT',
+      email: '',
+      name: '',
+      phone: '',
+      temporaryPassword: '',
+      /*
+       * Was hardcoded to STUDENT, which is the ONE role a Campus Admin cannot
+       * create - so the form opened pre-set to fail. Default to the first role
+       * this actor is actually allowed to make.
+       *
+       * FACULTY, not STUDENT, as the last-resort fallback. It only fires when
+       * the list is empty, in which case the form should not be reachable at
+       * all - but if it ever is, falling back to the single role this page's
+       * own audience is forbidden from creating would recreate the bug.
+       */
+      role: creatableRoles[0] ?? 'FACULTY',
     },
   });
   const applyCreateErrors = useApiFormErrors<UserCreateValues>(createForm.setError, setFormErrors);
@@ -285,8 +302,25 @@ export default function UsersPage() {
               </Field>
 
               <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-                <Field label="Role" required error={createForm.formState.errors.role?.message}>
+                <Field
+                  label="Role"
+                  required
+                  /* Says WHY the list is short. Without this the absence of
+                     "Student" reads as a missing feature - it was reported as a
+                     bug once already. A rule the user cannot see is a rule they
+                     assume is broken. */
+                  hint={
+                    identity?.role === 'CAMPUS_ADMIN'
+                      ? 'Students are added by their faculty or through bulk onboarding, not here.'
+                      : undefined
+                  }
+                  error={createForm.formState.errors.role?.message}
+                >
                   {({ id, describedBy }) => (
+                    /* Only what the SERVER will accept from this actor. The list
+                       used to be every role but SUPER_ADMIN, which meant a
+                       Campus Admin could pick STUDENT and get a 403 after
+                       filling the whole form. See CREATABLE_ROLES. */
                     <NativeSelect id={id} aria-describedby={describedBy} {...createForm.register('role')}>
                       {creatableRoles.map((role) => (
                         <option key={role} value={role}>{ROLE_LABEL[role]}</option>
