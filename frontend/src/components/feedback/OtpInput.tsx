@@ -19,12 +19,20 @@ export function OtpInput({ value, onChange, onComplete, invalid, disabled, autoF
     if (autoFocus) refs.current[0]?.focus();
   }, [autoFocus]);
 
+  /**
+   * Writes one box. An empty char CLEARS that box.
+   *
+   * Spaces are the placeholder for "not filled yet", and only trailing ones are
+   * stripped - collapsing all of them would slide later digits leftwards when
+   * you clear one in the middle, so correcting the third digit would silently
+   * rewrite the fourth and fifth.
+   */
   const setAt = (index: number, char: string) => {
     const next = value.padEnd(OTP_RULES.length, ' ').split('');
-    next[index] = char;
-    const joined = next.join('').replace(/\s/g, '');
+    next[index] = char || ' ';
+    const joined = next.join('').trimEnd();
     onChange(joined);
-    if (joined.length === OTP_RULES.length) onComplete?.(joined);
+    if (joined.replace(/\s/g, '').length === OTP_RULES.length) onComplete?.(joined);
   };
 
   return (
@@ -44,12 +52,34 @@ export function OtpInput({ value, onChange, onComplete, invalid, disabled, autoF
           value={value[i] ?? ''}
           onChange={(e) => {
             const digit = e.target.value.replace(/\D/g, '').slice(-1);
-            if (!digit) return;
+            // An empty value means the box was cleared - honour it. Returning
+            // early here is what made a wrong digit unfixable without a reload.
+            if (!digit) {
+              setAt(i, '');
+              return;
+            }
             setAt(i, digit);
             refs.current[i + 1]?.focus();
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Backspace' && !value[i]) refs.current[i - 1]?.focus();
+            if (e.key === 'Backspace') {
+              // Filled box: clear it and stay. Empty box: step back and clear
+              // that one, which is what a person expects from backspace.
+              if (value[i] && value[i] !== ' ') {
+                e.preventDefault();
+                setAt(i, '');
+              } else {
+                e.preventDefault();
+                setAt(i - 1, '');
+                refs.current[i - 1]?.focus();
+              }
+              return;
+            }
+            if (e.key === 'Delete') {
+              e.preventDefault();
+              setAt(i, '');
+              return;
+            }
             if (e.key === 'ArrowLeft') refs.current[i - 1]?.focus();
             if (e.key === 'ArrowRight') refs.current[i + 1]?.focus();
           }}
