@@ -180,6 +180,29 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
+
+        <!-- ============================================================
+             Apache POI - reads the Google Form responses .xlsx for bulk
+             student onboarding. See docs/BULK_STUDENT_ONBOARDING.md.
+
+             5.3.0 matches gatepass-service exactly. Two POI versions in one
+             repo is the same class of problem as two AWS SDK versions: the
+             classpath winner is whichever Maven resolves first.
+
+             poi-ooxml pulls in poi transitively, and both are declared so the
+             versions stay locked together - a mismatch between them produces
+             NoSuchMethodError at RUNTIME, not at compile time.
+             ============================================================ -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
     </dependencies>
 
     <build>
