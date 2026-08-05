@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 import { AlertTriangle, ArrowLeft, Image as ImageIcon, Info } from 'lucide-react';
 import { Button, Field, Input, NativeSelect, SkeletonText, Textarea } from '@ui/index';
 import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
+import { NotFoundError } from '@lib/api/errors';
 import { PageHeader } from '@components/data';
 import { AuthedImage, FileDropzone } from '@components/upload';
 import { ProfileVerificationBadge } from '@components/pass/StatusBadge';
@@ -79,10 +80,32 @@ export default function ProfileDetailsPage() {
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
 
+  /*
+   * A 404 here is NOT an error state on this screen.
+   *
+   * An account in auth-service and a profile in user-service are separate
+   * records, and an account can exist without one — every student created by
+   * anything other than the faculty Add Student screen is in that position.
+   * Those students used to open this page and get "Not found. No student
+   * profile exists for account 21", which is true, useless, and offers them
+   * nothing to do about it.
+   *
+   * A student with no profile is a student who has not filled anything in yet,
+   * which is exactly what a blank form is for. Saving it creates the row —
+   * PUT /students/me/details is create-or-replace server-side.
+   *
+   * retry: false because retrying a 404 three times only slows down the empty
+   * state it is going to show anyway.
+   */
   const profile = useQuery({
     queryKey: profileKeys.myStudent(),
     queryFn: () => studentApi.me(),
+    retry: false,
   });
+
+  const missingProfile = profile.error instanceof NotFoundError;
+  /** False until the student's first save creates the row. */
+  const hasProfile = Boolean(profile.data?.id);
 
   const status = profile.data?.verificationStatus ?? 'DRAFT';
   const locked = status === 'SUBMITTED';
@@ -205,7 +228,8 @@ export default function ProfileDetailsPage() {
   };
 
   if (profile.isPending) return <SkeletonText lines={8} />;
-  if (profile.isError) {
+  // Only a REAL failure stops the page. A missing profile renders a blank form.
+  if (profile.isError && !missingProfile) {
     return <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />;
   }
 
@@ -230,26 +254,26 @@ export default function ProfileDetailsPage() {
       <div className="surface-card space-y-[var(--sp-2)] p-[var(--sp-4)]">
         <div className="flex items-center gap-[var(--sp-2)]">
           <ProfileVerificationBadge status={status} />
-          {profile.data.submittedAt && status === 'SUBMITTED' && (
+          {profile.data?.submittedAt && status === 'SUBMITTED' && (
             <span className="text-caption text-[var(--ink-500)]">
-              sent {formatDateTime(profile.data.submittedAt)}
+              sent {formatDateTime(profile.data?.submittedAt)}
             </span>
           )}
-          {profile.data.verifiedAt && status === 'VERIFIED' && (
+          {profile.data?.verifiedAt && status === 'VERIFIED' && (
             <span className="text-caption text-[var(--ink-500)]">
-              checked {formatDateTime(profile.data.verifiedAt)}
+              checked {formatDateTime(profile.data?.verifiedAt)}
             </span>
           )}
         </div>
 
-        {status === 'REJECTED' && profile.data.verificationRemarks && (
+        {status === 'REJECTED' && profile.data?.verificationRemarks && (
           <p className="text-body flex gap-[var(--sp-2)]">
             <AlertTriangle className="size-4 shrink-0 mt-[2px]" aria-hidden />
             {/*
               The reviewer's words, rendered as text. Never as HTML — this is
               free text written by one user and read by another.
             */}
-            <span><strong>Faculty asked for changes:</strong> {profile.data.verificationRemarks}</span>
+            <span><strong>Faculty asked for changes:</strong> {profile.data?.verificationRemarks}</span>
           </p>
         )}
 
@@ -321,13 +345,26 @@ export default function ProfileDetailsPage() {
 
           {!locked && (
             <div className="min-w-[16rem] flex-1 space-y-[var(--sp-3)]">
-              <FileDropzone
-                rule={UPLOAD_RULES.photo}
-                file={photoFile}
-                onSelect={(file) => { setPhotoFile(file); uploadPhoto.mutate(file); }}
-                onClear={() => setPhotoFile(null)}
-                disabled={uploadPhoto.isPending}
-              />
+              {/*
+                The upload endpoint is keyed by profile id, so there is nothing
+                to upload against until the row exists. Rather than let the
+                student pick a file and fail, say what to do first — filling in
+                the form and saving creates the profile.
+              */}
+              {hasProfile ? (
+                <FileDropzone
+                  rule={UPLOAD_RULES.photo}
+                  file={photoFile}
+                  onSelect={(file) => { setPhotoFile(file); uploadPhoto.mutate(file); }}
+                  onClear={() => setPhotoFile(null)}
+                  disabled={uploadPhoto.isPending}
+                />
+              ) : (
+                <p className="text-body rounded-[var(--r-md)] bg-[var(--surface-sunken)] px-[var(--sp-3)] py-[var(--sp-3)] text-[var(--ink-500)]">
+                  Fill in your details below and press <strong>Save</strong> first.
+                  You can add your photo straight after.
+                </p>
+              )}
               {uploadPhoto.isPending && (
                 <p className="text-caption text-[var(--ink-500)]">Uploading…</p>
               )}
