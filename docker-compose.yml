@@ -194,10 +194,27 @@ services:
       # Container name, not localhost - inside a container localhost is the
       # container itself.
       AUTH_SERVICE_URL: http://auth-service:8081
+      # Google Drive - fetches passport photos submitted through the intake
+      # form. The key is mounted read-only from a path OUTSIDE the repo; only
+      # its location is configured here, never its contents.
+      #
+      # Set GOOGLE_DRIVE_ENABLED=false in .env to run the whole import without
+      # Drive. Students then import without photos and are prompted for one in
+      # the app, which is also what happens if Drive is unreachable - an outage
+      # must delay passes, not strand an intake.
+      GOOGLE_DRIVE_ENABLED: ${GOOGLE_DRIVE_ENABLED:-true}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-drive.json
       STORAGE_LOCAL_DIR: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
       - perimity_storage:/storage
+      # The service-account key, read-only, from wherever the developer keeps
+      # it. GOOGLE_CREDENTIALS_PATH is set in .env and differs per machine, so
+      # no path to anyone's home directory is committed.
+      #
+      # :ro because this container only ever reads it. A credential a process
+      # can overwrite is a credential a compromised process can replace.
+      - ${GOOGLE_CREDENTIALS_PATH:-./docker/noop-credentials.json}:/run/secrets/google-drive.json:ro
     ports: ["8082:8082"]
     depends_on:
       discovery-server: { condition: service_healthy }

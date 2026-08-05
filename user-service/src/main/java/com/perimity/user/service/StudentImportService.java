@@ -1,9 +1,14 @@
 package com.perimity.user.service;
 
+import com.perimity.user.bulk.DrivePhotoFetcher;
 import com.perimity.user.bulk.ImportRowValidator;
 import com.perimity.user.bulk.ResponseSheetParser;
 import com.perimity.user.bulk.TemporaryPasswords;
 import com.perimity.user.client.AuthFeignClient;
+import com.perimity.user.storage.StorageKeys;
+import com.perimity.user.storage.StorageService;
+import com.perimity.user.storage.StoredObject;
+import java.io.ByteArrayInputStream;
 import com.perimity.user.entity.StudentImportBatch;
 import com.perimity.user.entity.StudentImportRow;
 import com.perimity.user.entity.StudentProfile;
@@ -69,6 +74,8 @@ public class StudentImportService {
     private final StudentImportBatchRepository batchRepository;
     private final StudentImportRowRepository rowRepository;
     private final StudentProfileRepository studentRepository;
+    private final DrivePhotoFetcher photoFetcher;
+    private final StorageService storage;
     private final CurrentUser currentUser;
     private final String defaultCountryCode;
 
@@ -78,6 +85,8 @@ public class StudentImportService {
                                 StudentImportBatchRepository batchRepository,
                                 StudentImportRowRepository rowRepository,
                                 StudentProfileRepository studentRepository,
+                                DrivePhotoFetcher photoFetcher,
+                                StorageService storage,
                                 CurrentUser currentUser,
                                 @Value("${perimity.import.default-country-code:+91}")
                                 String defaultCountryCode) {
@@ -87,6 +96,8 @@ public class StudentImportService {
         this.batchRepository = batchRepository;
         this.rowRepository = rowRepository;
         this.studentRepository = studentRepository;
+        this.photoFetcher = photoFetcher;
+        this.storage = storage;
         this.currentUser = currentUser;
         this.defaultCountryCode = defaultCountryCode;
     }
@@ -290,6 +301,7 @@ public class StudentImportService {
                             .build());
 
             applyRow(profile, row, batch.getUploadedBy());
+            attachPhoto(profile, row, batch.getCampusId());
 
             if (profile.getPhotoS3Key() == null) {
                 missingPhoto++;
@@ -349,6 +361,52 @@ public class StudentImportService {
         profile.setVerifiedAt(LocalDateTime.now());
         profile.setSubmittedAt(LocalDateTime.now());
         profile.setVerificationRemarks(null);
+    }
+
+    /**
+     * Pulls this row's photo from Drive and stores it against the profile.
+     *
+     * ==================================================================
+     *  SILENT ON FAILURE, AND THAT IS THE POINT
+     * ==================================================================
+     * Drive being off, unreachable, or holding something that is not an image
+     * all end the same way: no photo on this profile, the row still imported,
+     * the batch's missingPhotoCount incremented. Those students appear on the
+     * progress screen as needing one, and no pass issues until they upload it
+     * in the app.
+     *
+     * The alternative - failing the row - would mean a Google outage during an
+     * intake costs a hundred students their accounts. The account and the
+     * verified details are worth having on their own; the photo can arrive
+     * later, and the rule that a pass needs one is enforced where passes are
+     * issued rather than here.
+     *
+     * An existing photo is NOT replaced. On a re-import, a student who has
+     * already uploaded a better picture in the app keeps it - the sheet is a
+     * starting point, not the authority.
+     */
+    private void attachPhoto(StudentProfile profile, StudentImportRow row, Long campusId) {
+        if (profile.getPhotoS3Key() != null || row.getPhotoDriveId() == null) {
+            return;
+        }
+        photoFetcher.fetch(row.getPhotoDriveId()).ifPresent(photo -> {
+            try {
+                String key = StorageKeys.studentPhoto(
+                        campusId, profile.getUserId(), photo.filename());
+                StoredObject stored = storage.put(
+                        key,
+                        new ByteArrayInputStream(photo.bytes()),
+                        photo.bytes().length,
+                        photo.contentType());
+                profile.setPhotoS3Key(stored.key());
+
+            } catch (RuntimeException ex) {
+                // Storage failed rather than Drive. Same outcome for the
+                // student, and the batch carries on.
+                log.warn("Could not store the photo for account {}: {}",
+                        profile.getUserId(), ex.getMessage());
+            }
+        });
     }
 
     /**

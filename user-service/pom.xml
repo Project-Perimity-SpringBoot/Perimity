@@ -203,6 +203,41 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.3.0</version>
         </dependency>
+
+        <!-- ============================================================
+             Google Drive - fetches the passport photos students upload
+             through the intake form. A file-upload question puts a Drive
+             LINK in the responses sheet, not the image.
+
+             THREE ARTIFACTS, ALL THREE NEEDED:
+               google-api-services-drive  the Drive v3 model and requests
+               google-api-client          the HTTP and JSON plumbing
+               google-auth-library        service-account credentials
+
+             Pulling only the first compiles and then fails at runtime with a
+             NoClassDefFoundError for a transport class, which is a confusing
+             way to discover a missing dependency.
+
+             OPTIONAL AT RUNTIME. GOOGLE_DRIVE_ENABLED=false means none of this
+             is touched, and the import runs without photos. The jars are still
+             on the classpath - roughly 3MB - which is the price of making the
+             feature a config switch rather than a build profile.
+             ============================================================ -->
+        <dependency>
+            <groupId>com.google.apis</groupId>
+            <artifactId>google-api-services-drive</artifactId>
+            <version>v3-rev20220815-2.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.api-client</groupId>
+            <artifactId>google-api-client</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.auth</groupId>
+            <artifactId>google-auth-library-oauth2-http</artifactId>
+            <version>1.19.0</version>
+        </dependency>
     </dependencies>
 
     <build>
