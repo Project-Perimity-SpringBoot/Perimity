@@ -54,6 +54,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    * browser hung forever instead of redirecting to /login. Deep links, a
    * bookmarked /guard, or anyone opening the app signed out all saw a dead page.
    *
+   * It stayed hidden because in normal use you sign in first, so the redirect
+   * path is never exercised. Neither tsc nor eslint can see it.
+   *
    * 'unknown' means "there is a token and we have not confirmed it yet", which
    * is exactly the window SessionBootstrap covers with its own spinner while
    * GET /api/auth/me is in flight. Without a token there is nothing to confirm.
