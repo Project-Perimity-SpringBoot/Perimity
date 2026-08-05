@@ -5,6 +5,9 @@ import com.perimity.user.bulk.ImportRowValidator;
 import com.perimity.user.bulk.ResponseSheetParser;
 import com.perimity.user.bulk.TemporaryPasswords;
 import com.perimity.user.client.AuthFeignClient;
+import com.perimity.user.dto.response.ImportBatchResponse;
+import com.perimity.user.dto.response.ImportRowResponse;
+import com.perimity.user.dto.response.PageResponse;
 import com.perimity.user.storage.StorageKeys;
 import com.perimity.user.storage.StorageService;
 import com.perimity.user.storage.StoredObject;
@@ -28,6 +31,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -165,6 +169,52 @@ public class StudentImportService {
                 batch.getId(), rows.size(), rows.size() - rejected, rejected, batch.getFilename());
 
         return batchRepository.save(batch);
+    }
+
+    // ---------------------------------------------------------------- read
+
+    /**
+     * One batch, campus-scoped.
+     *
+     * findByIdAndCampusId rather than findById, and the difference is not
+     * cosmetic: a bare id lookup would let a faculty member on one campus poll
+     * another campus's import - and the counts alone leak how many students
+     * that campus is onboarding.
+     *
+     * Another campus's batch reads as "not found" rather than "forbidden",
+     * because a 403 confirms the batch exists.
+     */
+    @Transactional(readOnly = true)
+    public StudentImportBatch getBatch(Long batchId) {
+        return batchRepository.findByIdAndCampusId(batchId, currentUser.campusId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Import batch", batchId));
+    }
+
+    /**
+     * The rows of a batch, optionally filtered by outcome.
+     *
+     * getBatch first, so the campus check happens before any row is read. Going
+     * straight to the rows would answer for a batch the caller may not see.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<ImportRowResponse> rows(Long batchId,
+                                                ImportRowOutcome outcome,
+                                                Pageable pageable) {
+        StudentImportBatch batch = getBatch(batchId);
+
+        var page = outcome == null
+                ? rowRepository.findByBatchIdOrderByRowNumberAsc(batch.getId(), pageable)
+                : rowRepository.findByBatchIdAndOutcomeOrderByRowNumberAsc(
+                        batch.getId(), outcome, pageable);
+
+        return PageResponse.from(page, ImportRowResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ImportBatchResponse> listBatches(Pageable pageable) {
+        return PageResponse.from(
+                batchRepository.findByCampusIdOrderByIdDesc(currentUser.campusId(), pageable),
+                ImportBatchResponse::from);
     }
 
     // ------------------------------------------------------------- confirm
