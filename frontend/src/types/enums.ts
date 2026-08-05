@@ -181,3 +181,34 @@ export const isTerminalJob = (s: JobStatus): boolean => s === 'DONE' || s === 'F
 
 export const isSettledEmail = (s: EmailStatus): boolean =>
   s === 'SENT' || s === 'NO_RECIPIENT';
+
+export const ID_TYPES = [
+  'AADHAAR', 'PAN', 'DRIVING_LICENCE', 'PASSPORT', 'VOTER_ID', 'OTHER',
+] as const;
+export type IdType = (typeof ID_TYPES)[number];
+
+export const VISITOR_TYPES = [
+  'GUEST', 'PARENT', 'VENDOR', 'CONTRACTOR', 'ALUMNI', 'CANDIDATE', 'OTHER',
+] as const;
+export type VisitorType = (typeof VISITOR_TYPES)[number];
+
+export const PURPOSE_TYPES = [
+  'MEETING', 'INTERVIEW', 'DELIVERY', 'MAINTENANCE', 'EVENT', 'ACADEMIC',
+  'PERSONAL', 'OTHER',
+] as const;
+export type PurposeType = (typeof PURPOSE_TYPES)[number];
+
+/** Wire values are enum names; these are what a human reads. */
+export const ID_TYPE_LABELS: Readonly<Record<IdType, string>> = {
+  AADHAAR: 'Aadhaar', PAN: 'PAN', DRIVING_LICENCE: 'Driving licence',
+  PASSPORT: 'Passport', VOTER_ID: 'Voter ID', OTHER: 'Other',
+};
+export const VISITOR_TYPE_LABELS: Readonly<Record<VisitorType, string>> = {
+  GUEST: 'Guest', PARENT: 'Parent', VENDOR: 'Vendor', CONTRACTOR: 'Contractor',
+  ALUMNI: 'Alumni', CANDIDATE: 'Interview candidate', OTHER: 'Other',
+};
+export const PURPOSE_TYPE_LABELS: Readonly<Record<PurposeType, string>> = {
+  MEETING: 'Meeting', INTERVIEW: 'Interview', DELIVERY: 'Delivery',
+  MAINTENANCE: 'Maintenance or service', EVENT: 'Event', ACADEMIC: 'Academic',
+  PERSONAL: 'Personal', OTHER: 'Other',
+};

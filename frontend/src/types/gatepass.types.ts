@@ -1,4 +1,4 @@
-import type { BatchStatus, PassStatus, PassType, RequestStatus, RequestableStatus } from './enums';
+import type { BatchStatus, PassStatus, PassType, RequestStatus, RequestableStatus, Gender, IdType, PurposeType, VisitorType } from './enums';
 
 /* ── Responses ── */
 
@@ -165,7 +165,15 @@ export interface VisitorRequestCreateRequest {
   visitorName: string;
   visitorEmail: string;
   visitorPhone?: string | null;
-  purpose: string;
+  /** Optional detail. The category is purposeType. */
+  purpose?: string | null;
+  purposeType: PurposeType;
+  visitorType: VisitorType;
+  gender?: Gender | null;
+  /** ISO yyyy-MM-dd. Date of birth, never an age - an age goes stale. */
+  dateOfBirth?: string | null;
+  idType?: IdType | null;
+  idNumber?: string | null;
   /** Optional. Only when the visitor knows who invited them. */
   hostUserId?: number | null;
   eventId?: number | null;
