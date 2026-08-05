@@ -7,18 +7,17 @@ import { Button, Field, Input, NativeSelect, Textarea } from '@ui/index';
 import { PageHeader } from '@components/data';
 import { ErrorState, FormError } from '@components/feedback';
 import { visitorRequestApi } from '@lib/api/services/gatepass.api';
-import { facultyApi } from '@lib/api/services/user.api';
-import { profileKeys, requestKeys } from '@lib/query/keys';
+import { campusApi } from '@lib/api/services/campus.api';
+import { campusKeys, requestKeys } from '@lib/query/keys';
 import { LIMITS } from '@lib/validation/patterns';
 import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
-import type { FacultyProfileResponse } from '@/types/user.types';
 import { visitorRequestSchema, type VisitorRequestValues } from '../schemas/visitor.schemas';
 
 /**
  * Phase 5 screen 2 — apply for a visitor pass.
  *
- * Name, email, phone, purpose, host, from, to. No semester — a visitor has
+ * Name, email, phone, purpose, campus, from, to. No semester — a visitor has
  * none. No document upload — nobody has agreed to meet this person yet, and
  * asking a stranger for ID before that is friction that buys nothing. No
  * password, on this or any visitor screen.
@@ -29,18 +28,18 @@ import { visitorRequestSchema, type VisitorRequestValues } from '../schemas/visi
  * mismatch between who is signed in and who the request names.
  *
  * ==========================================================================
- * BLOCKER: THE HOST PICKER CANNOT SHOW NAMES
+ * CAMPUS, NOT A HOST
  * ==========================================================================
- * GET /api/user/faculty is the right endpoint and is correctly readable by any
- * signed-in user — its own Javadoc says "visitors pick a host from it". But
- * FacultyProfileResponse carries no name: only userId, departmentName,
- * designation and employeeId.
+ * The visitor picks the campus they are visiting; any faculty member of that
+ * campus can approve it. The host picker this replaced could not show names -
+ * FacultyProfileResponse carries only userId, departmentName, designation and
+ * employeeId - so a visitor meeting Dr. Rao had to guess between three
+ * Assistant Professors, and guessing wrong parked the request in an inbox
+ * nobody was watching.
  *
- * So a visitor who knows they are meeting Dr. Rao in Computer Science can
- * narrow to the department and the designation, and then has to guess. The
- * field says so rather than pretending the list is complete.
- *
- * Fixing it is one field on the DTO in user-service. Raised with Mukul.
+ * hostUserId still exists on the DTO and is still accepted when a visitor
+ * genuinely knows who invited them. It is no longer required for the request
+ * to be actionable.
  */
 export default function ApplyPage() {
   const navigate = useNavigate();
@@ -48,9 +47,14 @@ export default function ApplyPage() {
   const { identity } = useAuth();
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
-  const hosts = useQuery({
-    queryKey: profileKeys.facultyList({ page: 0, size: 100 }),
-    queryFn: () => facultyApi.list({ page: 0, size: 100 }),
+  /*
+   * Active campuses only. The visitor is signed in by the time they reach this
+   * screen, so the authenticated listing is available - blocker B12 only bites
+   * on the registration page, which has no token yet.
+   */
+  const campuses = useQuery({
+    queryKey: campusKeys.list(false),
+    queryFn: () => campusApi.list(false),
   });
 
   const {
@@ -59,7 +63,7 @@ export default function ApplyPage() {
     resolver: zodResolver(visitorRequestSchema),
     defaultValues: {
       visitorName: '', visitorEmail: identity?.email ?? '', visitorPhone: '', purpose: '',
-      hostUserId: undefined, visitFrom: '', visitTo: '',
+      campusId: undefined, visitFrom: '', visitTo: '',
     },
   });
   const applyApiErrors = useApiFormErrors<VisitorRequestValues>(setError, setFormErrors);
@@ -72,10 +76,11 @@ export default function ApplyPage() {
         // Empty string would store a blank phone rather than none.
         visitorPhone: values.visitorPhone ? values.visitorPhone : null,
         purpose: values.purpose,
-        hostUserId: values.hostUserId,
+        // Chosen by the visitor now. The server validates that it exists and
+        // scopes the approval queue to it.
+        campusId: values.campusId,
         visitFrom: values.visitFrom,
         visitTo: values.visitTo,
-        // campusId is @JsonIgnore server-side. Not sent.
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: requestKeys.all });
@@ -84,8 +89,8 @@ export default function ApplyPage() {
     onError: (error) => { setFormErrors([]); applyApiErrors(error); },
   });
 
-  if (hosts.isError) {
-    return <ErrorState error={hosts.error} onRetry={() => void hosts.refetch()} />;
+  if (campuses.isError) {
+    return <ErrorState error={campuses.error} onRetry={() => void campuses.refetch()} />;
   }
 
   return (
@@ -146,24 +151,24 @@ export default function ApplyPage() {
         </Field>
 
         <Field
-          label="Who are you visiting"
+          label="Which campus are you visiting"
           required
-          hint="Names are not available on this list yet — pick by department and designation."
-          error={errors.hostUserId?.message}
+          hint="Any faculty member of that campus can approve your request."
+          error={errors.campusId?.message}
         >
           {({ id, describedBy }) => (
             <NativeSelect
               id={id} aria-describedby={describedBy}
-              disabled={hosts.isPending}
-              invalid={Boolean(errors.hostUserId)}
-              {...register('hostUserId')}
+              disabled={campuses.isPending}
+              invalid={Boolean(errors.campusId)}
+              {...register('campusId')}
             >
               <option value="">
-                {hosts.isPending ? 'Loading hosts…' : 'Choose a host…'}
+                {campuses.isPending ? 'Loading campuses…' : 'Choose a campus…'}
               </option>
-              {(hosts.data?.items ?? []).map((host) => (
-                <option key={host.id} value={host.userId}>
-                  {hostLabel(host)}
+              {(campuses.data ?? []).map((campus) => (
+                <option key={campus.id} value={campus.id}>
+                  {campus.name}
                 </option>
               ))}
             </NativeSelect>
@@ -220,8 +225,3 @@ export default function ApplyPage() {
  * · F-1042" — enough to narrow down, not enough to be certain, which is
  * exactly what the blocker above costs the visitor.
  */
-function hostLabel(host: FacultyProfileResponse): string {
-  return [host.designation, host.departmentName, host.employeeId]
-    .filter(Boolean)
-    .join(' · ') || `Faculty member #${host.userId}`;
-}
