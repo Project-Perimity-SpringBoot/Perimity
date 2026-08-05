@@ -29,8 +29,20 @@ public final class ValidationPatterns {
     public static final String PHONE_MESSAGE =
             "Enter a valid phone number in international format, digits only, optional leading +";
 
-    /** Unicode-aware: Devanagari, Arabic and accented Latin names all pass. */
-    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M}\\s.'-]{1,119}$";
+    /**
+     * Unicode-aware: Devanagari, Arabic and accented Latin names all pass.
+     *
+     * NOTE THE LITERAL SPACE, not \s. Inside a character class \s also matches
+     * \n, \r and \t, so a name could carry a line break.
+     *
+     * This is the one that mattered most. THIS is the authoritative name - it is
+     * what a gate pass carries and what an entry log records. A name containing
+     * a newline is a log-forgery vector: one field becomes two log lines, and an
+     * attacker chooses what the second one says. Register somebody as
+     * "Ravi\n2026-08-05 09:14:22 INFO Entry GRANTED gate=MAIN" and the audit
+     * trail contains an entry that never happened.
+     */
+    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]{1,119}$";
     public static final String PERSON_NAME_MESSAGE =
             "Name may contain letters, spaces, apostrophes, hyphens and full stops only";
 

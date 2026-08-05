@@ -13,8 +13,43 @@ export const RX = {
   /** E.164-ish: optional +, no leading zero, 7–15 digits. */
   PHONE: /^\+?[1-9]\d{6,14}$/,
 
-  /** Unicode letters and marks. 2–120 characters. */
-  PERSON_NAME: /^[\p{L}\p{M}][\p{L}\p{M}\s.'-]{1,119}$/u,
+  /**
+   * Unicode letters and marks. 2–120 characters.
+   *
+   * LITERAL SPACE, not \s. This used to be \s, mirroring the server before the
+   * server was fixed: \s inside a character class also matches \n, \r and \t,
+   * and a name carrying a line break splits one field into two log lines with
+   * the second one attacker-controlled. All six services now use a literal
+   * space, so this does too.
+   *
+   * Had this been left as \s it would be the LOOSER of the two rules — a tabbed
+   * name would sail past the form and come back as a 400 pointing at a field
+   * the user cannot see anything wrong with.
+   */
+  PERSON_NAME: /^[\p{L}\p{M}][\p{L}\p{M} .'-]{1,119}$/u,
+
+  /**
+   * ONE part of a name — first, middle or last on its own. Mirrors
+   * ValidationPatterns.PERSON_NAME_PART in user-service.
+   *
+   * Same character set as PERSON_NAME, shorter: 60 rather than 120, matching
+   * the column. Spaces are still allowed inside a single part because "van der
+   * Berg" and "Del Toro" are single surnames.
+   *
+   * Matches the empty string, as the server's does — required-ness is a
+   * separate rule, and doubling it up here would produce two error messages for
+   * one blank field.
+   */
+  PERSON_NAME_PART: /^$|^[\p{L}\p{M}][\p{L}\p{M} .'-]{0,59}$/u,
+
+  /** Country dialling code: + followed by 1–4 digits, no leading zero. */
+  PHONE_COUNTRY_CODE: /^\+[1-9][0-9]{0,3}$/,
+
+  /** Subscriber number WITHOUT the country code. Digits only. */
+  PHONE_NATIONAL: /^[0-9]{4,15}$/,
+
+  /** An Indian mobile: exactly 10 digits starting 6–9. Applied only when the code is +91. */
+  PHONE_NATIONAL_IN: /^[6-9][0-9]{9}$/,
 
   /**
    * 8–72, one lowercase, one uppercase, one digit. NO symbol is required and
@@ -23,14 +58,19 @@ export const RX = {
   PASSWORD_POLICY: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,72}$/,
 
   CAMPUS_CODE: /^[A-Za-z0-9][A-Za-z0-9-]{1,31}$/,
-  DISPLAY_NAME: /^[\p{L}\p{N}][\p{L}\p{N}\s.,'&()/-]{1,149}$/u,
+
+  /** Literal space, not \s — campus-service's DISPLAY_NAME was fixed the same way. */
+  DISPLAY_NAME: /^[\p{L}\p{N}][\p{L}\p{N} .,'&()/-]{1,149}$/u,
   CONFIG_KEY: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
   IDENTIFIER_CODE: /^[A-Za-z0-9][A-Za-z0-9/-]{0,31}$/,
   DEPARTMENT_CODE: /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,31}$/,
 
-  /** gatepass TITLE is 3–180; user-service TITLE is 1–150. They genuinely differ. */
-  TITLE_GATEPASS: /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}\s.,'&()+/-]{2,179}$/u,
-  TITLE_USER: /^[\p{L}\p{N}][\p{L}\p{N}\s.,'&()/-]{0,149}$/u,
+  /**
+   * gatepass TITLE is 3–180; user-service TITLE is 1–150. They genuinely differ.
+   * Both use a literal space, not \s, for the reason given on PERSON_NAME.
+   */
+  TITLE_GATEPASS: /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .,'&()+/-]{2,179}$/u,
+  TITLE_USER: /^[\p{L}\p{N}][\p{L}\p{N} .,'&()/-]{0,149}$/u,
 
   GOV_ID: /^$|^\d{12}$/,
   OTP_CODE: /^\d{6}$/,
@@ -60,6 +100,11 @@ export const LIMITS = {
   departmentName: { max: 150 },
   departmentCode: { max: 32 },
   identifierCode: { max: 32 },
+  /** One part of a name — matches the 60-char columns on student_profiles. */
+  personNamePart: { max: 60 },
+  /** Subscriber number without the country code. */
+  phoneNational: { min: 4, max: 15 },
+  verificationRemarks: { max: 500 },
   designation: { max: 100 },
   qualification: { max: 150 },
   gateName: { max: 100 },

@@ -54,6 +54,27 @@ public class UserAdminController {
      * granted to anyone: visitors self-register, and bulk onboarding mints
      * lightweight visitor identities through InternalUserController with the
      * shared key, which does not pass through here.
+     *
+     * ==========================================================================
+     * THIS WAS BRIEFLY WIDENED AND DELIBERATELY PUT BACK
+     * ==========================================================================
+     * On 2026-08-05 a Campus Admin hitting "a CAMPUS_ADMIN may not create a
+     * STUDENT account" looked like a bug, and the map was opened to all roles
+     * below SUPER_ADMIN. The team confirmed the original rule is the intended
+     * policy, so it is restored.
+     *
+     * Recording it here because the error message alone does not explain
+     * itself, and the next person to meet it will reach the same wrong
+     * conclusion. The two constraints are:
+     *
+     *   students   come from Faculty, who know who is actually in their class,
+     *              or from bulk onboarding
+     *   admins     are appointed by the Super Admin, because a campus admin
+     *              creating a peer is a lateral privilege grant that survives
+     *              the original account being deactivated
+     *
+     * If this needs revisiting, revisit the POLICY with the team - do not widen
+     * the map because a screen threw a 403.
      */
     private static final Map<Role, Set<Role>> CREATABLE = Map.of(
             Role.CAMPUS_ADMIN, EnumSet.of(Role.FACULTY, Role.GUARD),

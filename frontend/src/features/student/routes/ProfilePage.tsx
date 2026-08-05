@@ -4,6 +4,8 @@ import { BadgeCheck, Pencil } from 'lucide-react';
 import { Avatar, Button, SkeletonText } from '@ui/index';
 import { ErrorState } from '@components/feedback';
 import { DescriptionList, PageHeader } from '@components/data';
+import { AuthedImage } from '@components/upload';
+import { ProfileVerificationBadge } from '@components/pass/StatusBadge';
 import { studentApi } from '@lib/api/services/user.api';
 import { passApi } from '@lib/api/services/gatepass.api';
 import { profileKeys, passKeys } from '@lib/query/keys';
@@ -74,11 +76,66 @@ export default function ProfilePage() {
       />
 
       <section className="surface-card flex items-center gap-[var(--sp-4)] p-[var(--sp-6)]">
-        <Avatar name={identity?.name ?? 'Student'} src={photo.data?.url} className="size-16" />
+        {/*
+          AuthedImage rather than Avatar's src. In local-storage mode the photo
+          URL sits behind the JWT filter, and a browser sends no Authorization
+          header with an image request — so Avatar's img always failed here and
+          quietly fell back to initials. That fallback is exactly why the broken
+          photo went unnoticed for so long: it looked like a deliberate design.
+
+          Avatar is still the fallback, so a student with no photo sees the same
+          initials circle as before.
+        */}
+        <AuthedImage
+          url={photo.data?.url}
+          alt="Your profile photo"
+          className="size-16 rounded-[var(--r-circle)]"
+          fallback={<Avatar name={identity?.name ?? 'Student'} className="size-16" />}
+        />
         <div className="min-w-0">
           <h2 className="text-h3 truncate text-[var(--ink-900)]">{identity?.name}</h2>
           <p className="text-small truncate text-[var(--ink-500)]">{identity?.email}</p>
         </div>
+      </section>
+
+      {/* ---------------------------------------------------------------
+          Verification state.
+
+          A student who submitted their details three days ago has one
+          question — has anyone looked yet — and this is the page they open
+          to ask it. Leaving the answer only on the edit form meant the
+          status lived behind a button labelled for editing.
+
+          Each state carries the next action, because a status with no verb
+          is just a label. REJECTED shows the reviewer's note here rather
+          than only on the form: it is the reason the student needs to act.
+         --------------------------------------------------------------- */}
+      <section className="surface-card flex flex-wrap items-center gap-[var(--sp-3)] p-[var(--sp-4)]">
+        <ProfileVerificationBadge status={p.verificationStatus} />
+
+        <p className="text-small min-w-0 flex-1 text-[var(--ink-500)]">
+          {p.verificationStatus === 'VERIFIED'
+            && 'Your details have been checked by faculty.'}
+          {p.verificationStatus === 'SUBMITTED'
+            && 'Faculty are checking your details. Nothing to do for now.'}
+          {p.verificationStatus === 'DRAFT'
+            && 'Your details have not been sent for checking yet.'}
+          {p.verificationStatus === 'REJECTED' && (
+            <>
+              Faculty asked for changes
+              {/* Free text written by another user. Rendered as text, never HTML. */}
+              {p.verificationRemarks ? `: ${p.verificationRemarks}` : '.'}
+            </>
+          )}
+        </p>
+
+        {p.verificationStatus !== 'SUBMITTED' && (
+          <Button variant="secondary" asChild>
+            <Link to="/student/profile/details">
+              {p.verificationStatus === 'VERIFIED' ? 'View details' : 'Fill in details'}
+            </Link>
+          </Button>
+        )}
       </section>
 
       <section className="surface-card p-[var(--sp-6)]">
