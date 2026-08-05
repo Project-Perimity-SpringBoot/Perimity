@@ -62,8 +62,14 @@ public final class ValidationPatterns {
     public static final String PERSON_NAME_MESSAGE =
             "Name may contain letters, spaces, apostrophes, hyphens and full stops only";
 
-    /** An event or programme title: letters, digits and ordinary punctuation. */
-    public static final String TITLE = "^[\\p{L}\\p{M}\\p{N}][\\p{L}\\p{M}\\p{N}\\s.,'&()+/-]{2,179}$";
+    /**
+     * An event or programme title: letters, digits and ordinary punctuation.
+     *
+     * LITERAL SPACE, not \s - same reasoning as PERSON_NAME above, which was
+     * already fixed. \s inside a character class also matches \n, \r and \t, and
+     * an event title is written to logs and rendered in the pass register.
+     */
+    public static final String TITLE = "^[\\p{L}\\p{M}\\p{N}][\\p{L}\\p{M}\\p{N} .,'&()+/-]{2,179}$";
 
     public static final String TITLE_MESSAGE =
             "Title may contain letters, digits, spaces and basic punctuation only";

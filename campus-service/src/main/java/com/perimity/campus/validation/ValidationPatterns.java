@@ -27,8 +27,15 @@ public final class ValidationPatterns {
     public static final String CAMPUS_CODE_MESSAGE =
             "Campus code may contain letters, digits and hyphens only, 2 to 32 characters";
 
-    /** A human-facing name for a campus or gate. Unicode-aware. */
-    public static final String DISPLAY_NAME = "^[\\p{L}\\p{N}][\\p{L}\\p{N}\\s.,'&()/-]{1,149}$";
+    /**
+     * A human-facing name for a campus or gate. Unicode-aware.
+     *
+     * LITERAL SPACE, not \s. Inside a character class \s also matches \n, \r and
+     * \t, and a gate name with a newline in it is a log-forgery vector - gate
+     * names appear in every scan log line guard-service writes, so this one gets
+     * into the audit trail more often than any other field in the system.
+     */
+    public static final String DISPLAY_NAME = "^[\\p{L}\\p{N}][\\p{L}\\p{N} .,'&()/-]{1,149}$";
     public static final String DISPLAY_NAME_MESSAGE =
             "Name contains characters that are not allowed";
 

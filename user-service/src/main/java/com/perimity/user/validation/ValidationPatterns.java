@@ -29,10 +29,37 @@ public final class ValidationPatterns {
     public static final String PHONE_MESSAGE =
             "Enter a valid phone number in international format, digits only, optional leading +";
 
-    /** Unicode-aware: Devanagari, Arabic and accented Latin names all pass. */
-    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M}\\s.'-]{1,119}$";
+    /**
+     * Unicode-aware: Devanagari, Arabic and accented Latin names all pass.
+     *
+     * NOTE THE LITERAL SPACE, not \s. Inside a character class \s also matches
+     * \n, \r and \t, so a name could carry a newline - and these values are
+     * written to logs and rendered in a register. A name containing a line
+     * break is a log-forgery vector: one field becomes two log lines, and the
+     * second one can be made to look like a real entry.
+     *
+     * guard-service fixed this in its own copy; this one still had \s.
+     */
+    public static final String PERSON_NAME = "^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]{1,119}$";
     public static final String PERSON_NAME_MESSAGE =
             "Name may contain letters, spaces, apostrophes, hyphens and full stops only";
+
+    /**
+     * ONE part of a name - a first, middle or last name on its own.
+     *
+     * Separate from PERSON_NAME because the rules genuinely differ. A full name
+     * legitimately contains spaces between its parts; a single part usually
+     * does not, but cannot forbid them either - "van der Berg" and "Del Toro"
+     * are single surnames with spaces in them.
+     *
+     * So the character set is the same and only the LENGTH differs: 60 rather
+     * than 120, matching the column. The value of having a separate constant is
+     * that the intent is visible at the field, and if the rules ever do diverge
+     * there is somewhere for that to happen.
+     */
+    public static final String PERSON_NAME_PART = "^$|^[\\p{L}\\p{M}][\\p{L}\\p{M} .'-]{0,59}$";
+    public static final String PERSON_NAME_PART_MESSAGE =
+            "Use letters, spaces, apostrophes, hyphens and full stops only";
 
     /**
      * Roll number / employee id. Campus-agnostic: letters, digits, hyphen and
@@ -61,7 +88,8 @@ public final class ValidationPatterns {
             "Invalid storage key: no leading slash and no parent-directory segments";
 
     /** A generic short title / label. */
-    public static final String TITLE = "^[\\p{L}\\p{N}][\\p{L}\\p{N}\\s.,'&()/-]{0,149}$";
+    /* Literal space, not \s - same log-forgery reasoning as PERSON_NAME above. */
+    public static final String TITLE = "^[\\p{L}\\p{N}][\\p{L}\\p{N} .,'&()/-]{0,149}$";
     public static final String TITLE_MESSAGE =
             "Title contains characters that are not allowed";
 }
