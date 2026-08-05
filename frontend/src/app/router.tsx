@@ -83,6 +83,7 @@ const FacultyAddStudent = lazy(() => import('@features/faculty/routes/AddStudent
 const FacultyStudentVerification = lazy(
   () => import('@features/faculty/routes/StudentVerificationPage'),
 );
+const FacultyStudentImport = lazy(() => import('@features/faculty/routes/StudentImportPage'));
 const FacultyOnboarding = lazy(() => import('@features/faculty/routes/OnboardingPage'));
 const FacultyBatchProgress = lazy(() => import('@features/faculty/routes/BatchProgressPage'));
 const FacultyEvents = lazy(() => import('@features/faculty/routes/EventsPage'));
@@ -219,6 +220,14 @@ export const router = createBrowserRouter([
                   {
                     path: '/faculty/students/verification',
                     element: <FacultyStudentVerification />,
+                  },
+                  /* Bulk onboarding from a Google Form responses sheet. Separate
+                     from /faculty/onboarding, which is Sanjay's visitor bulk
+                     upload in gatepass-service - different domain, different
+                     service, same word. */
+                  {
+                    path: '/faculty/students/import',
+                    element: <FacultyStudentImport />,
                   },
                   { path: '/faculty/onboarding', element: <FacultyOnboarding /> },
                   {
