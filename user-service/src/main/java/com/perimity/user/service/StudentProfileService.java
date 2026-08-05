@@ -89,14 +89,63 @@ public class StudentProfileService {
     public StudentProfileResponse create(StudentProfileCreateDto dto) {
         currentUser.requireSameCampus(dto.getCampusId());
 
-        if (studentRepository.existsByUserId(dto.getUserId())) {
-            throw new IllegalStateException(
-                    "That account already has a student profile.");
+        String rollNo = trimToNull(dto.getRollNo());
+        guard.requireSelectableDepartment(dto.getCampusId(), dto.getDepartmentId());
+
+        /*
+         * ==================================================================
+         *  CREATE-OR-FILL, NOT CREATE-OR-FAIL
+         * ==================================================================
+         * This used to throw "That account already has a student profile" when
+         * a row existed. That was right when nothing else created profiles.
+         *
+         * It is wrong now. A user.created event provisions an EMPTY profile the
+         * moment the account is made, so by the time the Add Student screen
+         * makes its second call the row usually already exists - and which of
+         * the two arrives first is a race between a queue and an HTTP round
+         * trip. Failing on the losing side would break the one screen that has
+         * always done this correctly, intermittently, which is the worst way to
+         * break anything.
+         *
+         * So an existing row is filled in rather than refused. The caller's
+         * intent - "this student has this roll number and department" - is the
+         * same either way, and the endpoint is staff-only and campus-scoped.
+         *
+         * The self-declared fields are NOT touched here. If a student has
+         * already entered their own name or phone number, a staff member
+         * setting a roll number must not wipe it, and their verification status
+         * must not silently change.
+         */
+        Optional<StudentProfile> existing = studentRepository.findByUserId(dto.getUserId());
+
+        if (existing.isPresent()) {
+            StudentProfile profile = existing.get();
+            requireVisible(profile);
+            requireRollNoAvailable(dto.getCampusId(), rollNo, profile.getId());
+
+            if (rollNo != null) {
+                profile.setRollNo(rollNo);
+            }
+            if (dto.getDepartmentId() != null) {
+                profile.setDepartmentId(dto.getDepartmentId());
+            }
+            if (trimToNull(dto.getGovId()) != null) {
+                profile.setGovId(trimToNull(dto.getGovId()));
+            }
+            if (trimToNull(dto.getAddress()) != null) {
+                profile.setAddress(trimToNull(dto.getAddress()));
+            }
+            if (trimToNull(dto.getPhotoS3Key()) != null) {
+                profile.setPhotoS3Key(trimToNull(dto.getPhotoS3Key()));
+            }
+
+            StudentProfile saved = studentRepository.save(profile);
+            log.info("Filled in auto-provisioned student profile {} for account {}.",
+                    saved.getId(), saved.getUserId());
+            return StudentProfileResponse.from(saved, guard.departmentName(saved.getDepartmentId()));
         }
 
-        String rollNo = trimToNull(dto.getRollNo());
         requireRollNoAvailable(dto.getCampusId(), rollNo, null);
-        guard.requireSelectableDepartment(dto.getCampusId(), dto.getDepartmentId());
 
         StudentProfile profile = StudentProfile.builder()
                 .userId(dto.getUserId())
@@ -270,7 +319,7 @@ public class StudentProfileService {
     public StudentProfileResponse updateOwnDetails(Long userId, StudentSelfDetailsDto dto) {
         currentUser.requireSelfOrStaff(userId);
 
-        StudentProfile profile = requireProfileOf(userId);
+        StudentProfile profile = findOrCreateProfileOf(userId);
         requireEditable(profile);
 
         profile.setFirstName(trimToNull(dto.getFirstName()));
@@ -501,6 +550,51 @@ public class StudentProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No student profile exists for account " + userId));
         return requireVisible(profile);
+    }
+
+    /**
+     * The student's profile, created empty if it does not exist yet.
+     *
+     * ==================================================================
+     *  WHY A PUT CREATES THE ROW
+     * ==================================================================
+     * An account in auth-service and a profile in user-service are two separate
+     * records, and until now exactly ONE thing in the whole product created the
+     * second one: the faculty Add Student screen, client-side, in a step after
+     * the account. Any account that arrived another way - or whose second step
+     * failed - could sign in and then found every profile screen answering
+     * "No student profile exists for account 21".
+     *
+     * The student could not fix that themselves, and no screen anywhere let
+     * anyone else fix it either. The account was simply stuck.
+     *
+     * PUT is create-or-replace by definition, so a PUT to "my details" creating
+     * the row is what the verb already means rather than a special case. It also
+     * makes the whole class of orphaned accounts self-healing: the student opens
+     * their own form, fills it in, and the row appears.
+     *
+     * SAFE, because nothing here is caller-supplied. userId and campusId both
+     * come from the verified token, so this cannot mint a profile for somebody
+     * else or attach one to another campus. rollNo, departmentId and govId are
+     * deliberately left null - those are staff decisions, and a student
+     * inventing their own roll number is exactly what the create DTO refuses.
+     *
+     * The unique index on user_id is the backstop: two racing requests cannot
+     * produce two profiles, one gets a constraint violation.
+     */
+    private StudentProfile findOrCreateProfileOf(Long userId) {
+        return studentRepository.findByUserId(userId)
+                .map(this::requireVisible)
+                .orElseGet(() -> {
+                    Long campusId = currentUser.campusId();
+                    StudentProfile created = studentRepository.save(StudentProfile.builder()
+                            .userId(userId)
+                            .campusId(campusId)
+                            .build());
+                    log.info("Created student profile {} on first use for account {} (campus {}).",
+                            created.getId(), userId, campusId);
+                    return created;
+                });
     }
 
     private static boolean isBlank(String value) {

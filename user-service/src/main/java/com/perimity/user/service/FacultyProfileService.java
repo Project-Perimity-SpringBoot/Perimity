@@ -61,17 +61,52 @@ public class FacultyProfileService {
 
     // ------------------------------------------------------------ create
 
+    /**
+     * CREATE-OR-FILL. See StudentProfileService.create for the full reasoning.
+     *
+     * In short: a user.created event provisions an empty profile the moment the
+     * account is made, so a caller creating one explicitly usually finds a row
+     * already there, and which arrives first is a race between a queue and an
+     * HTTP round trip. Refusing on the losing side would fail intermittently.
+     */
     @Transactional
     public FacultyProfileResponse create(FacultyProfileCreateDto dto) {
         currentUser.requireSameCampus(dto.getCampusId());
 
-        if (facultyRepository.existsByUserId(dto.getUserId())) {
-            throw new IllegalStateException("That account already has a faculty profile.");
+        String employeeId = trimToNull(dto.getEmployeeId());
+        guard.requireSelectableDepartment(dto.getCampusId(), dto.getDepartmentId());
+
+        Optional<FacultyProfile> existing = facultyRepository.findByUserId(dto.getUserId());
+        if (existing.isPresent()) {
+            FacultyProfile profile = existing.get();
+            requireVisible(profile);
+            requireEmployeeIdAvailable(dto.getCampusId(), employeeId, profile.getId());
+
+            // Only overwrite what the caller actually supplied. A null here
+            // means "not my business", not "clear it".
+            if (employeeId != null) {
+                profile.setEmployeeId(employeeId);
+            }
+            if (dto.getDepartmentId() != null) {
+                profile.setDepartmentId(dto.getDepartmentId());
+            }
+            if (trimToNull(dto.getDesignation()) != null) {
+                profile.setDesignation(trimToNull(dto.getDesignation()));
+            }
+            if (trimToNull(dto.getQualification()) != null) {
+                profile.setQualification(trimToNull(dto.getQualification()));
+            }
+            if (trimToNull(dto.getPhotoS3Key()) != null) {
+                profile.setPhotoS3Key(trimToNull(dto.getPhotoS3Key()));
+            }
+
+            FacultyProfile saved = facultyRepository.save(profile);
+            log.info("Filled in auto-provisioned faculty profile {} for account {}.",
+                    saved.getId(), saved.getUserId());
+            return FacultyProfileResponse.from(saved, guard.departmentName(saved.getDepartmentId()));
         }
 
-        String employeeId = trimToNull(dto.getEmployeeId());
         requireEmployeeIdAvailable(dto.getCampusId(), employeeId, null);
-        guard.requireSelectableDepartment(dto.getCampusId(), dto.getDepartmentId());
 
         FacultyProfile profile = FacultyProfile.builder()
                 .userId(dto.getUserId())
