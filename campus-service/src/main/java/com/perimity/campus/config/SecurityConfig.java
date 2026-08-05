@@ -3,6 +3,7 @@ package com.perimity.campus.config;
 import com.perimity.campus.security.InternalApiKeyFilter;
 import com.perimity.campus.security.JwtAuthenticationFilter;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -27,11 +28,14 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final InternalApiKeyFilter internalKeyFilter;
+    private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter,
-                          InternalApiKeyFilter internalKeyFilter) {
+                          InternalApiKeyFilter internalKeyFilter,
+                          @Value("${perimity.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtFilter = jwtFilter;
         this.internalKeyFilter = internalKeyFilter;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -97,7 +101,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration c = new CorsConfiguration();
-        c.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        c.setAllowedOrigins(allowedOrigins);
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         c.setAllowedHeaders(List.of("*"));
         c.setAllowCredentials(true);
