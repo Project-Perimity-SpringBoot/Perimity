@@ -126,16 +126,22 @@ public class ScanService {
         //    against the pass - which is the only mitigation for the attack the
         //    QR design knowingly permits, someone holding a screenshot of
         //    somebody else's valid pass.
-        String photoKey = holderProfiles.profileFor(pass.holderUserId())
-                .map(HolderProfileClient.HolderProfile::photoKey)
-                .orElse(null);
+        /*
+         * One lookup, both fields. Calling profileFor twice would double the
+         * network hop on the scan path for the same row — and this sits between
+         * a guard's tap and a queue.
+         */
+        HolderProfileClient.HolderProfile profile =
+                holderProfiles.profileFor(pass.holderUserId()).orElse(null);
+        String photoKey = profile == null ? null : profile.photoKey();
+        String photoUrl = profile == null ? null : profile.photoUrl();
 
         // eventName still needs a gatepass-service lookup - the running-event
         // endpoint returns an id only. The message degrades to a plain welcome,
         // which is correct, just less warm than "Welcome to [Event]".
         return result == ScanResult.AMBER
-                ? ScanResponse.repeatEntry(log, null, photoKey)
-                : ScanResponse.allowed(log, null, photoKey);
+                ? ScanResponse.repeatEntry(log, null, photoKey, photoUrl)
+                : ScanResponse.allowed(log, null, photoKey, photoUrl);
     }
 
     /**

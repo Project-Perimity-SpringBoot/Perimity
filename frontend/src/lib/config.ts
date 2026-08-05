@@ -32,8 +32,13 @@ export const config = {
  * becomes permanent debt, so every one is deleted the day its blocker clears.
  */
 export const flags = {
-  /** B1 — nothing in qr-service serves the QR PNG or the pass PDF. */
-  passDownload: bool('VITE_ENABLE_PASS_DOWNLOAD', false),
+  /**
+   * B1 — CLEARED. qr-service serves both /{passId}/pdf and /{passId}/image,
+   * so this defaults on. Kept for one release as a kill switch: set
+   * VITE_ENABLE_PASS_DOWNLOAD=false to fall back to the "QR is in your email"
+   * panel without a deploy. Delete the flag once that has held.
+   */
+  passDownload: bool('VITE_ENABLE_PASS_DOWNLOAD', true),
   /** B9 — a STUDENT gets 403 on /api/guard/entry-logs/**. */
   studentEntryHistory: bool('VITE_ENABLE_STUDENT_ENTRY_HISTORY', false),
   /** B8 — no manual lookup and no override endpoint exist. */

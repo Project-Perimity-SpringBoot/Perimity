@@ -51,8 +51,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    * This read 'unknown' when there was no token, and nothing ever moved it on -
    * 'anonymous' is only set by an explicit signOut(). ProtectedRoute renders a
    * spinner while status is 'unknown', so opening ANY protected URL in a fresh
-   * browser hung forever instead of redirecting to /login. A bookmarked /guard,
-   * a deep link, or anyone opening the app signed out all saw a dead page.
+   * browser hung forever instead of redirecting to /login. Deep links, a
+   * bookmarked /guard, or anyone opening the app signed out all saw a dead page.
    *
    * It stayed hidden because in normal use you sign in first, so the redirect
    * path is never exercised. Neither tsc nor eslint can see it.

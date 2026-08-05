@@ -104,6 +104,29 @@ public class CurrentUser {
     }
 
     /**
+     * Who may accept or refuse a student's self-declared details.
+     *
+     * DELIBERATELY WIDER than requireAdministrative, and the difference is the
+     * point. Verifying a government ID proof is an administrative act, so that
+     * one excludes faculty. Checking that a student has typed their own name,
+     * date of birth and phone number correctly is a teaching-side act: faculty
+     * are the ones who know their students and who already create their
+     * accounts, so they are the ones who can spot a wrong entry.
+     *
+     * Admins are included because a campus with no faculty on duty still needs
+     * somebody able to clear the queue.
+     *
+     * Guards, students and visitors are excluded. A student who could approve
+     * their own details would make the whole status meaningless.
+     */
+    public void requireProfileReviewer() {
+        if (!require().isStaff()) {
+            throw new ForbiddenException(
+                    "Only faculty or an admin may decide on a student's details.");
+        }
+    }
+
+    /**
      * True when the caller may see another person's record. Used to decide
      * between 403 and a deliberately vague 404, never to grant access.
      */

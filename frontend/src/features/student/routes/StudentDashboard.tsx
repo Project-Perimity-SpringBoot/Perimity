@@ -118,7 +118,9 @@ export default function StudentDashboard() {
           <EmptyState
             icon={ScanLine}
             heading="Entry history is not available yet"
-            description="Your own gate entries will appear here once the register opens to students."
+            /* Same explanation as EntryHistoryPage. Two different sentences for
+               one blocker (B9) read as two different problems. */
+            description="Your gate entries are recorded, but students cannot read the register yet."
           />
         ) : entries.isPending ? (
           <div className="surface-card p-[var(--sp-6)]"><SkeletonText lines={3} /></div>

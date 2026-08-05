@@ -3,10 +3,15 @@ import { Link } from 'react-router';
 import { BadgeCheck, Pencil } from 'lucide-react';
 import { Avatar, Button, SkeletonText } from '@ui/index';
 import { ErrorState } from '@components/feedback';
+import { NotFoundError } from '@lib/api/errors';
 import { DescriptionList, PageHeader } from '@components/data';
+import { AuthedImage } from '@components/upload';
+import { ProfileVerificationBadge } from '@components/pass/StatusBadge';
 import { studentApi } from '@lib/api/services/user.api';
 import { passApi } from '@lib/api/services/gatepass.api';
 import { profileKeys, passKeys } from '@lib/query/keys';
+import { formatDate } from '@lib/format/datetime';
+import { GENDER_LABELS } from '@/types/enums';
 import { useAuth } from '@hooks/useAuth';
 import { PausedBanner } from '../components/PausedBanner';
 
@@ -31,9 +36,13 @@ import { PausedBanner } from '../components/PausedBanner';
 export default function ProfilePage() {
   const { identity } = useAuth();
 
+  // retry: false - a 404 here is a real answer ("no profile yet"), not a
+  // transient failure, and retrying it three times only delays the screen that
+  // tells the student what to do.
   const profile = useQuery({
     queryKey: profileKeys.myStudent(),
     queryFn: () => studentApi.me(),
+    retry: false,
   });
 
   // Only so the paused banner can render here too - it belongs on every
@@ -53,6 +62,34 @@ export default function ProfilePage() {
   if (profile.isPending) {
     return <div className="surface-card p-[var(--sp-6)]"><SkeletonText lines={8} /></div>;
   }
+
+  /*
+   * A 404 means the account has no profile row yet, which is a state plenty of
+   * student accounts are in: the account lives in auth-service and the profile
+   * in user-service, and only the faculty Add Student screen ever created the
+   * second one.
+   *
+   * "Not found. No student profile exists for account 21" is accurate and
+   * useless — it reads like a broken system and gives the student nothing to
+   * do. Saving the details form creates the row, so point at it.
+   */
+  if (profile.error instanceof NotFoundError) {
+    return (
+      <div className="surface-card flex flex-col items-start gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <div>
+          <h1 className="text-h2 text-[var(--ink-900)]">Your profile is not set up yet</h1>
+          <p className="text-body mt-[var(--sp-2)] text-[var(--ink-500)]">
+            Fill in your details and they will be sent to faculty to check. You need
+            this before a pass can be issued to you.
+          </p>
+        </div>
+        <Button asChild>
+          <Link to="/student/profile/details">Fill in my details</Link>
+        </Button>
+      </div>
+    );
+  }
+
   if (profile.isError) {
     return <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />;
   }
@@ -74,14 +111,74 @@ export default function ProfilePage() {
       />
 
       <section className="surface-card flex items-center gap-[var(--sp-4)] p-[var(--sp-6)]">
-        <Avatar name={identity?.name ?? 'Student'} src={photo.data?.url} className="size-16" />
+        {/*
+          AuthedImage rather than Avatar's src. In local-storage mode the photo
+          URL sits behind the JWT filter, and a browser sends no Authorization
+          header with an image request — so Avatar's img always failed here and
+          quietly fell back to initials. That fallback is exactly why the broken
+          photo went unnoticed for so long: it looked like a deliberate design.
+
+          Avatar is still the fallback, so a student with no photo sees the same
+          initials circle as before.
+        */}
+        <AuthedImage
+          url={photo.data?.url}
+          alt="Your profile photo"
+          className="size-16 rounded-[var(--r-circle)]"
+          fallback={<Avatar name={identity?.name ?? 'Student'} className="size-16" />}
+        />
         <div className="min-w-0">
           <h2 className="text-h3 truncate text-[var(--ink-900)]">{identity?.name}</h2>
           <p className="text-small truncate text-[var(--ink-500)]">{identity?.email}</p>
         </div>
       </section>
 
-      <section className="surface-card p-[var(--sp-6)]">
+      {/* ---------------------------------------------------------------
+          Verification state.
+
+          A student who submitted their details three days ago has one
+          question — has anyone looked yet — and this is the page they open
+          to ask it. Leaving the answer only on the edit form meant the
+          status lived behind a button labelled for editing.
+
+          Each state carries the next action, because a status with no verb
+          is just a label. REJECTED shows the reviewer's note here rather
+          than only on the form: it is the reason the student needs to act.
+         --------------------------------------------------------------- */}
+      <section className="surface-card flex flex-wrap items-center gap-[var(--sp-3)] p-[var(--sp-4)]">
+        <ProfileVerificationBadge status={p.verificationStatus} />
+
+        <p className="text-small min-w-0 flex-1 text-[var(--ink-500)]">
+          {p.verificationStatus === 'VERIFIED'
+            && 'Your details have been checked by faculty.'}
+          {p.verificationStatus === 'SUBMITTED'
+            && 'Faculty are checking your details. Nothing to do for now.'}
+          {p.verificationStatus === 'DRAFT'
+            && 'Your details have not been sent for checking yet.'}
+          {p.verificationStatus === 'REJECTED' && (
+            <>
+              Faculty asked for changes
+              {/* Free text written by another user. Rendered as text, never HTML. */}
+              {p.verificationRemarks ? `: ${p.verificationRemarks}` : '.'}
+            </>
+          )}
+        </p>
+
+        {p.verificationStatus !== 'SUBMITTED' && (
+          <Button variant="secondary" asChild>
+            <Link to="/student/profile/details">
+              {p.verificationStatus === 'VERIFIED' ? 'View details' : 'Fill in details'}
+            </Link>
+          </Button>
+        )}
+      </section>
+
+      {/*
+        SET BY THE INSTITUTION — assigned at enrolment, not chosen by the
+        student, and read-only everywhere in the student portal.
+      */}
+      <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <h2 className="text-h3 text-[var(--ink-900)]">Set by your institution</h2>
         <DescriptionList
           items={[
             { label: 'Roll number', value: p.rollNo ?? '—' },
@@ -99,14 +196,67 @@ export default function ProfilePage() {
                 'Not provided'
               ),
             },
+          ]}
+        />
+      </section>
+
+      {/*
+        YOUR OWN DETAILS — everything the student enters on /profile/details.
+        Every field below was already in StudentProfileResponse and simply was
+        not rendered, so a student filled in eight fields, submitted them for
+        verification, and their profile went on showing four unrelated ones.
+        Nothing here needed a backend change.
+
+        Shown even when empty, with a dash, rather than hidden when null: a
+        missing field is information — it is what the student still has to do
+        — and a form that quietly omits blank rows makes that invisible.
+      */}
+      <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <div className="flex flex-wrap items-center justify-between gap-[var(--sp-3)]">
+          <h2 className="text-h3 text-[var(--ink-900)]">Your details</h2>
+          <Button variant="ghost" asChild>
+            <Link to="/student/profile/details">Edit these</Link>
+          </Button>
+        </div>
+
+        <DescriptionList
+          items={[
+            {
+              label: 'Full name',
+              value: [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ') || '—',
+            },
+            { label: 'Date of birth', value: formatDate(p.dateOfBirth) },
+            { label: 'Gender', value: p.gender ? GENDER_LABELS[p.gender] : '—' },
+            {
+              label: 'Phone',
+              value: p.phoneNumber ? `${p.phoneCountryCode ?? ''} ${p.phoneNumber}`.trim() : '—',
+            },
+            {
+              label: 'Another phone',
+              value: p.altPhoneNumber
+                ? `${p.altPhoneCountryCode ?? ''} ${p.altPhoneNumber}`.trim()
+                : '—',
+            },
             { label: 'Address', value: p.address ?? '—', wide: true },
           ]}
         />
       </section>
 
+      {/*
+        Corrected against StudentProfileService. The previous wording was wrong
+        in both directions: it named "name or department" as pausing (neither
+        does) and said the roll number does not (it does). The service adds to
+        sensitiveChanges for exactly three fields - rollNo, govId, photoS3Key -
+        and calls PassPauseClient only when that list is non-empty.
+
+        The second sentence is a different mechanism and worth separating:
+        updateOwnDetails clears an existing VERIFIED status when a student edits
+        their own details, which is not a pause and does not stop them at a gate.
+      */}
       <p className="text-caption text-[var(--ink-500)]">
-        Changing your name, photo, government ID or department pauses your passes until
-        staff re-verify them. Your roll number and address do not.
+        Changing your photo, government ID or roll number pauses your passes until staff
+        re-verify them. Your name, address and phone numbers do not — but editing them
+        after verification means your details need checking again.
       </p>
     </div>
   );

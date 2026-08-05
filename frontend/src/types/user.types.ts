@@ -1,4 +1,4 @@
-import type { DocumentType, ProfileType } from './enums';
+import type { DocumentType, Gender, ProfileType, ProfileVerificationStatus } from './enums';
 
 export interface StudentProfileResponse {
   id: number;
@@ -10,11 +10,79 @@ export interface StudentProfileResponse {
   /** "********9012". The full value never leaves the server. */
   govIdMasked: string | null;
   govIdPresent: boolean;
-  address: string | null;
-  /** A storage key. Resolve via /students/{id}/photo-url. */
   photoS3Key: string | null;
+
+  /*
+   * Self-declared. Unverified until verificationStatus says otherwise, so do
+   * not treat any of it as identity — a pass carries the account name from
+   * auth-service, not these.
+   *
+   * NULL ON THE DIRECTORY LIST. `/students` returns the forDirectory shape,
+   * which blanks address, dateOfBirth and both phone numbers so that paging
+   * through a campus cannot be used to harvest contact details. The single
+   * reads (`/me`, `/{id}`, `/by-user/{id}`) and the pending queue return them
+   * in full. A screen that needs a phone number must fetch one profile, not
+   * read it off a list row — it will silently be null there.
+   */
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
+  /** The three parts joined, or null when none is set. Convenience, not identity. */
+  displayName: string | null;
+  /** ISO date, no time — "2004-08-19". */
+  dateOfBirth: string | null;
+  gender: Gender | null;
+  address: string | null;
+  phoneCountryCode: string | null;
+  phoneNumber: string | null;
+  altPhoneCountryCode: string | null;
+  altPhoneNumber: string | null;
+
+  verificationStatus: ProfileVerificationStatus;
+  /** The server's own view of whether the student may edit right now. */
+  editable: boolean;
+  submittedAt: string | null;
+  verifiedBy: number | null;
+  verifiedAt: string | null;
+  /** Why it was refused. Shown to the student so they can correct it. */
+  verificationRemarks: string | null;
+
   createdAt: string;
   updatedAt: string | null;
+}
+
+/**
+ * Body of PUT /students/me/details.
+ *
+ * WHOLE-OBJECT, unlike StudentProfileUpdateRequest which is a partial patch.
+ * Every field is sent every time; omitting one clears it. The two endpoints
+ * have deliberately different semantics — see the DTO javadoc in user-service.
+ *
+ * No id: the account comes from the token. Nothing here can be pointed at
+ * another student.
+ */
+export interface StudentSelfDetailsRequest {
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  dateOfBirth: string;
+  gender: Gender;
+  address: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
+  altPhoneCountryCode?: string | null;
+  altPhoneNumber?: string | null;
+}
+
+/**
+ * Body of PATCH /students/{id}/verification.
+ *
+ * There is no verifiedBy field and there must not be one — the server takes the
+ * reviewer from the token. remarks is required when approved is false.
+ */
+export interface StudentVerificationDecisionRequest {
+  approved: boolean;
+  remarks?: string | null;
 }
 
 export interface FacultyProfileResponse {

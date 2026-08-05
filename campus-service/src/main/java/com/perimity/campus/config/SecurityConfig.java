@@ -3,6 +3,7 @@ package com.perimity.campus.config;
 import com.perimity.campus.security.InternalApiKeyFilter;
 import com.perimity.campus.security.JwtAuthenticationFilter;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -27,11 +28,14 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final InternalApiKeyFilter internalKeyFilter;
+    private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter,
-                          InternalApiKeyFilter internalKeyFilter) {
+                          InternalApiKeyFilter internalKeyFilter,
+                          @Value("${perimity.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtFilter = jwtFilter;
         this.internalKeyFilter = internalKeyFilter;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -61,6 +65,20 @@ public class SecurityConfig {
                     }))
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/api/campus/ping").permitAll()
+
+                    // Spring Boot runs this filter chain on ERROR dispatches as
+                    // well as REQUEST ones. Without this line an unhandled 500 is
+                    // re-dispatched to /error with no credentials attached, and
+                    // anyRequest().authenticated() reports it as
+                    // 401 "Authentication required" - hiding the real fault.
+                    //
+                    // Found in user-service, where a broken database column
+                    // surfaced as a 401 on an internal endpoint whose API key was
+                    // correct all along. All six services had it.
+                    //
+                    // Safe: Spring Boot's server.error.include-message and
+                    // include-stacktrace are both off by default.
+                    .requestMatchers("/error").permitAll()
                     .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
                                      "/v3/api-docs", "/v3/api-docs/**",
                                      "/api-docs", "/api-docs/**").permitAll()
@@ -83,7 +101,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration c = new CorsConfiguration();
-        c.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        c.setAllowedOrigins(allowedOrigins);
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         c.setAllowedHeaders(List.of("*"));
         c.setAllowCredentials(true);

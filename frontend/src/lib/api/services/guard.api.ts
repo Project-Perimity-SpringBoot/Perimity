@@ -1,4 +1,5 @@
 import { guardClient } from '../client';
+import { ApiError } from '../errors';
 import { unwrap, unwrapList, unwrapPage } from '../normalize';
 import type { Paged, PageRequest } from '@/types/api';
 import type {
@@ -29,9 +30,31 @@ export const sessionApi = {
     const { data } = await guardClient.post<unknown>(`${SESSIONS}/${id}/end`);
     return unwrap<ScanSessionResponse>(data);
   },
-  async current(): Promise<ScanSessionResponse> {
-    const { data } = await guardClient.get<unknown>(`${SESSIONS}/current`);
-    return unwrap<ScanSessionResponse>(data);
+  /**
+   * NULL means "this guard has no open shift" — a normal state, not a failure.
+   *
+   * guard-service answers that state with 400 "No open shift for this guard",
+   * but every consumer here models it as absent data: GuardShell renders "No
+   * open shift" when `data` is falsy, and GuardSessionGate tests
+   * `data?.state === 'OPEN'`. Letting the 400 through as an error meant the
+   * gate never left its isPending branch, so a guard signing in for the first
+   * time got a full-page spinner and a request storm against this endpoint
+   * instead of the gate picker — they could never start a shift at all.
+   *
+   * Only this one condition is swallowed. Any other 400, and every other
+   * status, still rejects.
+   */
+  async current(): Promise<ScanSessionResponse | null> {
+    try {
+      const { data } = await guardClient.get<unknown>(`${SESSIONS}/current`);
+      return unwrap<ScanSessionResponse>(data);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400
+          && /no open shift/i.test(error.message)) {
+        return null;
+      }
+      throw error;
+    }
   },
   /** Supervision view: every guard on duty at this campus right now. */
   async open(): Promise<ScanSessionResponse[]> {

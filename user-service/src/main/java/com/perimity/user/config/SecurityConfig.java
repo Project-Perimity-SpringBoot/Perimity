@@ -83,6 +83,25 @@ public class SecurityConfig {
                     }))
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/api/user/ping").permitAll()
+
+                    // Spring Boot runs this filter chain on ERROR dispatches as
+                    // well as REQUEST ones. Without this line, any unhandled 500
+                    // is re-dispatched to /error, arrives with no Authorization
+                    // header and no internal key - the internal filter skips
+                    // /error, since it only matches /api/user/internal/ - and
+                    // anyRequest().authenticated() turns it into
+                    // 401 "Authentication required".
+                    //
+                    // So every genuine server error in this service was being
+                    // reported as an authentication failure. That cost real time:
+                    // a broken column in student_profiles showed up as a 401 on
+                    // an internal endpoint whose API key was correct all along,
+                    // and the key is the first thing anyone suspects.
+                    //
+                    // Permitting /error is safe. Spring Boot's default
+                    // server.error.include-message/include-stacktrace are both
+                    // off, so the body is a status code and a timestamp.
+                    .requestMatchers("/error").permitAll()
                     .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
                                      "/api-docs", "/api-docs/**",
                                      "/v3/api-docs", "/v3/api-docs/**").permitAll()

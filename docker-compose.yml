@@ -1,11 +1,11 @@
-# Perimity — local development stack.
+# Perimity â€” local development stack.
 #
 # Reads values from .env in this folder. Copy .env.example to .env first.
 #
 #   cp .env.example .env
 #   docker compose up --build
 #
-# The `version:` key was removed — Compose v2 ignores it and warns about it.
+# The `version:` key was removed â€” Compose v2 ignores it and warns about it.
 services:
   # ---------- Infrastructure ----------
   postgres:
@@ -132,7 +132,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 120s
 
   auth-service:
     build: ./auth-service
@@ -144,16 +144,27 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
-      MAIL_SMTP_AUTH: "false"
-      MAIL_STARTTLS: "false"
+      # Container name, not localhost. auth-service publishes user.created here
+      # so user-service can provision the profile for a new STUDENT or FACULTY.
+      RABBITMQ_HOST: rabbitmq
+      # MailHog unless SMTP_* is set in .env. Deliberately NOT MAIL_HOST from
+      # .env: that one is localhost for an STS run, which inside a container
+      # means the container itself. Same split as SPRING_RABBITMQ_HOST above.
+      # To send real mail, set SMTP_HOST/SMTP_PORT/SMTP_AUTH/SMTP_STARTTLS plus
+      # MAIL_USERNAME and MAIL_PASSWORD in .env, then recreate this service.
+      MAIL_HOST: ${SMTP_HOST:-mailhog}
+      MAIL_PORT: ${SMTP_PORT:-1025}
+      MAIL_SMTP_AUTH: "${SMTP_AUTH:-false}"
+      MAIL_STARTTLS: "${SMTP_STARTTLS:-false}"
+      # PROPOSAL. Container name, not localhost - see GatepassVisitorClient.
+      GATEPASS_BASE_URL: http://gatepass-service:8083
       EUREKA_URL: http://discovery-server:8761/eureka/
     ports: ["8081:8081"]
     depends_on:
       discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/auth/ping"]
       interval: 10s
@@ -170,7 +181,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
-      GATEPASS_BASE_URL: http://gatepass-service:8083
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
       STORAGE_LOCAL_DIR: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
@@ -196,6 +207,14 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
+      # gatepass-service/application.properties pins spring.rabbitmq.host to
+      # localhost on purpose (so an STS run does not try to resolve "rabbitmq")
+      # and documents that Docker must override it with SPRING_RABBITMQ_HOST.
+      # RABBITMQ_HOST above is NOT read by that file, so without this line the
+      # service dials localhost inside its own container, never connects, and
+      # every pass sits at PENDING because qr.generate.request is never
+      # published and qr.generate.result is never consumed.
+      SPRING_RABBITMQ_HOST: rabbitmq
       AUTH_SERVICE_URL: http://auth-service:8081
       USER_SERVICE_URL: http://user-service:8082
       CAMPUS_SERVICE_URL: http://campus-service:8084
@@ -247,10 +266,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
-      MAIL_HOST: mailhog
-      MAIL_PORT: 1025
-      MAIL_SMTP_AUTH: "false"
-      MAIL_STARTTLS: "false"
+      # Same SMTP_* override as auth-service. Both must agree: a pass email and
+      # its OTP arriving from different senders is worse than neither working.
+      MAIL_HOST: ${SMTP_HOST:-mailhog}
+      MAIL_PORT: ${SMTP_PORT:-1025}
+      MAIL_SMTP_AUTH: "${SMTP_AUTH:-false}"
+      MAIL_STARTTLS: "${SMTP_STARTTLS:-false}"
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       QR_STORAGE_LOCAL_ROOT: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/

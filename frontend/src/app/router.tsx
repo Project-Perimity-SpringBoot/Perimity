@@ -1,7 +1,6 @@
 import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import { AppShell, AuthLayout, GuardShell } from '@/layouts';
-import { PhasePending } from '@components/feedback';
 import {
   GuardSessionGate, PasswordChangeGate, ProtectedRoute, PublicOnlyRoute, RoleRoute,
 } from './guards';
@@ -45,6 +44,11 @@ const VisitorRegisterPage = lazy(() => import('@features/auth/routes/VisitorRegi
 const GuardLoginPage = lazy(() => import('@features/auth/routes/GuardLoginPage'));
 const GateSessionPage = lazy(() => import('@features/auth/routes/GateSessionPage'));
 
+/* ── PHASE 6 · Guard ───────────────────────────────────────────────────── */
+const ScannerPage = lazy(() => import('@features/guard/routes/ScannerPage'));
+const GuardShiftEndPage = lazy(() => import('@features/guard/routes/ShiftEndPage'));
+const GuardManualEntryPage = lazy(() => import('@features/guard/routes/ManualEntryPage'));
+
 /* ── PHASE 2 · Campus Admin ── */
 const AdminOverview = lazy(() => import('@features/campus-admin/routes/AdminOverview'));
 const VisitorQueuePage = lazy(() => import('@features/campus-admin/routes/VisitorQueuePage'));
@@ -63,6 +67,7 @@ const StudentPassDetail = lazy(() => import('@features/student/routes/PassDetail
 const StudentEntryHistory = lazy(() => import('@features/student/routes/EntryHistoryPage'));
 const StudentProfile = lazy(() => import('@features/student/routes/ProfilePage'));
 const StudentProfileEdit = lazy(() => import('@features/student/routes/ProfileEditPage'));
+const StudentProfileDetails = lazy(() => import('@features/student/routes/ProfileDetailsPage'));
 const StudentDocuments = lazy(() => import('@features/student/routes/DocumentsPage'));
 
 /* ── PHASE 5 · Visitor ─────────────────────────────────────────────────── */
@@ -74,6 +79,10 @@ const VisitorPass = lazy(() => import('@features/visitor/routes/PassPage'));
 /* ── PHASE 4 · Faculty ─────────────────────────────────────────────────── */
 const FacultyOverview = lazy(() => import('@features/faculty/routes/FacultyOverview'));
 const FacultyApprovals = lazy(() => import('@features/faculty/routes/ApprovalsPage'));
+const FacultyAddStudent = lazy(() => import('@features/faculty/routes/AddStudentPage'));
+const FacultyStudentVerification = lazy(
+  () => import('@features/faculty/routes/StudentVerificationPage'),
+);
 const FacultyOnboarding = lazy(() => import('@features/faculty/routes/OnboardingPage'));
 const FacultyBatchProgress = lazy(() => import('@features/faculty/routes/BatchProgressPage'));
 const FacultyEvents = lazy(() => import('@features/faculty/routes/EventsPage'));
@@ -113,7 +122,9 @@ export const router = createBrowserRouter([
       // Sits OUTSIDE PasswordChangeGate: it is the one route a user holding a
       // temporary password is allowed to reach.
       {
-        element: <AuthLayout />,
+        // No back button: this route is mandatory, and PasswordChangeGate
+        // would return the user here immediately.
+        element: <AuthLayout showBack={false} />,
         children: [{ path: '/change-password', element: <ChangePasswordPage /> }],
       },
 
@@ -165,6 +176,11 @@ export const router = createBrowserRouter([
                   { path: '/student/entries', element: <StudentEntryHistory /> },
                   { path: '/student/profile', element: <StudentProfile /> },
                   { path: '/student/profile/edit', element: <StudentProfileEdit /> },
+                  /* Separate from /profile/edit on purpose. That screen patches
+                     and can pause a pass; this one replaces the whole record and
+                     submits it for faculty to check. Different contracts, so
+                     different screens. */
+                  { path: '/student/profile/details', element: <StudentProfileDetails /> },
                   { path: '/student/documents', element: <StudentDocuments /> },
                 ],
               },
@@ -195,6 +211,15 @@ export const router = createBrowserRouter([
                 children: [
                   { path: '/faculty', element: <FacultyOverview /> },
                   { path: '/faculty/approvals', element: <FacultyApprovals /> },
+                  /* Faculty are the ONLY role that may create a STUDENT
+                     account, but until now the only way to do it was a
+                     spreadsheet. This is the single-student path the policy
+                     already assumed existed. */
+                  { path: '/faculty/students/new', element: <FacultyAddStudent /> },
+                  {
+                    path: '/faculty/students/verification',
+                    element: <FacultyStudentVerification />,
+                  },
                   { path: '/faculty/onboarding', element: <FacultyOnboarding /> },
                   {
                     path: '/faculty/onboarding/batches/:batchId',
@@ -257,11 +282,16 @@ export const router = createBrowserRouter([
                   {
                     element: <GuardShell />,
                     children: [
-                      {
-                        path: '/guard',
-                        element: <PhasePending phase={6} owner="Palash" area="Scanner" screens={8} />,
-                      },
+                      /* The scanner IS the guard's home screen. There is no
+                         guard dashboard, deliberately — nothing competes with
+                         the viewfinder. */
+                      { path: '/guard', element: <ScannerPage /> },
                       { path: '/guard/session', element: <GateSessionPage /> },
+                      { path: '/guard/shift-end', element: <GuardShiftEndPage /> },
+                      /* Behind VITE_ENABLE_GUARD_MANUAL_LOOKUP (B8). The route
+                         exists either way so the link never 404s; the screen
+                         explains itself when the endpoints are missing. */
+                      { path: '/guard/manual', element: <GuardManualEntryPage /> },
                     ],
                   },
                 ],

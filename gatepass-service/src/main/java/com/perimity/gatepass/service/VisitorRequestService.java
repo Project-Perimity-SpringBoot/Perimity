@@ -14,6 +14,7 @@ import com.perimity.gatepass.exception.ResourceNotFoundException;
 import com.perimity.gatepass.repository.EventRepository;
 import com.perimity.gatepass.repository.GatePassRepository;
 import com.perimity.gatepass.repository.VisitorRequestRepository;
+import com.perimity.gatepass.validation.IdDocumentValidator;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -83,6 +84,44 @@ public class VisitorRequestService {
      */
     @Transactional
     public VisitorRequestResponse submit(VisitorRequestCreateDto dto) {
+        return submit(dto, null);
+    }
+
+    /**
+     * @param verifiedVisitorUserId the signed-in VISITOR's id, or null when the
+     *        caller is not a visitor (staff filing on someone's behalf).
+     *
+     * A visitor reaching this endpoint is signed in, and a visitor can only
+     * sign in with an email OTP - they never have a password. Their address is
+     * therefore already proven, and the request is created verified.
+     *
+     * This replaces a cross-service dance that could not work. auth-service
+     * told gatepass "this email is verified" at sign-in, which happens BEFORE
+     * the visitor fills the form: there was no request to mark, so the call
+     * 404'd and the request created a minute later was stamped unverified
+     * forever. Approving it was then refused with "this visitor has not
+     * verified their email yet" - on a visitor who had just proved they owned
+     * that address.
+     *
+     * Observed: verified 19:59:00, request created 19:59:57.
+     *
+     * The auth-service call still earns its place for the other order - a
+     * visitor who applies, then verifies - so both directions are covered.
+     */
+    @Transactional
+    public VisitorRequestResponse submit(VisitorRequestCreateDto dto, Long verifiedVisitorUserId) {
+
+        /*
+         * The campus must exist. It is client-chosen since the campus-queue
+         * change, and an unknown id would create a request in a queue no
+         * faculty can ever see - the visitor would wait for an approval nobody
+         * is shown. Checked before the duplicate rule below, so an unknown
+         * campus reports itself rather than hiding behind "you already have a
+         * request".
+         */
+        if (internal.campusOf(dto.getCampusId()).isEmpty()) {
+            throw ResourceNotFoundException.of("Campus", dto.getCampusId());
+        }
 
         // One open request per person per campus. Without this, refreshing the
         // form five times gives a host five identical rows to approve, and
@@ -109,11 +148,25 @@ public class VisitorRequestService {
                 .visitorEmail(dto.getVisitorEmail().toLowerCase())
                 .visitorPhone(dto.getVisitorPhone())
                 .purpose(dto.getPurpose())
+                .purposeType(dto.getPurposeType())
+                .visitorType(dto.getVisitorType())
+                .gender(dto.getGender())
+                .dateOfBirth(dto.getDateOfBirth())
+                .idType(dto.getIdType())
+                /*
+                 * ONLY THE LAST FOUR. @ValidIdDocument has already checked the
+                 * whole number against its type - Verhoeff included - so it was
+                 * proven real before this line throws the rest away. A gate
+                 * needs "a guard checked a document and it matched", which four
+                 * digits and a type carry. See IdDocumentValidator.lastFour.
+                 */
+                .idNumber(IdDocumentValidator.lastFour(dto.getIdNumber()))
                 .hostUserId(dto.getHostUserId())
                 .eventId(dto.getEventId())
                 .visitFrom(dto.getVisitFrom())
                 .visitTo(dto.getVisitTo())
-                .otpVerified(false)
+                .otpVerified(verifiedVisitorUserId != null)
+                .visitorUserId(verifiedVisitorUserId)
                 .status(RequestStatus.PENDING)
                 .build();
 
@@ -183,6 +236,42 @@ public class VisitorRequestService {
         }
 
         return VisitorRequestResponse.from(request);
+    }
+
+    /**
+     * PROPOSAL. The same verification, addressed by the visitor's email instead
+     * of by a request id.
+     *
+     * auth-service is the only caller this path can ever have, and it does not
+     * know request ids - after an OTP it holds an email, a purpose and a user,
+     * and has no concept of a visitor request at all. Requiring an id is why
+     * the id-keyed method above has never been called by anything, and why
+     * otpVerified has stayed false for every request ever created. Since
+     * markEmailVerified is what issues the pass, no visitor has ever received
+     * one.
+     *
+     * Picks the newest request that is still PENDING and unverified. A visitor
+     * who applied twice has two rows: marking the older one would leave the
+     * request they are actually waiting on untouched, which fails silently and
+     * looks exactly like the bug this replaces.
+     *
+     * Identity still comes from the body, never from the path. The email says
+     * which request; dto.visitorUserId says who the holder is, and that is the
+     * value the pass is issued against. A caller that could forge the email
+     * therefore still cannot redirect a pass to a different user - and the
+     * caller is already behind InternalApiKeyFilter.
+     */
+    @Transactional
+    public VisitorRequestResponse markEmailVerifiedByEmail(String visitorEmail,
+                                                           VisitorEmailVerifiedDto dto) {
+        VisitorRequest target = requestRepository
+                .findByVisitorEmailOrderByCreatedAtDesc(visitorEmail).stream()
+                .filter(r -> !r.isOtpVerified() && r.getStatus() == RequestStatus.PENDING)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No visitor request is awaiting email verification for " + visitorEmail));
+
+        return markEmailVerified(target.getId(), dto);
     }
 
     // ------------------------------------------------------------- decide

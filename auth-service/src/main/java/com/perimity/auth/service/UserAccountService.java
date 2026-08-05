@@ -1,6 +1,8 @@
 package com.perimity.auth.service;
 
+import com.perimity.auth.messaging.UserEventPublisher;
 import com.perimity.auth.dto.request.InternalIdentityBatchDto;
+import com.perimity.auth.dto.request.InternalStudentBatchDto;
 import com.perimity.auth.dto.request.InternalIdentityCreateDto;
 import com.perimity.auth.dto.request.PasswordChangeDto;
 import com.perimity.auth.dto.request.PasswordResetConfirmDto;
@@ -28,6 +30,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +64,7 @@ public class UserAccountService {
     private final RateLimiter rateLimiter;
     private final AuditService audit;
     private final EmailService emailService;
+    private final UserEventPublisher userEvents;
     private final int resetExpiryMinutes;
     private final int resetPerEmailPerDay;
     private final String resetUrlBase;
@@ -72,6 +76,7 @@ public class UserAccountService {
                               RateLimiter rateLimiter,
                               AuditService audit,
                               EmailService emailService,
+                              UserEventPublisher userEvents,
                               @Value("${perimity.password.reset-link-expiry-minutes}") int resetExpiryMinutes,
                               @Value("${perimity.ratelimit.reset.per-email-per-day}") int resetPerEmailPerDay,
                               @Value("${perimity.frontend.reset-password-url}") String resetUrlBase) {
@@ -82,6 +87,7 @@ public class UserAccountService {
         this.rateLimiter = rateLimiter;
         this.audit = audit;
         this.emailService = emailService;
+        this.userEvents = userEvents;
         this.resetExpiryMinutes = resetExpiryMinutes;
         this.resetPerEmailPerDay = resetPerEmailPerDay;
         this.resetUrlBase = resetUrlBase;
@@ -94,6 +100,14 @@ public class UserAccountService {
     public UserResponse create(UserCreateDto dto, Long actorUserId, Role actorRole) {
         if (userRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new IllegalArgumentException("An account already exists for that email.");
+        }
+
+        if (dto.getRole() == Role.CAMPUS_ADMIN && dto.getCampusId() != null) {
+            long activeCount = userRepository.countByCampusIdAndRoleAndActiveTrue(dto.getCampusId(), Role.CAMPUS_ADMIN);
+            if (activeCount > 0) {
+                throw new IllegalArgumentException(
+                        "This campus already has an active Campus Admin. Please suspend or deactivate the existing admin account before creating a new one.");
+            }
         }
 
         String hash = dto.getRole().canLoginWithPassword()
@@ -116,6 +130,21 @@ public class UserAccountService {
         audit.record(AuditAction.ACCOUNT_CREATED, actorUserId, actorRole,
                 user.getCampusId(), "user:" + user.getId(),
                 "Created " + user.getRole() + " account");
+
+        /*
+         * A STUDENT or FACULTY account needs a matching profile in user-service.
+         * This announces the account; user-service provisions the profile.
+         *
+         * It used to be the CALLER's job - the React Add Student screen made a
+         * second API call after this one returned. Any account created any other
+         * way, or whose second call failed, ended up able to sign in with no
+         * profile and no way for anyone to create one. Several accounts on this
+         * system are still in that state.
+         *
+         * Published after commit, and a broker failure does not fail account
+         * creation. See UserEventPublisher.
+         */
+        userEvents.publishCreatedAfterCommit(user);
 
         return UserResponse.from(user);
     }
@@ -255,6 +284,123 @@ public class UserAccountService {
      * NOTHING HERE THROWS FOR A BAD ROW. Every row gets an outcome and the
      * batch always completes - "never block the batch for a few bad ones".
      */
+    /**
+     * Create or resolve STUDENT accounts for a bulk import.
+     *
+     * ==================================================================
+     *  HOW THIS DIFFERS FROM resolveOrCreateBatch BELOW
+     * ==================================================================
+     * That one makes lightweight VISITOR identities: no password, OTP only.
+     * This one makes accounts that sign in with a password and hold a campus
+     * pass, so three things change.
+     *
+     *   1. Each row carries its OWN temporary password, hashed here. A shared
+     *      password across a batch would let any student in it sign in as any
+     *      other until the first one changed theirs.
+     *   2. mustChangePassword is set, so the generated value is good for
+     *      exactly one sign-in.
+     *   3. The blocklist is NOT consulted. It exists to keep named individuals
+     *      out as VISITORS; a student on the roll is admitted by the
+     *      institution, and refusing them here would silently drop somebody
+     *      from an intake with no reason given - FR-BLK-4 forbids saying why,
+     *      which is tolerable for a visitor and not for a student who is
+     *      supposed to be on the course.
+     *
+     * The role is STUDENT because of which method this is. There is no role
+     * parameter and there must not be one - see InternalStudentBatchDto.
+     *
+     * REUSED rather than "already exists, fail": students resubmit forms and
+     * faculty re-upload sheets. A second account on the same address would
+     * split one person's history and could issue them a second pass.
+     */
+    @Transactional
+    public IdentityBatchResponseDto resolveOrCreateStudents(InternalStudentBatchDto request) {
+        Long campusId = request.getCampusId();
+        List<InternalStudentBatchDto.Row> rows = request.getRows();
+
+        Set<String> sheetEmails = new LinkedHashSet<>();
+        for (InternalStudentBatchDto.Row row : rows) {
+            sheetEmails.add(row.getEmail().trim().toLowerCase());
+        }
+
+        Map<String, Long> known = new HashMap<>();
+        for (User existing : userRepository.findByEmailIn(sheetEmails)) {
+            known.put(existing.getEmail(), existing.getId());
+        }
+
+        Set<String> seenInThisBatch = new LinkedHashSet<>();
+        List<User> toCreate = new ArrayList<>();
+        List<IdentityBatchResponseDto.RowResult> results = new ArrayList<>(rows.size());
+
+        // Email to row number, so the second pass can report against the sheet.
+        Map<String, InternalStudentBatchDto.Row> newRowsByEmail = new LinkedHashMap<>();
+
+        for (InternalStudentBatchDto.Row row : rows) {
+            String email = row.getEmail().trim().toLowerCase();
+
+            Long existingId = known.get(email);
+            if (existingId != null) {
+                results.add(new IdentityBatchResponseDto.RowResult(
+                        row.getRowNumber(), email, "REUSED", existingId));
+                continue;
+            }
+
+            /*
+             * users.email is UNIQUE, so two rows with the same new address
+             * would make saveAll throw and roll back every account in the
+             * batch. One repeated address must not cost two hundred students
+             * their accounts, so the duplicate is recorded and skipped here.
+             */
+            if (!seenInThisBatch.add(email)) {
+                results.add(new IdentityBatchResponseDto.RowResult(
+                        row.getRowNumber(), email, "DUPLICATE", null));
+                continue;
+            }
+
+            toCreate.add(User.builder()
+                    .email(email)
+                    .name(row.getName().trim())
+                    .phone(row.getPhone() == null || row.getPhone().isBlank()
+                            ? null : row.getPhone().trim())
+                    .role(Role.STUDENT)
+                    .campusId(campusId)
+                    .passwordHash(passwordEncoder.encode(row.getTemporaryPassword()))
+                    // Generated by an import and emailed in plain text. It must
+                    // survive exactly one sign-in.
+                    .mustChangePassword(true)
+                    .active(true)
+                    .build());
+            newRowsByEmail.put(email, row);
+        }
+
+        for (User created : userRepository.saveAll(toCreate)) {
+            InternalStudentBatchDto.Row row = newRowsByEmail.get(created.getEmail());
+            results.add(new IdentityBatchResponseDto.RowResult(
+                    row == null ? null : row.getRowNumber(),
+                    created.getEmail(), "CREATED", created.getId()));
+
+            audit.record(AuditAction.ACCOUNT_CREATED, request.getUploadedBy(), Role.FACULTY,
+                    campusId, "user:" + created.getId(),
+                    "Created STUDENT account from "
+                            + (request.getSource() == null ? "a bulk import" : request.getSource()));
+
+            /*
+             * Same event the single-account path publishes, so an imported
+             * student gets a profile the same way anyone else does. Without
+             * this, a bulk import would recreate the orphaned-account problem
+             * two hundred rows at a time.
+             */
+            userEvents.publishCreatedAfterCommit(created);
+        }
+
+        // Back into sheet order. Rows were split across two passes above, and a
+        // report that jumps around is one nobody can check against the file.
+        results.sort(java.util.Comparator.comparing(
+                r -> r.rowNumber() == null ? Integer.MAX_VALUE : r.rowNumber()));
+
+        return IdentityBatchResponseDto.of(results);
+    }
+
     @Transactional
     public IdentityBatchResponseDto resolveOrCreateBatch(InternalIdentityBatchDto request) {
         Long campusId = request.getCampusId();
@@ -394,6 +540,14 @@ public class UserAccountService {
                     + (user.isActive() ? "active" : "inactive") + ".");
         }
 
+        if (dto.getActive() && user.getRole() == Role.CAMPUS_ADMIN && user.getCampusId() != null) {
+            long activeCount = userRepository.countByCampusIdAndRoleAndActiveTrue(user.getCampusId(), Role.CAMPUS_ADMIN);
+            if (activeCount > 0) {
+                throw new IllegalArgumentException(
+                        "This campus already has an active Campus Admin. Please suspend the other admin before activating this one.");
+            }
+        }
+
         user.setActive(dto.getActive());
         if (!dto.getActive()) {
             // Deactivating clears the lock so reactivation is not blocked by a
@@ -407,9 +561,6 @@ public class UserAccountService {
                 actorUserId, actorRole, user.getCampusId(), "user:" + user.getId(),
                 dto.getReason());
 
-        // TODO Day 8: when deactivating a holder, call gatepass-service
-        //   POST /internal/passes/holder/{id}/pause
-        // so their live passes stop opening gates immediately.
         return UserResponse.from(user);
     }
 
@@ -420,6 +571,13 @@ public class UserAccountService {
 
     @Transactional(readOnly = true)
     public PageResponse<UserResponse> byCampus(Long campusId, Role role, Pageable pageable) {
+        if (campusId == null) {
+            return PageResponse.from(
+                    role == null
+                            ? userRepository.findAll(pageable)
+                            : userRepository.findByRoleOrderByNameAsc(role, pageable),
+                    UserResponse::from);
+        }
         return PageResponse.from(
                 role == null
                         ? userRepository.findByCampusIdOrderByNameAsc(campusId, pageable)
