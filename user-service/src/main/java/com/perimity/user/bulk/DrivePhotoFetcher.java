@@ -144,6 +144,73 @@ public class DrivePhotoFetcher {
     }
 
     /**
+     * A Google Sheet exported as .xlsx, so the same parser reads it whether it
+     * came from Drive or from a file somebody uploaded.
+     *
+     * ==================================================================
+     *  export, NOT get
+     * ==================================================================
+     * A Google Sheet is not a file with bytes - it is a document in Google's
+     * own format, and files().get() on one returns a 403 saying so. export()
+     * is what renders it into something else, and asking for xlsx means the
+     * result is byte-identical in shape to what a person would have downloaded
+     * by hand.
+     *
+     * That matters more than it sounds: it means Pull and Download and Upload
+     * all end up in exactly the same parser, so a bug can never appear on one
+     * path and not the others.
+     *
+     * Returns empty rather than throwing, like fetch() above - the caller
+     * reports a readable failure instead of a stack trace.
+     */
+    public Optional<byte[]> exportSheet(String sheetId) {
+        if (!enabled || sheetId == null || sheetId.isBlank()) {
+            return Optional.empty();
+        }
+        Drive client = client();
+        if (client == null) {
+            return Optional.empty();
+        }
+
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            client.files()
+                    .export(sheetId,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .executeMediaAndDownloadTo(out);
+
+            byte[] bytes = out.toByteArray();
+            if (bytes.length == 0) {
+                log.warn("Sheet {} exported as zero bytes.", sheetId);
+                return Optional.empty();
+            }
+            /*
+             * An .xlsx is a zip, so it starts "PK". Checked for the same reason
+             * the photo fetcher checks magic bytes: a Drive id can point at
+             * anything the account can read, and being handed a PDF here would
+             * fail later inside POI with a message about the wrong thing.
+             */
+            if (bytes.length < 4 || bytes[0] != 'P' || bytes[1] != 'K') {
+                log.warn("Sheet {} did not export as a workbook.", sheetId);
+                return Optional.empty();
+            }
+            log.info("Exported sheet {} ({} bytes).", sheetId, bytes.length);
+            return Optional.of(bytes);
+
+        } catch (IOException | RuntimeException ex) {
+            // A 404 here almost always means the sheet was never shared with
+            // the service account - the step everyone misses.
+            log.warn("Could not export sheet {}: {}", sheetId, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** True when Drive is switched on AND the credentials actually loaded. */
+    public boolean isUsable() {
+        return enabled && client() != null;
+    }
+
+    /**
      * Built once, lazily, on first use.
      *
      * Lazy rather than in the constructor so a missing or unreadable key cannot
