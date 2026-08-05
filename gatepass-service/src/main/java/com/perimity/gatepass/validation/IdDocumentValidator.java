@@ -70,7 +70,7 @@ public final class IdDocumentValidator {
             return true;
         }
 
-        String value = number.trim().toUpperCase();
+        String value = normalise(number);
 
         return switch (type) {
             case AADHAAR -> value.matches(AADHAAR) && notAllSameDigit(value) && verhoeff(value);
@@ -78,6 +78,16 @@ public final class IdDocumentValidator {
             case PASSPORT -> value.matches(PASSPORT);
             case VOTER_ID -> value.matches(VOTER_ID);
         };
+    }
+
+    /**
+     * Spaces and hyphens are how people read a number off the card - Aadhaar is
+     * printed in three groups of four, and a PAN is often written with a dash.
+     * Rejecting the separators would fail the number the visitor is looking
+     * straight at, so they are stripped rather than refused.
+     */
+    public static String normalise(String number) {
+        return number == null ? null : number.replaceAll("[\\s-]", "").trim().toUpperCase();
     }
 
     /** 111111111111 has a valid shape and is not a real Aadhaar. */
@@ -119,14 +129,14 @@ public final class IdDocumentValidator {
         if (number == null || number.isBlank()) {
             return null;
         }
-        String value = number.trim().toUpperCase();
+        String value = normalise(number);
         return value.length() <= 4 ? value : value.substring(value.length() - 4);
     }
 
     /** What to tell someone who got it wrong. Names the shape, not the rule. */
     public static String messageFor(IdType type) {
         return switch (type) {
-            case AADHAAR -> "An Aadhaar number is 12 digits and must pass its checksum";
+            case AADHAAR -> "Check the number - 12 digits, and one of them looks wrong";
             case PAN -> "A PAN is 5 letters, 4 digits and a letter, e.g. ABCDE1234F";
             case PASSPORT -> "A passport number is a letter followed by 7 digits, e.g. A1234567";
             case VOTER_ID -> "A voter ID is 3 letters followed by 7 digits, e.g. ABC1234567";

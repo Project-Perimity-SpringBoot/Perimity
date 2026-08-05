@@ -15,15 +15,33 @@ const SHAPES: Record<IdType, RegExp> = {
   VOTER_ID: /^[A-Z]{3}[0-9]{7}$/,
 };
 
+/**
+ * How many characters the field accepts, INCLUDING the spaces people naturally
+ * type. Aadhaar is printed in three groups of four, so 12 digits plus two
+ * spaces. Bounding the input means a 13th digit simply cannot be typed - far
+ * better than accepting it and complaining afterwards.
+ */
+export const ID_MAX_LENGTH: Record<IdType, number> = {
+  AADHAAR: 14,
+  PAN: 10,
+  PASSPORT: 8,
+  VOTER_ID: 10,
+};
+
+/** Aadhaar is digits only, so a phone should open its number pad. */
+export const ID_NUMERIC_ONLY: Record<IdType, boolean> = {
+  AADHAAR: true, PAN: false, PASSPORT: false, VOTER_ID: false,
+};
+
 export const ID_HINTS: Record<IdType, string> = {
-  AADHAAR: '12 digits, e.g. 2341 2341 2346',
+  AADHAAR: '12 digits. Spaces are fine, e.g. 2341 2341 2346',
   PAN: '5 letters, 4 digits, 1 letter — e.g. ABCDE1234F',
   PASSPORT: 'A letter then 7 digits — e.g. A1234567',
   VOTER_ID: '3 letters then 7 digits — e.g. ABC1234567',
 };
 
 export const ID_MESSAGES: Record<IdType, string> = {
-  AADHAAR: 'An Aadhaar number is 12 digits and must pass its checksum',
+  AADHAAR: 'Check the number — 12 digits, and one of them looks wrong',
   PAN: 'A PAN is 5 letters, 4 digits and a letter, e.g. ABCDE1234F',
   PASSPORT: 'A passport number is a letter followed by 7 digits, e.g. A1234567',
   VOTER_ID: 'A voter ID is 3 letters followed by 7 digits, e.g. ABC1234567',
@@ -63,7 +81,9 @@ export function verhoeff(digits: string): boolean {
 export function isValidIdNumber(type: IdType | '' | undefined, value: string | undefined): boolean {
   if (!type || !value || !value.trim()) return true;
 
-  const normalised = value.trim().toUpperCase();
+  // Spaces and hyphens are how the number is printed on the card. Strip them
+  // rather than refuse the thing the visitor is looking straight at.
+  const normalised = value.replace(/[\s-]/g, '').trim().toUpperCase();
   if (!SHAPES[type].test(normalised)) return false;
 
   if (type === 'AADHAAR') {
