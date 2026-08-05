@@ -18,12 +18,6 @@ const personName = z
   .max(LIMITS.personName.max, 'Name may be at most 120 characters')
   .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only');
 
-const phone = z
-  .string()
-  .regex(RX.PHONE, 'Enter a valid phone number')
-  .optional()
-  .or(z.literal(''));
-
 /**
  * 8+ with upper, lower and a digit. NOT 12, and NO symbol — the design mockup's
  * checklist contradicts the backend regex, and the backend wins.
@@ -61,7 +55,9 @@ export type OtpVerifyValues = z.infer<typeof otpVerifySchema>;
 export const visitorRegistrationSchema = z.object({
   email,
   name: personName,
-  phone,
+  // No phone. A visitor is reached by email - that address is OTP-verified,
+  // which a phone number never is. Collected later on the pass application if
+  // the host wants a number for the day of the visit.
 });
 export type VisitorRegistrationValues = z.infer<typeof visitorRegistrationSchema>;
 
