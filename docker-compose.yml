@@ -1,11 +1,11 @@
-# Perimity — local development stack.
+# Perimity â€” local development stack.
 #
 # Reads values from .env in this folder. Copy .env.example to .env first.
 #
 #   cp .env.example .env
 #   docker compose up --build
 #
-# The `version:` key was removed — Compose v2 ignores it and warns about it.
+# The `version:` key was removed â€” Compose v2 ignores it and warns about it.
 services:
   # ---------- Infrastructure ----------
   postgres:
@@ -181,7 +181,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
-      GATEPASS_BASE_URL: http://gatepass-service:8083
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
       STORAGE_LOCAL_DIR: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
