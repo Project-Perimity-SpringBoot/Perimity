@@ -67,6 +67,7 @@ const StudentPassDetail = lazy(() => import('@features/student/routes/PassDetail
 const StudentEntryHistory = lazy(() => import('@features/student/routes/EntryHistoryPage'));
 const StudentProfile = lazy(() => import('@features/student/routes/ProfilePage'));
 const StudentProfileEdit = lazy(() => import('@features/student/routes/ProfileEditPage'));
+const StudentProfileDetails = lazy(() => import('@features/student/routes/ProfileDetailsPage'));
 const StudentDocuments = lazy(() => import('@features/student/routes/DocumentsPage'));
 
 /* ── PHASE 5 · Visitor ─────────────────────────────────────────────────── */
@@ -78,6 +79,10 @@ const VisitorPass = lazy(() => import('@features/visitor/routes/PassPage'));
 /* ── PHASE 4 · Faculty ─────────────────────────────────────────────────── */
 const FacultyOverview = lazy(() => import('@features/faculty/routes/FacultyOverview'));
 const FacultyApprovals = lazy(() => import('@features/faculty/routes/ApprovalsPage'));
+const FacultyAddStudent = lazy(() => import('@features/faculty/routes/AddStudentPage'));
+const FacultyStudentVerification = lazy(
+  () => import('@features/faculty/routes/StudentVerificationPage'),
+);
 const FacultyOnboarding = lazy(() => import('@features/faculty/routes/OnboardingPage'));
 const FacultyBatchProgress = lazy(() => import('@features/faculty/routes/BatchProgressPage'));
 const FacultyEvents = lazy(() => import('@features/faculty/routes/EventsPage'));
@@ -171,6 +176,11 @@ export const router = createBrowserRouter([
                   { path: '/student/entries', element: <StudentEntryHistory /> },
                   { path: '/student/profile', element: <StudentProfile /> },
                   { path: '/student/profile/edit', element: <StudentProfileEdit /> },
+                  /* Separate from /profile/edit on purpose. That screen patches
+                     and can pause a pass; this one replaces the whole record and
+                     submits it for faculty to check. Different contracts, so
+                     different screens. */
+                  { path: '/student/profile/details', element: <StudentProfileDetails /> },
                   { path: '/student/documents', element: <StudentDocuments /> },
                 ],
               },
@@ -201,6 +211,15 @@ export const router = createBrowserRouter([
                 children: [
                   { path: '/faculty', element: <FacultyOverview /> },
                   { path: '/faculty/approvals', element: <FacultyApprovals /> },
+                  /* Faculty are the ONLY role that may create a STUDENT
+                     account, but until now the only way to do it was a
+                     spreadsheet. This is the single-student path the policy
+                     already assumed existed. */
+                  { path: '/faculty/students/new', element: <FacultyAddStudent /> },
+                  {
+                    path: '/faculty/students/verification',
+                    element: <FacultyStudentVerification />,
+                  },
                   { path: '/faculty/onboarding', element: <FacultyOnboarding /> },
                   {
                     path: '/faculty/onboarding/batches/:batchId',

@@ -1,7 +1,7 @@
 import {
   BadgeCheck, Building2, CalendarRange, ClipboardList, FileText, Gauge, IdCard,
   LayoutDashboard, ListChecks, LogIn, ScanLine, Settings2, ShieldBan,
-  Users, UsersRound, type LucideIcon,
+  UserPen, UserPlus, Users, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/types/enums';
 import type { Capability } from '@lib/auth/permissions';
@@ -13,7 +13,7 @@ export interface NavItem {
   /** Hidden unless the signed-in user holds it. Mirrors the server, for UX only. */
   capability?: Capability;
   /** Query key name whose value renders as a count pill. */
-  badge?: 'pendingRequests';
+  badge?: 'pendingRequests' | 'pendingStudentVerification';
   end?: boolean;
 }
 
@@ -36,6 +36,20 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   FACULTY: [
     { to: '/faculty', label: 'Overview', icon: LayoutDashboard, end: true },
     { to: '/faculty/approvals', label: 'Approvals', icon: ClipboardList, badge: 'pendingRequests' },
+    /* Gated on profile:createStudent, which only FACULTY and the two admin
+       roles hold - it mirrors UserAdminController.CREATABLE, where FACULTY is
+       the only role that may create a STUDENT. */
+    { to: '/faculty/students/new', label: 'Add student', icon: UserPlus, capability: 'profile:createStudent' },
+    /* Same capability as Add student: whoever may create a student is who may
+       check that student's own details. The server allows any staff role, so
+       this is the narrower of the two rules and the safer default. */
+    {
+      to: '/faculty/students/verification',
+      label: 'Check details',
+      icon: BadgeCheck,
+      capability: 'profile:createStudent',
+      badge: 'pendingStudentVerification',
+    },
     { to: '/faculty/onboarding', label: 'Onboarding', icon: ListChecks, capability: 'bulk:run' },
     { to: '/faculty/events', label: 'Events', icon: CalendarRange, capability: 'event:manage' },
   ],
@@ -44,6 +58,7 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { to: '/student/passes', label: 'My passes', icon: IdCard },
     { to: '/student/entries', label: 'Entry history', icon: ScanLine },
     { to: '/student/profile', label: 'Profile', icon: BadgeCheck },
+    { to: '/student/profile/details', label: 'My details', icon: UserPen },
     { to: '/student/documents', label: 'Documents', icon: FileText },
   ],
   VISITOR: [

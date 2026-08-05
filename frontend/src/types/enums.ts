@@ -30,6 +30,48 @@ export const DENIAL_REASONS = [
 ] as const;
 export type DenialReason = (typeof DENIAL_REASONS)[number];
 
+/**
+ * Where a student's self-declared details are in the verification cycle.
+ * Mirrors ProfileVerificationStatus in user-service — keep the two identical.
+ *
+ *   DRAFT     -> SUBMITTED   student finished and asked to be checked
+ *   SUBMITTED -> VERIFIED    faculty accepted
+ *   SUBMITTED -> REJECTED    faculty refused, with mandatory remarks
+ *   REJECTED  -> SUBMITTED   student corrected it and asked again
+ *   VERIFIED  -> DRAFT       student edited a verified profile
+ *
+ * An array, not a bare union, because the queue screen needs to iterate it.
+ */
+export const PROFILE_VERIFICATION_STATUSES = [
+  'DRAFT', 'SUBMITTED', 'VERIFIED', 'REJECTED',
+] as const;
+export type ProfileVerificationStatus = (typeof PROFILE_VERIFICATION_STATUSES)[number];
+
+/**
+ * The server permits editing in DRAFT and REJECTED only. SUBMITTED is locked
+ * while faculty read it; VERIFIED is editable but as an explicit act that
+ * clears the verification, so the form asks first rather than silently
+ * discarding somebody's approval.
+ *
+ * This mirrors ProfileVerificationStatus.isStudentEditable() and is a UI hint
+ * ONLY — the server enforces it regardless of what this says.
+ */
+export const isProfileEditable = (status: ProfileVerificationStatus | null | undefined): boolean =>
+  status === 'DRAFT' || status === 'REJECTED' || status === 'VERIFIED';
+
+export const canSubmitProfile = (status: ProfileVerificationStatus | null | undefined): boolean =>
+  status === 'DRAFT' || status === 'REJECTED';
+
+export const GENDERS = ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'] as const;
+export type Gender = (typeof GENDERS)[number];
+
+export const GENDER_LABELS: Readonly<Record<Gender, string>> = {
+  MALE: 'Male',
+  FEMALE: 'Female',
+  OTHER: 'Other',
+  PREFER_NOT_TO_SAY: 'Prefer not to say',
+};
+
 export type SessionState = 'OPEN' | 'CLOSED';
 export type DocumentType = 'PHOTO' | 'ID_PROOF' | 'CERTIFICATE' | 'OTHER';
 export type ProfileType = 'STUDENT' | 'FACULTY';
@@ -51,6 +93,48 @@ export type AuditAction =
   | 'BULK_BLOCKLIST_SCREENED' | 'BULK_IDENTITY_RESOLVED';
 
 /* ── Derived rules, transcribed from Java. Import these; never reimplement. ── */
+
+/**
+ * UserAdminController.CREATABLE — who may create whom.
+ *
+ * Must stay byte-for-byte equivalent to the map in UserAdminController. If the
+ * two drift, the form offers a role the server refuses and the user meets a 403
+ * after filling in the whole thing.
+ *
+ *   SUPER_ADMIN   unrestricted. The server skips the check entirely for them.
+ *   CAMPUS_ADMIN  teaching staff and gate staff on their own campus. NOT
+ *                 students - those come from Faculty, who know who is actually
+ *                 in their class, or from bulk onboarding. NOT another Campus
+ *                 Admin - appointing a peer is the Super Admin's decision.
+ *   FACULTY       their students, and nobody else.
+ *
+ * VISITOR is granted to nobody: visitors self-register, and bulk onboarding
+ * mints them through the internal API, which never reaches this endpoint.
+ *
+ * SUPER_ADMIN appears in no other role's list, so campus-level access can never
+ * escalate to the platform.
+ *
+ * Transcribed here because the form previously offered every role to everyone
+ * and DEFAULTED to STUDENT - so a Campus Admin opening "Add user" saw a form
+ * pre-filled with a role the server then refused. A 403 the UI could have
+ * prevented reads as a broken app rather than as a rule. Keep this identical to
+ * UserAdminController.CREATABLE; if the two drift, that bug comes back.
+ *
+ * ORDER MATTERS - the form defaults to the first entry and the dropdown renders
+ * in this order.
+ */
+export const CREATABLE_ROLES: Readonly<Record<Role, readonly Role[]>> = {
+  SUPER_ADMIN: ROLES,
+  CAMPUS_ADMIN: ['FACULTY', 'GUARD'],
+  FACULTY: ['STUDENT'],
+  STUDENT: [],
+  VISITOR: [],
+  GUARD: [],
+};
+
+/** What this person may actually pick in a "create account" form. */
+export const creatableRolesFor = (actor: Role | null | undefined): readonly Role[] =>
+  actor ? CREATABLE_ROLES[actor] : [];
 
 /** PassStatus.isScannable() */
 export const isScannable = (s: PassStatus): boolean => s === 'ACTIVE';

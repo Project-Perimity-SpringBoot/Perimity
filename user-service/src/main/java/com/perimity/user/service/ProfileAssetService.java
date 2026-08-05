@@ -6,6 +6,7 @@ import com.perimity.user.dto.response.PresignedUrlResponse;
 import com.perimity.user.dto.response.StudentProfileResponse;
 import com.perimity.user.entity.FacultyProfile;
 import com.perimity.user.entity.StudentProfile;
+import com.perimity.user.entity.enums.ProfileVerificationStatus;
 import com.perimity.user.exception.ResourceNotFoundException;
 import com.perimity.user.repository.FacultyProfileRepository;
 import com.perimity.user.repository.StudentProfileRepository;
@@ -102,6 +103,7 @@ public class ProfileAssetService {
 
         String previousKey = profile.getPhotoS3Key();
         profile.setPhotoS3Key(store(key, file, contentType).key());
+        clearVerificationIfVerified(profile);
         StudentProfile saved = studentRepository.save(profile);
 
         replaceOldObject(previousKey, saved.getPhotoS3Key());
@@ -125,6 +127,7 @@ public class ProfileAssetService {
         String previousKey = profile.getPhotoS3Key();
         if (previousKey != null) {
             profile.setPhotoS3Key(null);
+            clearVerificationIfVerified(profile);
             studentRepository.save(profile);
             storage.delete(previousKey);
             // Removing the photo is as much of a change as replacing it - the
@@ -193,6 +196,37 @@ public class ProfileAssetService {
             storage.delete(previousKey);
             log.info("Replaced photo, removed {}", previousKey);
         }
+    }
+
+    /**
+     * A new or removed photo un-verifies the profile.
+     *
+     * The photo is part of what faculty check, so a verified record with a
+     * photo nobody has seen is a false attestation - the same hole that
+     * StudentProfileService.updateOwnDetails closes when the text fields
+     * change, and the photo is the field where it matters most, because it is
+     * the one a guard actually compares against a face.
+     *
+     * Pausing the pass is NOT a substitute. Pausing says "this pass does not
+     * open the gate right now"; the verification status says "a named member of
+     * staff looked at this". They answer different questions and both have to
+     * be true.
+     *
+     * Only VERIFIED is cleared. Replacing a photo mid-review would be a way to
+     * swap the picture while somebody is looking at it, so SUBMITTED is left
+     * alone here - it is refused earlier, by requireVisibleStudent's caller
+     * chain and the state machine in StudentProfileService.
+     */
+    private void clearVerificationIfVerified(StudentProfile profile) {
+        if (profile.getVerificationStatus() != ProfileVerificationStatus.VERIFIED) {
+            return;
+        }
+        profile.setVerificationStatus(ProfileVerificationStatus.DRAFT);
+        profile.setVerifiedBy(null);
+        profile.setVerifiedAt(null);
+        profile.setVerificationRemarks(null);
+        profile.setSubmittedAt(null);
+        log.info("Photo changed on verified profile {}; verification cleared.", profile.getId());
     }
 
     private void pause(Long holderUserId) {

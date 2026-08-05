@@ -13,7 +13,7 @@ import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { authKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
-import { ROLES, type Role } from '@/types/enums';
+import { ROLES, creatableRolesFor, type Role } from '@/types/enums';
 import type { UserResponse } from '@/types/auth.types';
 import { ROLE_LABEL } from '@/layouts/navigation';
 import { useApiFormErrors } from '@hooks/useApiForm';
@@ -70,9 +70,25 @@ export default function UsersPage() {
     );
   }, [users.data, debounced]);
 
+  /*
+   * What this admin may actually create, per UserAdminController.CREATABLE.
+   * A CAMPUS_ADMIN gets FACULTY and GUARD - not STUDENT (faculty create their
+   * own students) and not another CAMPUS_ADMIN (that is the Super Admin's call).
+   */
+  const creatable = creatableRolesFor(identity?.role);
+
   const createForm = useForm<UserCreateValues>({
     resolver: zodResolver(userCreateSchema),
-    defaultValues: { email: '', name: '', phone: '', role: 'STUDENT', temporaryPassword: '' },
+    defaultValues: {
+      email: '',
+      name: '',
+      phone: '',
+      // Was hardcoded to STUDENT, which is the ONE role a Campus Admin cannot
+      // create - so the form opened pre-set to fail. Default to the first role
+      // this actor is actually allowed to make.
+      role: creatable[0] ?? 'FACULTY',
+      temporaryPassword: '',
+    },
   });
   const applyCreateErrors = useApiFormErrors<UserCreateValues>(createForm.setError, setFormErrors);
   const watchedRole = createForm.watch('role');
@@ -256,10 +272,27 @@ export default function UsersPage() {
               </Field>
 
               <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-                <Field label="Role" required error={createForm.formState.errors.role?.message}>
+                <Field
+                  label="Role"
+                  required
+                  /* Says WHY the list is short. Without this the absence of
+                     "Student" reads as a missing feature - it was reported as a
+                     bug once already. A rule the user cannot see is a rule they
+                     assume is broken. */
+                  hint={
+                    identity?.role === 'CAMPUS_ADMIN'
+                      ? 'Students are added by their faculty or through bulk onboarding, not here.'
+                      : undefined
+                  }
+                  error={createForm.formState.errors.role?.message}
+                >
                   {({ id, describedBy }) => (
+                    /* Only what the SERVER will accept from this actor. The list
+                       used to be every role but SUPER_ADMIN, which meant a
+                       Campus Admin could pick STUDENT and get a 403 after
+                       filling the whole form. See CREATABLE_ROLES. */
                     <NativeSelect id={id} aria-describedby={describedBy} {...createForm.register('role')}>
-                      {ROLES.filter((role) => role !== 'SUPER_ADMIN').map((role) => (
+                      {creatable.map((role) => (
                         <option key={role} value={role}>{ROLE_LABEL[role]}</option>
                       ))}
                     </NativeSelect>
