@@ -164,7 +164,15 @@ services:
       discovery-server: { condition: service_healthy }
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
+      # service_started, NOT service_healthy, and the difference matters.
+      #
+      # auth-service publishes user.created but does not need the broker to do
+      # its job: UserEventPublisher swallows a publish failure precisely so a
+      # RabbitMQ hiccup cannot fail account creation. Waiting for the broker to
+      # be HEALTHY before starting would undo that at the other end - a broken
+      # RabbitMQ would stop auth-service booting, and nobody could log in to
+      # anything. Sign-in must not depend on a message queue.
+      rabbitmq: { condition: service_started }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/auth/ping"]
       interval: 10s
