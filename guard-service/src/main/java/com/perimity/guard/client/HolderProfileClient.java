@@ -26,8 +26,15 @@ public interface HolderProfileClient {
     Optional<HolderProfile> profileFor(Long userId);
 
     /**
-     * photoKey is an object-storage key, not a URL. Nothing can render it yet -
-     * see HttpHolderProfileClient for what is still needed from user-service.
+     * photoKey is an object-storage key; photoUrl is a short-lived signed link
+     * to the same object, minted fresh by user-service on every read.
+     *
+     * Both are carried because they are different things. The key is stable and
+     * meaningless to a browser; the URL is renderable and expires. The gate
+     * needs the second one — a guard has to look at a face, which was the whole
+     * point of FR-SCAN-9 — and it was being dropped here.
+     *
+     * Either may be null and that is normal: a visitor has no profile at all.
      */
-    record HolderProfile(Long userId, String identifierCode, String photoKey) { }
+    record HolderProfile(Long userId, String identifierCode, String photoKey, String photoUrl) { }
 }

@@ -53,12 +53,16 @@ public class VisitorRequestController {
     public ResponseEntity<ApiResponse<VisitorRequestResponse>> submit(
             @Valid @RequestBody VisitorRequestCreateDto dto) {
 
-        // A visitor's token names the campus they registered for. Taking it
-        // from the body would let anyone request entry to any institution.
-        dto.setCampusId(currentUser.campusId());
+        // The visitor chooses the campus now - see VisitorRequestCreateDto for
+        // why that is safe. The service checks it exists; the rule lives next
+        // to the row it is about, as the ownership checks do.
+
+        // A visitor here is signed in, and a visitor signs in only by email OTP.
+        // Their address is already proven, so the request is created verified.
+        Long verifiedVisitor = currentUser.require().isVisitor() ? currentUser.userId() : null;
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Request submitted", service.submit(dto)));
+                .body(ApiResponse.ok("Request submitted", service.submit(dto, verifiedVisitor)));
     }
 
     @PatchMapping("/{id}/decision")
@@ -107,15 +111,29 @@ public class VisitorRequestController {
 
     @GetMapping("/mine")
     @PreAuthorize("hasAnyRole('FACULTY','CAMPUS_ADMIN','SUPER_ADMIN')")
-    @Operation(summary = "Your own approval queue, as the host")
+    @Operation(summary = "The approval queue for your campus")
     public ApiResponse<PageResponse<VisitorRequestResponse>> myQueue(
             @RequestParam(defaultValue = "PENDING") RequestStatus status,
+            @RequestParam(required = false) @Positive Long campusId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.ASC)
             Pageable pageable) {
 
-        // hostUserId comes from the token. Before Day 7 this was a parameter,
-        // so any faculty member could read another's queue by changing it.
-        return ApiResponse.ok(service.byHostAndStatus(currentUser.userId(), status, pageable));
+        /*
+         * Campus-wide, not per-host.
+         *
+         * A visitor now chooses a campus rather than naming a person, so a
+         * per-host queue would leave every request unseen: hostUserId is
+         * usually null. Any faculty of the campus can act on it, and decide()
+         * records who did in reviewedBy.
+         *
+         * campusId comes from the token for faculty and campus admins, exactly
+         * as hostUserId used to. The ?campusId= parameter exists only because a
+         * Super Admin has no campus of their own and must name one; supplying
+         * someone else's is refused, not ignored. See
+         * CurrentUser.resolveCampusForListing.
+         */
+        return ApiResponse.ok(service.byCampusAndStatus(
+                currentUser.resolveCampusForListing(campusId), status, pageable));
     }
 
     @GetMapping("/my-history")

@@ -205,6 +205,10 @@ class ScanControllerSecurityTest {
     private ScanResponse allowedResponse() {
         return new ScanResponse(ScanResult.ALLOWED, "Welcome, R. Kulkarni", null,
                 118L, 108L, "R. Kulkarni", null, null, 3L, "Main Gate",
-                LocalDateTime.now(), "entrylog-1", null);
+                LocalDateTime.now(), "entrylog-1",
+                // photo key, then the signed URL the gate renders. Null here on
+                // purpose: this test is about who may call the endpoint, and a
+                // photo has nothing to do with that.
+                null, null);
     }
 }

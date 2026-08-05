@@ -89,8 +89,25 @@ public class StudentSelfDetailsDto {
     @Schema(example = "FEMALE")
     private Gender gender;
 
+    /**
+     * @NotBlank alone is the same rule as "not empty", so the single word
+     * "address" passed validation - and did, in testing. This is a field
+     * FACULTY VERIFY, and attesting to a one-word address attests to nothing.
+     *
+     * The minimum length and the digit-or-comma check below are the two cheap
+     * signals that separate a real address from a placeholder: a house number,
+     * a PIN code, or a separator between street and city.
+     *
+     * Deliberately NOT a format rule. Addresses differ far too much between
+     * countries for a regex to be honest, and this product is campus-agnostic.
+     *
+     * Mirrors studentSelfDetailsSchema on the client exactly. A stricter client
+     * rejects what the server would accept; a looser one produces a 400 the
+     * user cannot act on.
+     */
     @NotBlank(message = "Address is required")
-    @Size(max = 250, message = "Keep the address under 250 characters")
+    @Size(min = 10, max = 250,
+          message = "Give the full address - house or street, area and city")
     private String address;
 
     @NotBlank(message = "Country code is required")
@@ -151,6 +168,43 @@ public class StudentSelfDetailsDto {
         boolean hasCode = altPhoneCountryCode != null && !altPhoneCountryCode.isBlank();
         boolean hasNumber = altPhoneNumber != null && !altPhoneNumber.isBlank();
         return hasCode == hasNumber;
+    }
+
+    /**
+     * A second number identical to the first is not a second contact.
+     *
+     * Compared WITH the country code, so +91 9876543214 and +44 9876543214 are
+     * correctly treated as different numbers rather than the same one.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(message = "The second number must be different from the first")
+    public boolean isAltPhoneDistinct() {
+        if (altPhoneNumber == null || altPhoneNumber.isBlank()) {
+            return true;
+        }
+        String primary = safe(phoneCountryCode) + safe(phoneNumber);
+        String alternate = safe(altPhoneCountryCode) + safe(altPhoneNumber);
+        return !primary.equals(alternate);
+    }
+
+    /**
+     * The address must carry at least one digit or comma. Separate from the
+     * @Size rule above so the two failures produce different messages - "too
+     * short" and "looks like a placeholder" are different problems.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(message = "Include a house or street number, or separate the parts with commas")
+    public boolean isAddressSpecific() {
+        if (address == null || address.isBlank()) {
+            return true;   // @NotBlank already reports this
+        }
+        return address.chars().anyMatch(Character::isDigit) || address.contains(",");
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value.trim();
     }
 
     /**

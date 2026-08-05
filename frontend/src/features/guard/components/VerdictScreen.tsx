@@ -1,5 +1,6 @@
 import { AlertTriangle, CalendarCheck, Check, X } from 'lucide-react';
 import { Avatar, Button } from '@ui/index';
+import { AuthedImage } from '@components/upload';
 import { formatTime } from '@lib/format/datetime';
 import type { DenialReason } from '@/types/enums';
 import type { ScanResponse } from '@/types/guard.types';
@@ -84,6 +85,7 @@ export function VerdictScreen({
   onDismiss: () => void;
 }) {
   const v = VERDICT[scan.result];
+
   const reason = denialText(scan.denialReason);
 
   return (
@@ -128,12 +130,31 @@ export function VerdictScreen({
 
       {scan.holderName && (
         <div className="flex flex-col items-center gap-[var(--sp-3)]">
-          {/* Initials, never a photo. ScanResponse carries holderPhotoKey - an
-              object-storage key - and a guard's browser cannot resolve one to a
-              URL (blocker B11). A broken image at a gate is worse than no
-              image: it looks like the system failed rather than like the photo
-              was never sent. */}
-          <Avatar name={scan.holderName} className="size-16" />
+          {/*
+            THE PHOTO IS THE POINT OF THIS SCREEN.
+            A valid QR proves the pass is real. It cannot prove the person
+            holding the phone is the person it belongs to — a screenshot of
+            somebody else's pass scans perfectly. The face is the only check
+            that closes that, which is why FR-SCAN-9 asks for it.
+
+            AuthedImage, NOT a plain <img>. This was a plain img and it never
+            worked: in local-storage mode presignedReadUrl returns
+            "/api/user/storage/local/{key}", a path back through user-service
+            behind .authenticated(), and a browser sends no Authorization header
+            with an image request. Every photo 401'd and fell back to initials —
+            silently, which is why it looked deliberate rather than broken.
+
+            AuthedImage fetches through the API client, so the interceptor adds
+            the token, and it passes absolute S3 URLs straight through for when
+            storage moves. Avatar stays as the fallback, so a visitor with no
+            profile sees exactly what they saw before.
+          */}
+          <AuthedImage
+            url={scan.holderPhotoUrl}
+            alt={`Photo of ${scan.holderName}`}
+            className="size-24 rounded-[var(--r-circle)] object-cover"
+            fallback={<Avatar name={scan.holderName} className="size-16" />}
+          />
           <p className="text-h2 text-[var(--ink-900)]">{scan.holderName}</p>
         </div>
       )}
