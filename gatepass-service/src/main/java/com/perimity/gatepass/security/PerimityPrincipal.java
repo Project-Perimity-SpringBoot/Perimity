@@ -40,6 +40,11 @@ public record PerimityPrincipal(
                 campus == null ? null : campus.longValue());
     }
 
+    /** A visitor holds a token only by verifying an email OTP - never a password. */
+    public boolean isVisitor() {
+        return "VISITOR".equals(role);
+    }
+
     public boolean isSuperAdmin() {
         return "SUPER_ADMIN".equals(role);
     }
