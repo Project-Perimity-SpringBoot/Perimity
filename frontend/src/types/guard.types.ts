@@ -17,8 +17,14 @@ export interface ScanResponse {
   scannedAt: string;
   /** Mongo ObjectId as a string. */
   entryLogId: string;
-  /** A guard cannot resolve this to a URL — blocker B11. */
+  /** Stable object-storage key. Not renderable; use holderPhotoUrl. */
   holderPhotoKey: string | null;
+  /**
+   * Short-lived signed link, minted per scan by user-service. Null is normal —
+   * a visitor has no profile, and the server returns null rather than stalling
+   * a queue if object storage is slow.
+   */
+  holderPhotoUrl: string | null;
 }
 
 export interface ScanSessionResponse {

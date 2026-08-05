@@ -33,16 +33,33 @@ public record ScanResponse(
         /**
          * Object-storage key for the holder's photo, or null.
          *
-         * A KEY, not a URL - user-service has no internal presigned-URL endpoint
-         * yet, so nothing can render this. It is carried anyway so the contract
-         * is settled and the scanner only has to change where it points, not what
-         * it expects. Null is entirely normal: visitors have no profile.
+         * Kept alongside holderPhotoUrl rather than replaced by it. The key is
+         * stable and identifies the object; the URL expires. Anything that wants
+         * to refer to the photo later — an audit view, a support ticket — wants
+         * the key, not a link that stopped working minutes after the scan.
          *
          * Not stored on the EntryLog, unlike holderName. A name is a fact about
          * the moment of entry and belongs in an append-only record; a photo key
          * is a pointer to somebody else's mutable storage and does not.
          */
-        String holderPhotoKey
+        String holderPhotoKey,
+
+        /**
+         * A short-lived signed link to that photo, or null.
+         *
+         * THIS IS THE ONE THE GATE NEEDS. user-service mints it per read and it
+         * was already in the internal summary — guard-service was reading the
+         * key beside it and discarding this. The verdict screen could therefore
+         * only ever show initials, which meant a guard verified the pass but
+         * never the person, and checking the face is the entire mitigation for
+         * the attack the QR design does not prevent: a screenshot of somebody
+         * else's valid pass.
+         *
+         * Null is entirely normal. A visitor has no profile, and user-service
+         * returns null rather than failing if object storage is slow — a photo
+         * must never hold up a queue.
+         */
+        String holderPhotoUrl
 ) {
 
     /** Amber counts. The person walked through. */
@@ -51,7 +68,8 @@ public record ScanResponse(
     }
 
     /** Normal campus entry, or entry credited to an event. */
-    public static ScanResponse allowed(EntryLog log, String eventName, String photoKey) {
+    public static ScanResponse allowed(EntryLog log, String eventName,
+                                       String photoKey, String photoUrl) {
         String message = eventName == null
                 ? "Welcome, " + safeName(log)
                 : "Welcome to " + eventName;
@@ -60,7 +78,7 @@ public record ScanResponse(
                 log.getPassId(), log.getHolderUserId(), log.getHolderName(),
                 log.getAttributedEventId(), eventName,
                 log.getGateId(), log.getGateName(), log.getScannedAt(), log.getId(),
-                photoKey);
+                photoKey, photoUrl);
     }
 
     /**
@@ -72,7 +90,8 @@ public record ScanResponse(
      * there isn't one. Whether a campus wants amber or plain green here is its
      * own choice, read from `repeat_entry_result`.
      */
-    public static ScanResponse repeatEntry(EntryLog log, String eventName, String photoKey) {
+    public static ScanResponse repeatEntry(EntryLog log, String eventName,
+                                       String photoKey, String photoUrl) {
         String message = eventName == null
                 ? "Seen already today · " + safeName(log)
                 : "Seen already today · " + eventName;
@@ -81,7 +100,7 @@ public record ScanResponse(
                 log.getPassId(), log.getHolderUserId(), log.getHolderName(),
                 log.getAttributedEventId(), eventName,
                 log.getGateId(), log.getGateName(), log.getScannedAt(), log.getId(),
-                photoKey);
+                photoKey, photoUrl);
     }
 
     /**
@@ -96,7 +115,10 @@ public record ScanResponse(
                 ScanResult.DENIED, messageFor(reason), reason,
                 log.getPassId(), log.getHolderUserId(), log.getHolderName(),
                 null, null, log.getGateId(), log.getGateName(),
-                log.getScannedAt(), log.getId(), null);
+                log.getScannedAt(), log.getId(),
+                // No photo on a refusal - it was never fetched. The guard's job
+                // on red is to turn someone away, not to study their face.
+                null, null);
     }
 
     /**

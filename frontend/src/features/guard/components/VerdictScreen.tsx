@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlertTriangle, CalendarCheck, Check, X } from 'lucide-react';
 import { Avatar, Button } from '@ui/index';
 import { formatTime } from '@lib/format/datetime';
@@ -84,6 +85,16 @@ export function VerdictScreen({
   onDismiss: () => void;
 }) {
   const v = VERDICT[scan.result];
+
+  /*
+   * A signed URL that expired between the scan and the render is a real case,
+   * not a hypothetical — the link is short-lived by design. onError flips this
+   * and we fall back to initials, so the guard sees a name rather than a broken
+   * image icon. Keyed by nothing: a verdict lives for two seconds and is
+   * replaced wholesale by the next scan.
+   */
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photo = photoFailed ? null : scan.holderPhotoUrl;
   const reason = denialText(scan.denialReason);
 
   return (
@@ -128,12 +139,32 @@ export function VerdictScreen({
 
       {scan.holderName && (
         <div className="flex flex-col items-center gap-[var(--sp-3)]">
-          {/* Initials, never a photo. ScanResponse carries holderPhotoKey - an
-              object-storage key - and a guard's browser cannot resolve one to a
-              URL (blocker B11). A broken image at a gate is worse than no
-              image: it looks like the system failed rather than like the photo
-              was never sent. */}
-          <Avatar name={scan.holderName} className="size-16" />
+          {/*
+            THE PHOTO IS THE POINT OF THIS SCREEN.
+            A valid QR proves the pass is real. It cannot prove the person
+            holding the phone is the person it belongs to — a screenshot of
+            somebody else's pass scans perfectly. The face is the only check
+            that closes that, which is why FR-SCAN-9 asks for it.
+
+            Falls back to initials rather than a broken image. Null is the
+            normal case, not an error: visitors have no profile at all, and
+            user-service returns null rather than stalling a queue when storage
+            is slow. A broken image icon at a gate reads as "the system failed",
+            which is worse than "no photo was ever taken".
+
+            onError covers the third case — a link that expired between the scan
+            and the render. Same outcome, same reasoning.
+          */}
+          {photo ? (
+            <img
+              src={photo}
+              alt={`Photo of ${scan.holderName}`}
+              className="size-24 rounded-[var(--r-circle)] object-cover"
+              onError={() => setPhotoFailed(true)}
+            />
+          ) : (
+            <Avatar name={scan.holderName} className="size-16" />
+          )}
           <p className="text-h2 text-[var(--ink-900)]">{scan.holderName}</p>
         </div>
       )}
