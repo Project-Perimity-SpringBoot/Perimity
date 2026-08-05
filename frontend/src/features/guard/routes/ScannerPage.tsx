@@ -184,7 +184,7 @@ export default function ScannerPage() {
       : 'text-[var(--ink-500)] hover:text-[var(--ink-900)]');
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-[var(--sp-5)] p-[var(--sp-4)]">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-[var(--sp-6)] p-[var(--sp-4)]">
       {/* Offline. The scan itself needs the network - there is no local
           verification - so this states plainly that scanning will not work
           rather than letting a guard find out one person at a time. */}

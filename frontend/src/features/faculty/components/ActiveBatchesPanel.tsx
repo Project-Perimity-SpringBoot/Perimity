@@ -49,7 +49,7 @@ export function ActiveBatchesPanel() {
   if (batches.isPending || unfinished.length === 0) return null;
 
   return (
-    <section aria-labelledby="active-batches" className="surface-card p-[var(--sp-5)]">
+    <section aria-labelledby="active-batches" className="surface-card p-[var(--sp-6)]">
       <h2 id="active-batches" className="text-h3 mb-[var(--sp-4)] text-[var(--ink-900)]">
         Batches in progress
       </h2>

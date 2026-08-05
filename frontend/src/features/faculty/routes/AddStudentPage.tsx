@@ -168,7 +168,7 @@ export default function AddStudentPage() {
       <form
         noValidate
         onSubmit={form.handleSubmit((values) => create.mutate(values))}
-        className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]"
+        className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]"
       >
         <FormError messages={formErrors} />
 

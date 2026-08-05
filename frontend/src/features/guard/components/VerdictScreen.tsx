@@ -92,7 +92,7 @@ export function VerdictScreen({
     <section
       role="alert"
       aria-label={`${v.word}. ${scan.message}`}
-      className="flex min-h-[60dvh] flex-col items-center justify-center gap-[var(--sp-5)]
+      className="flex min-h-[60dvh] flex-col items-center justify-center gap-[var(--sp-6)]
                  rounded-[var(--r-lg)] p-[var(--sp-6)] text-center"
       style={{ backgroundColor: v.bg }}
     >

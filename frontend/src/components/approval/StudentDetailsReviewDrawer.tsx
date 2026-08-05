@@ -171,7 +171,7 @@ export function StudentDetailsReviewDrawer({
 
                 128px because a thumbnail cannot be checked against anything.
                ----------------------------------------------------------- */}
-            <section className="flex flex-wrap items-start gap-[var(--sp-5)]">
+            <section className="flex flex-wrap items-start gap-[var(--sp-6)]">
               <div className="shrink-0">
                 {photoUrl.isPending && profile.photoS3Key ? (
                   <div className="size-32 animate-pulse rounded-[var(--r-md)] bg-[var(--surface-sunken)]" />

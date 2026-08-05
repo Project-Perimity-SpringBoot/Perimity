@@ -156,7 +156,7 @@ export default function GuardLoginPage() {
 
             <form
               noValidate
-              className="mt-[var(--sp-6)] flex flex-col gap-[var(--sp-5)]"
+              className="mt-[var(--sp-6)] flex flex-col gap-[var(--sp-4)]"
               onSubmit={form.handleSubmit((values) => {
                 setFormErrors([]);
                 login.mutate(values);

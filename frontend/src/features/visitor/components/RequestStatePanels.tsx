@@ -49,7 +49,7 @@ export function NoRequestState({ email }: { email: string | undefined }) {
  */
 export function PendingState({ request }: { request: VisitorRequestResponse }) {
   return (
-    <section className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+    <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
       <div className="flex flex-col gap-[var(--sp-1)]">
         <h2 className="text-h3 text-[var(--ink-900)]">Waiting for approval</h2>
         <p className="text-body text-[var(--ink-700)]">
@@ -101,7 +101,7 @@ export function PendingState({ request }: { request: VisitorRequestResponse }) {
  */
 export function RejectedState({ request }: { request: VisitorRequestResponse }) {
   return (
-    <section className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+    <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
       <div className="flex items-start gap-[var(--sp-3)]">
         <FileX2 className="mt-[2px] size-5 shrink-0 text-[var(--ink-500)]" aria-hidden />
         <div className="flex flex-col gap-[var(--sp-1)]">
