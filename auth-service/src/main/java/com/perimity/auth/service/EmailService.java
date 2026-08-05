@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -58,6 +59,13 @@ public class EmailService {
     }
 
     /** OTP for login, registration, visitor verification, pass retrieval or password reset. */
+    /**
+     * Fire-and-forget. The OTP row is already committed before this runs, so
+     * the code is valid whether or not the mail lands, and every failure path
+     * below already logs rather than throws - nothing here is worth making a
+     * visitor wait five seconds for.
+     */
+    @Async("mailExecutor")
     public void sendOtp(String toEmail, String code, OtpPurpose purpose, int expiryMinutes) {
         if (!mailEnabled) {
             log.warn("MAIL DISABLED (dev mode) - OTP for {} ({}) is {}", toEmail, purpose, code);
@@ -78,7 +86,8 @@ public class EmailService {
         }
     }
 
-    /** Forgot-password link (FR-SESS-5). */
+    /** Forgot-password link (FR-SESS-5). Off the request thread, as above. */
+    @Async("mailExecutor")
     public void sendPasswordResetLink(String toEmail, String resetLink, int expiryMinutes) {
         if (!mailEnabled) {
             log.warn("MAIL DISABLED (dev mode) - password reset link for {} is {}",

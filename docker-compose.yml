@@ -1,11 +1,11 @@
-# Perimity — local development stack.
+# Perimity â€” local development stack.
 #
 # Reads values from .env in this folder. Copy .env.example to .env first.
 #
 #   cp .env.example .env
 #   docker compose up --build
 #
-# The `version:` key was removed — Compose v2 ignores it and warns about it.
+# The `version:` key was removed â€” Compose v2 ignores it and warns about it.
 services:
   # ---------- Infrastructure ----------
   postgres:
@@ -132,7 +132,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 120s
 
   auth-service:
     build: ./auth-service
@@ -189,7 +189,13 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
-      GATEPASS_BASE_URL: http://gatepass-service:8083
+      # GATEPASS_SERVICE_URL, from main, and it is a fix rather than a rename
+      # for its own sake: user-service reads ${GATEPASS_SERVICE_URL} while this
+      # file used to set GATEPASS_BASE_URL. The two never matched, and nothing
+      # broke only because Eureka resolves the service by name and the url
+      # property is just a fallback - so it would have bitten the first person
+      # to run with EUREKA_ENABLED=false.
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
       # Bulk student onboarding asks auth-service to create the accounts.
       # Container name, not localhost - inside a container localhost is the
       # container itself.

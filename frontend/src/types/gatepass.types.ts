@@ -1,4 +1,4 @@
-import type { BatchStatus, PassStatus, PassType, RequestStatus, RequestableStatus } from './enums';
+import type { BatchStatus, PassStatus, PassType, RequestStatus, RequestableStatus, Gender, IdType, PurposeType, VisitorType } from './enums';
 
 /* ── Responses ── */
 
@@ -154,11 +154,28 @@ export interface GatePassStatusUpdateRequest {
 }
 
 export interface VisitorRequestCreateRequest {
+  /**
+   * The campus being visited, chosen by the visitor.
+   *
+   * Used to be omitted here because the server took it from the token and
+   * marked the DTO field @JsonIgnore. It is now a required part of the body:
+   * any faculty of this campus can approve the request.
+   */
+  campusId: number;
   visitorName: string;
   visitorEmail: string;
   visitorPhone?: string | null;
-  purpose: string;
-  hostUserId: number;
+  /** Optional detail. The category is purposeType. */
+  purpose?: string | null;
+  purposeType: PurposeType;
+  visitorType: VisitorType;
+  gender?: Gender | null;
+  /** ISO yyyy-MM-dd. Date of birth, never an age - an age goes stale. */
+  dateOfBirth?: string | null;
+  idType?: IdType | null;
+  idNumber?: string | null;
+  /** Optional. Only when the visitor knows who invited them. */
+  hostUserId?: number | null;
   eventId?: number | null;
   visitFrom: string;
   visitTo: string;
