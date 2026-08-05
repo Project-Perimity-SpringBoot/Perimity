@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { LIMITS, RX } from '@lib/validation/patterns';
+import {
+  GENDERS, ID_TYPES, PURPOSE_TYPES, VISITOR_TYPES,
+} from '@/types/enums';
 
 /**
  * VisitorRequestCreateRequest.
@@ -50,15 +53,57 @@ export const visitorRequestSchema = z
     visitorPhone: z
       .string()
       .trim()
-      .regex(RX.PHONE, 'Enter a phone number with country code, e.g. +919876543210')
+      .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
       .or(z.literal(''))
       .optional(),
 
+    /**
+     * Optional detail now — purposeType is the required part. Requiring both
+     * asks the visitor to write a sentence repeating the dropdown above it.
+     */
     purpose: z
       .string()
       .trim()
-      .min(LIMITS.purpose.min, 'Say briefly why you are visiting — your host reads this')
-      .max(LIMITS.purpose.max, `Keep it under ${LIMITS.purpose.max} characters`),
+      .max(LIMITS.purpose.max, `Keep it under ${LIMITS.purpose.max} characters`)
+      .or(z.literal(''))
+      .optional(),
+
+    purposeType: z.enum(PURPOSE_TYPES, {
+      errorMap: () => ({ message: 'Choose the purpose of your visit' }),
+    }),
+
+    visitorType: z.enum(VISITOR_TYPES, {
+      errorMap: () => ({ message: 'Choose the type of visitor you are' }),
+    }),
+
+    /** Optional, and PREFER_NOT_TO_SAY is a real answer, not a placeholder. */
+    gender: z.enum(GENDERS).optional().or(z.literal('')),
+
+    /**
+     * Date of birth, mirroring the server's @Past: today and the future are
+     * both refused. Checked against a date-only string so a timezone cannot
+     * make "today" ambiguous — the backend serialises LocalDate with no zone.
+     */
+    dateOfBirth: z
+      .string()
+      .refine((v) => v === '' || v < new Date().toISOString().slice(0, 10), {
+        message: 'Date of birth must be in the past',
+      })
+      .optional(),
+
+    idType: z.enum(ID_TYPES).optional().or(z.literal('')),
+
+    /**
+     * Shape only, matching the server. Not per-type: a checksum-accurate
+     * Aadhaar rule here would reject a valid passport, and verifying the
+     * document is the guard's job at the gate, not the form's.
+     */
+    idNumber: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9-]{4,40}$/, 'Use letters, digits and hyphens, 4 to 40 characters')
+      .or(z.literal(''))
+      .optional(),
 
     /**
      * The campus being visited. Chosen, never typed.
@@ -87,6 +132,22 @@ export const visitorRequestSchema = z
   .refine((values) => values.visitTo >= values.visitFrom, {
     message: 'The last day cannot be before the first day',
     path: ['visitTo'],
+  })
+  /**
+   * An ID type without a number is useless, and a number without a type cannot
+   * be checked at the gate. Both optional, but they travel together.
+   *
+   * The server does not enforce this pairing - it validates each field alone -
+   * so this is a UI-side rule. Worth adding to the DTO as a class-level
+   * constraint, the way @ValidDateRange already works.
+   */
+  .refine((values) => !values.idType || Boolean(values.idNumber), {
+    message: 'Enter the number for the ID you chose',
+    path: ['idNumber'],
+  })
+  .refine((values) => !values.idNumber || Boolean(values.idType), {
+    message: 'Choose which ID this number belongs to',
+    path: ['idType'],
   });
 
 export type VisitorRequestValues = z.infer<typeof visitorRequestSchema>;

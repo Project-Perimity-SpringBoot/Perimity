@@ -1,5 +1,9 @@
 package com.perimity.gatepass.dto.request;
 
+import com.perimity.gatepass.entity.enums.Gender;
+import com.perimity.gatepass.entity.enums.IdType;
+import com.perimity.gatepass.entity.enums.PurposeType;
+import com.perimity.gatepass.entity.enums.VisitorType;
 import com.perimity.gatepass.validation.ValidDateRange;
 import com.perimity.gatepass.validation.ValidationPatterns;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -7,6 +11,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -74,14 +79,61 @@ public class VisitorRequestCreateDto {
     @Schema(example = "anita.deshmukh@example.com")
     private String visitorEmail;
 
-    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
-    @Schema(example = "+919876543210")
+    @Pattern(regexp = ValidationPatterns.PHONE_IN, message = ValidationPatterns.PHONE_IN_MESSAGE)
+    @Schema(example = "9876543210")
     private String visitorPhone;
 
-    @NotBlank(message = "Purpose of visit is required")
-    @Size(min = 5, max = 500, message = "Describe the purpose of the visit in at least 5 characters")
+    /**
+     * Free-text detail. OPTIONAL since purposeType arrived.
+     *
+     * Requiring both means asking a visitor to write five words that repeat the
+     * dropdown they just used. The category is what the queue groups by; this
+     * is the sentence an approver actually reads, when there is one.
+     */
+    @Size(max = 500, message = "Keep the description under 500 characters")
     @Schema(example = "Meeting the project guide for thesis review")
     private String purpose;
+
+    @NotNull(message = "Choose the purpose of your visit")
+    @Schema(example = "MEETING")
+    private PurposeType purposeType;
+
+    @NotNull(message = "Choose the type of visitor you are")
+    @Schema(example = "GUEST")
+    private VisitorType visitorType;
+
+    /** Optional, deliberately. PREFER_NOT_TO_SAY is also a valid answer. */
+    @Schema(example = "PREFER_NOT_TO_SAY")
+    private Gender gender;
+
+    /**
+     * Date of birth, not age - an age is wrong the day after it is submitted.
+     *
+     * @Past rejects today and the future. A visitor born today is not a visitor.
+     */
+    @Past(message = "Date of birth must be in the past")
+    @Schema(example = "1998-04-12")
+    private LocalDate dateOfBirth;
+
+    @Schema(example = "PASSPORT")
+    private IdType idType;
+
+    /**
+     * The identity document number.
+     *
+     * Validated for SHAPE only - letters, digits and hyphens, 4 to 40. Not
+     * per-type: a checksum-accurate Aadhaar regex here would reject a valid
+     * passport, and per-type validation belongs with whoever verifies the
+     * document at the gate, not with a form.
+     *
+     * See VisitorRequest.idNumber: this can hold a full Aadhaar today, and it
+     * should not. Flagged for the team, not decided here.
+     */
+    @Size(max = 40)
+    @Pattern(regexp = "^$|^[A-Za-z0-9-]{4,40}$",
+            message = "An ID number uses letters, digits and hyphens, 4 to 40 characters")
+    @Schema(example = "X1234567")
+    private String idNumber;
 
     /**
      * Optional since the campus-queue change.
