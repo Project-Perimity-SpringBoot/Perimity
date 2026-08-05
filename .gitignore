@@ -19,6 +19,11 @@ perimity-secrets/
 # run cannot leave it staged.
 perimity-test-photo.*.png
 
+# Excel lock files. Created whenever a spreadsheet is open and deleted when it
+# closes - one got committed already, because `git add -A` while a sheet was
+# open picks them up and the name is odd enough not to notice in a file list.
+~$*
+
 # Java / Spring Boot
 target/
 *.class
