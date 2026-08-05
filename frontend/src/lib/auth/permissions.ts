@@ -27,7 +27,7 @@ const CAMPUS_SCOPED: ReadonlySet<Capability> = new Set<Capability>([
   'pass:issue', 'pass:changeStatus', 'pass:viewAny', 'pass:count',
   'request:decide', 'request:viewQueue', 'request:lookupByEmail',
   'event:manage', 'bulk:run',
-  'user:list', 'blocklist:manage', 'audit:view',
+  'blocklist:manage', 'audit:view',
   'entrylog:view',
 ]);
 

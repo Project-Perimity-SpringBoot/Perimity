@@ -51,7 +51,7 @@ public class CampusService {
      */
     @Transactional
     public CampusResponse create(CampusCreateDto dto) {
-        String code = dto.getCode().trim().toLowerCase();
+        String code = dto.getCode().trim().toUpperCase();
 
         if (campusRepository.existsByCodeIgnoreCase(code)) {
             throw new IllegalArgumentException(
