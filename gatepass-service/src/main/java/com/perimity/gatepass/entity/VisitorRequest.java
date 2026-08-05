@@ -81,9 +81,20 @@ public class VisitorRequest {
     @Column(name = "purpose", nullable = false, length = 500)
     private String purpose;
 
-    /** Faculty / staff user being visited. Lives in AuthDB - reference by id only, never a JOIN. */
-    @NotNull
-    @Column(name = "host_user_id", nullable = false)
+    /**
+     * Faculty / staff user being visited. Lives in AuthDB - reference by id
+     * only, never a JOIN.
+     *
+     * NULLABLE since the campus-queue change. A visitor chooses a campus, not a
+     * person, so most requests have no host: any faculty of the campus can
+     * approve, and whoever does is recorded in reviewedBy. It stays set when a
+     * visitor genuinely knows who invited them.
+     *
+     * Was NOT NULL, which made every request from the new form fail on insert.
+     * ddl-auto=update does not drop a NOT NULL from a populated table - see
+     * db/migration/V1__visitor_request_host_optional.sql.
+     */
+    @Column(name = "host_user_id")
     private Long hostUserId;
 
     /** Set when the request is part of an event batch, otherwise null. */
