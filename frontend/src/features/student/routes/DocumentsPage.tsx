@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { BadgeCheck, ExternalLink, FileText, Trash2 } from 'lucide-react';
@@ -7,6 +7,8 @@ import { ConfirmDialog, EmptyState, ErrorState } from '@components/feedback';
 import { PageHeader } from '@components/data';
 import { FileDropzone } from '@components/upload';
 import { documentApi } from '@lib/api/services/user.api';
+import { userClient } from '@lib/api/client';
+import { fetchFile, needsToken, openBlankTab, saveFile } from '@lib/api/download';
 import { documentKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
 import { UPLOAD_RULES } from '@lib/validation/patterns';
@@ -53,8 +55,10 @@ const UPLOADABLE_TYPES: DocumentType[] = ['ID_PROOF', 'CERTIFICATE', 'OTHER'];
  * needs to read why before uploading a replacement, and hiding it would leave
  * them guessing at what to fix.
  *
- * Files open through a short-lived presigned URL in a new tab — the bytes never
- * pass through this application.
+ * Files open in a new tab. In S3 mode the bytes never pass through this
+ * application; in local storage mode they must, because that path is behind
+ * the JWT filter and a tab cannot send a bearer token. openDocument explains
+ * the difference.
  */
 export default function DocumentsPage() {
   const { identity } = useAuth();
@@ -82,31 +86,73 @@ export default function DocumentsPage() {
   });
 
   /**
-   * OPENING A FILE, AND WHY THE BLANK TAB IS OPENED FIRST
+   * ==========================================================================
+   * OPENING A FILE - THREE THINGS HAVE TO BE TRUE AT ONCE
+   * ==========================================================================
    *
-   * window.open is only permitted while a user gesture is still being handled.
-   * This URL has to be fetched first - it is minted per request and expires -
-   * so calling window.open in onSuccess runs AFTER the round trip, by which
-   * point the gesture is spent and Chrome, Safari and Firefox all block it.
+   * 1. THE TAB MUST BE OPENED INSIDE THE CLICK.
+   *    window.open is only permitted while a user gesture is being handled.
+   *    The URL is minted per request and expires, so it has to be fetched
+   *    first - and by the time the response lands the gesture is spent and
+   *    every major browser blocks the popup. It works on localhost, which
+   *    most blockers allowlist, and fails silently for everyone else.
+   *    openBlankTab opens it up front; its location is set when the URL
+   *    arrives. See lib/api/download.ts for why 'noopener' is not passed.
    *
-   * It appears to work on localhost, which most blockers allowlist, and then
-   * fails silently for real users: no error, no tab, nothing to report.
+   * 2. IN LOCAL STORAGE MODE THE URL IS NOT ACTUALLY SIGNED.
+   *    LocalFileStorageService returns /api/user/storage/local/{key}, and
+   *    LocalStorageController sits behind the JWT filter on purpose - that
+   *    directory holds identity documents. A tab navigating to that path
+   *    sends no Authorization header, so the browser gets
+   *    {"success":false,"message":"Authentication required"} rendered as raw
+   *    JSON instead of the document. The bytes are fetched through
+   *    userClient, which attaches the token, and the tab is pointed at a blob
+   *    URL. Same problem AuthedImage solves for <img>, same fix.
    *
-   * So the tab is opened synchronously inside the click, while the gesture is
-   * live, and its location is set once the URL arrives. If the fetch fails the
-   * blank tab is closed again rather than left sitting there.
+   * 3. S3 MODE MUST NOT GO THROUGH THAT PATH.
+   *    A real presigned S3 link carries its own signature and lives on
+   *    another origin. Fetching it through userClient would send the user's
+   *    bearer token to Amazon and fail CORS on the way. needsToken decides.
+   *
+   * If the popup is blocked outright the file is saved instead. The earlier
+   * fallback navigated THIS tab to the URL, which threw the student out of
+   * the application to look at an error - the behaviour that made the bug
+   * visible in the first place.
    */
+  const objectUrls = useRef<string[]>([]);
+
+  useEffect(() => () => {
+    // Blob URLs live until revoked or until this document unloads. Revoking
+    // on a timer would break reload in the tab the student is reading; this
+    // frees them when they leave the page instead.
+    objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    objectUrls.current = [];
+  }, []);
+
   const open = useMutation({
-    mutationFn: (id: number) => documentApi.downloadUrl(id),
-    onError: (error) => toast.fromError(error, 'That link could not be created.'),
+    mutationFn: async (id: number) => {
+      const presigned = await documentApi.downloadUrl(id);
+      if (!needsToken(presigned.url)) return { href: presigned.url, file: null };
+
+      const file = await fetchFile(userClient, presigned.url);
+      const href = URL.createObjectURL(file.blob);
+      objectUrls.current.push(href);
+      return { href, file };
+    },
+    onError: (error) => toast.fromError(error, 'That document could not be opened.'),
   });
 
   const openDocument = (id: number) => {
-    const tab = window.open('', '_blank', 'noopener,noreferrer');
+    const tab = openBlankTab();
     open.mutate(id, {
-      onSuccess: (presigned) => {
-        if (tab) tab.location.href = presigned.url;
-        else window.location.href = presigned.url;
+      onSuccess: ({ href, file }) => {
+        if (tab) { tab.location.href = href; return; }
+        if (file) {
+          saveFile(file);
+          toast.success('Downloaded', 'Your browser blocked the new tab, so the file was saved instead.');
+          return;
+        }
+        window.location.href = href;
       },
       onError: () => tab?.close(),
     });
