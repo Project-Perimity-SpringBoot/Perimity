@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Eye, EyeOff } from 'lucide-react';
 import { Button, Field, Input } from '@ui/index';
 import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
@@ -22,6 +23,9 @@ export default function ChangePasswordPage() {
   const setProfile = useAuthStore((s) => s.setProfile);
   const { role, profile } = useAuth();
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<ChangePasswordValues>({
     resolver: zodResolver(changePasswordSchema),
@@ -88,28 +92,50 @@ export default function ChangePasswordPage() {
       >
         <Field label="Current password" required error={form.formState.errors.currentPassword?.message}>
           {({ id, describedBy }) => (
-            <Input
-              id={id}
-              type="password"
-              autoComplete="current-password"
-              autoFocus
-              aria-describedby={describedBy}
-              invalid={!!form.formState.errors.currentPassword}
-              {...form.register('currentPassword')}
-            />
+            <div className="relative">
+              <Input
+                id={id}
+                type={showCurrentPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                autoFocus
+                aria-describedby={describedBy}
+                invalid={!!form.formState.errors.currentPassword}
+                className="pr-10"
+                {...form.register('currentPassword')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((v) => !v)}
+                aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--r-sm)] p-1 text-[var(--ink-500)] hover:text-[var(--ink-900)] transition-colors"
+              >
+                {showCurrentPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+              </button>
+            </div>
           )}
         </Field>
 
         <Field label="New password" required error={form.formState.errors.newPassword?.message}>
           {({ id, describedBy }) => (
-            <Input
-              id={id}
-              type="password"
-              autoComplete="new-password"
-              aria-describedby={describedBy}
-              invalid={!!form.formState.errors.newPassword}
-              {...form.register('newPassword')}
-            />
+            <div className="relative">
+              <Input
+                id={id}
+                type={showNewPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-describedby={describedBy}
+                invalid={!!form.formState.errors.newPassword}
+                className="pr-10"
+                {...form.register('newPassword')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((v) => !v)}
+                aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--r-sm)] p-1 text-[var(--ink-500)] hover:text-[var(--ink-900)] transition-colors"
+              >
+                {showNewPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+              </button>
+            </div>
           )}
         </Field>
 
@@ -117,14 +143,25 @@ export default function ChangePasswordPage() {
 
         <Field label="Confirm new password" required error={form.formState.errors.confirmPassword?.message}>
           {({ id, describedBy }) => (
-            <Input
-              id={id}
-              type="password"
-              autoComplete="new-password"
-              aria-describedby={describedBy}
-              invalid={!!form.formState.errors.confirmPassword}
-              {...form.register('confirmPassword')}
-            />
+            <div className="relative">
+              <Input
+                id={id}
+                type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-describedby={describedBy}
+                invalid={!!form.formState.errors.confirmPassword}
+                className="pr-10"
+                {...form.register('confirmPassword')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--r-sm)] p-1 text-[var(--ink-500)] hover:text-[var(--ink-900)] transition-colors"
+              >
+                {showConfirmPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+              </button>
+            </div>
           )}
         </Field>
 
