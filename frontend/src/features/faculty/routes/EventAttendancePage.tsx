@@ -74,7 +74,7 @@ export default function EventAttendancePage() {
       />
 
       {data.cancelled ? (
-        <div className="surface-card p-[var(--sp-5)]">
+        <div className="surface-card p-[var(--sp-6)]">
           <p className="text-body-md text-[var(--ink-900)]">This event was cancelled.</p>
           <p className="text-caption text-[var(--ink-500)]">
             Every pass issued for it was revoked. The record is kept because the entry

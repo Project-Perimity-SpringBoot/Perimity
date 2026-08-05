@@ -148,7 +148,7 @@ export default function OnboardingPage() {
         }
       />
 
-      <div className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+      <div className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
         <FormError messages={formErrors} />
 
         <Field label="What are you creating" required>
@@ -251,7 +251,7 @@ function SummaryStep({
           <Figure label="With errors" value={invalidRows} />
         </dl>
 
-        <p className="text-body mt-[var(--sp-5)] text-[var(--ink-700)]">
+        <p className="text-body mt-[var(--sp-4)] text-[var(--ink-700)]">
           {validRows === 0 ? (
             <>No row in this sheet can be used. Fix the errors and upload it again.</>
           ) : (
@@ -269,7 +269,7 @@ function SummaryStep({
 
       {errors.length > 0 ? (
         <section aria-labelledby="row-errors" className="surface-card overflow-hidden">
-          <div className="flex items-baseline justify-between gap-[var(--sp-4)] p-[var(--sp-5)]">
+          <div className="flex items-baseline justify-between gap-[var(--sp-4)] p-[var(--sp-4)]">
             <h2 id="row-errors" className="text-h3 text-[var(--ink-900)]">Rows with errors</h2>
             <Button variant="secondary" onClick={onErrorReport} loading={fetchingReport}>
               <FileSpreadsheet aria-hidden />Full report
