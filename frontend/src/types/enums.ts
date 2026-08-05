@@ -182,9 +182,7 @@ export const isTerminalJob = (s: JobStatus): boolean => s === 'DONE' || s === 'F
 export const isSettledEmail = (s: EmailStatus): boolean =>
   s === 'SENT' || s === 'NO_RECIPIENT';
 
-export const ID_TYPES = [
-  'AADHAAR', 'PAN', 'DRIVING_LICENCE', 'PASSPORT', 'VOTER_ID', 'OTHER',
-] as const;
+export const ID_TYPES = ['AADHAAR', 'PAN', 'PASSPORT', 'VOTER_ID'] as const;
 export type IdType = (typeof ID_TYPES)[number];
 
 export const VISITOR_TYPES = [
@@ -200,8 +198,7 @@ export type PurposeType = (typeof PURPOSE_TYPES)[number];
 
 /** Wire values are enum names; these are what a human reads. */
 export const ID_TYPE_LABELS: Readonly<Record<IdType, string>> = {
-  AADHAAR: 'Aadhaar', PAN: 'PAN', DRIVING_LICENCE: 'Driving licence',
-  PASSPORT: 'Passport', VOTER_ID: 'Voter ID', OTHER: 'Other',
+  AADHAAR: 'Aadhaar', PAN: 'PAN', PASSPORT: 'Passport', VOTER_ID: 'Voter ID',
 };
 export const VISITOR_TYPE_LABELS: Readonly<Record<VisitorType, string>> = {
   GUEST: 'Guest', PARENT: 'Parent', VENDOR: 'Vendor', CONTRACTOR: 'Contractor',

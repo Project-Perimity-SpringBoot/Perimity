@@ -5,6 +5,7 @@ import com.perimity.gatepass.entity.enums.IdType;
 import com.perimity.gatepass.entity.enums.PurposeType;
 import com.perimity.gatepass.entity.enums.VisitorType;
 import com.perimity.gatepass.validation.ValidDateRange;
+import com.perimity.gatepass.validation.ValidIdDocument;
 import com.perimity.gatepass.validation.ValidationPatterns;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -32,6 +33,7 @@ import lombok.Setter;
 @Schema(description = "A visitor's registration form, submitted after email OTP verification")
 @ValidDateRange(from = "visitFrom", to = "visitTo",
         message = "The last day of the visit cannot be before the first day")
+@ValidIdDocument
 @Getter
 @Setter
 @NoArgsConstructor
@@ -119,20 +121,15 @@ public class VisitorRequestCreateDto {
     private IdType idType;
 
     /**
-     * The identity document number.
+     * The identity document number, checked AGAINST its type by
+     * @ValidIdDocument on this class - the same string is a valid PAN and
+     * nonsense as a passport, which a field-level @Pattern cannot express.
      *
-     * Validated for SHAPE only - letters, digits and hyphens, 4 to 40. Not
-     * per-type: a checksum-accurate Aadhaar regex here would reject a valid
-     * passport, and per-type validation belongs with whoever verifies the
-     * document at the gate, not with a form.
-     *
-     * See VisitorRequest.idNumber: this can hold a full Aadhaar today, and it
-     * should not. Flagged for the team, not decided here.
+     * See VisitorRequest.idNumber: with idType AADHAAR this holds a full
+     * Aadhaar today, and it should not. Flagged for the team, not decided here.
      */
     @Size(max = 40)
-    @Pattern(regexp = "^$|^[A-Za-z0-9-]{4,40}$",
-            message = "An ID number uses letters, digits and hyphens, 4 to 40 characters")
-    @Schema(example = "X1234567")
+    @Schema(example = "ABCDE1234F")
     private String idNumber;
 
     /**

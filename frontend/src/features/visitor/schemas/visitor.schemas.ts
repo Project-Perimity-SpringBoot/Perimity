@@ -3,12 +3,13 @@ import { LIMITS, RX } from '@lib/validation/patterns';
 import {
   GENDERS, ID_TYPES, PURPOSE_TYPES, VISITOR_TYPES,
 } from '@/types/enums';
+import { ID_MESSAGES, isValidIdNumber } from '@lib/validation/idDocuments';
 
 /**
  * VisitorRequestCreateRequest.
  *
- * `campusId` is absent on purpose — it is @JsonIgnore server-side and taken
- * from the token.
+ * `campusId` IS sent and is required: the visitor chooses the campus they are
+ * visiting, and any faculty of that campus can approve it.
  *
  * `visitorEmail` IS sent: VisitorRequestCreateDto marks it @NotBlank, so the
  * server requires it in the body rather than reading the token. The form
@@ -20,13 +21,14 @@ import {
  * directly. The read-only field closes it in the UI, not in the product.
  *
  * ==========================================================================
- * NO SEMESTER. NO DOCUMENT UPLOAD. NO PASSWORD.
+ * NO SEMESTER. NO PASSWORD. ID DETAILS, BUT NO UPLOAD YET.
  * ==========================================================================
- * Not oversights. A visitor has no semester and never sets a password — email
- * OTP is the entire authentication story for this role. Documents are not
- * collected at request time; the host approves on the strength of the purpose
- * and the dates, and asking a stranger to upload ID before anyone has agreed to
- * meet them is friction that buys nothing.
+ * A visitor has no semester and never sets a password — email OTP is the whole
+ * authentication story for this role.
+ *
+ * ID type and number ARE collected now, and validated per document. The
+ * scanned proof itself is not uploaded yet; the columns exist (id_proof_key,
+ * photo_key) so that work needs no further migration.
  */
 export const visitorRequestSchema = z
   .object({
@@ -94,16 +96,11 @@ export const visitorRequestSchema = z
     idType: z.enum(ID_TYPES).optional().or(z.literal('')),
 
     /**
-     * Shape only, matching the server. Not per-type: a checksum-accurate
-     * Aadhaar rule here would reject a valid passport, and verifying the
-     * document is the guard's job at the gate, not the form's.
+     * No shape rule here - the number is only meaningful against its type, so
+     * it is checked in the cross-field refinement below, exactly as the server
+     * does with @ValidIdDocument.
      */
-    idNumber: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z0-9-]{4,40}$/, 'Use letters, digits and hyphens, 4 to 40 characters')
-      .or(z.literal(''))
-      .optional(),
+    idNumber: z.string().trim().max(40).or(z.literal('')).optional(),
 
     /**
      * The campus being visited. Chosen, never typed.
@@ -148,6 +145,23 @@ export const visitorRequestSchema = z
   .refine((values) => !values.idNumber || Boolean(values.idType), {
     message: 'Choose which ID this number belongs to',
     path: ['idType'],
+  })
+  /**
+   * The number must match the document it claims to be. Mirrors the server's
+   * @ValidIdDocument so a typo is caught before the round trip - Aadhaar
+   * includes the Verhoeff checksum, which catches a single wrong digit and a
+   * pair of swapped ones, the two mistakes people actually make copying a
+   * number off a card.
+   */
+  .superRefine((values, ctx) => {
+    if (!values.idType || !values.idNumber) return;
+    if (!isValidIdNumber(values.idType, values.idNumber)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['idNumber'],
+        message: ID_MESSAGES[values.idType],
+      });
+    }
   });
 
 export type VisitorRequestValues = z.infer<typeof visitorRequestSchema>;
