@@ -20,7 +20,7 @@ export default function VisitorRegisterPage() {
     // press the button. Silent on arrival, live once they start correcting.
     mode: 'onTouched',
     reValidateMode: 'onChange',
-    defaultValues: { email: '', name: '', phone: '' },
+    defaultValues: { email: '', name: '' },
   });
   const applyApiErrors = useApiFormErrors<VisitorRegistrationValues>(form.setError, setFormErrors);
 
@@ -32,14 +32,29 @@ export default function VisitorRegisterPage() {
       await authApi.registerVisitor({
         email: values.email,
         name: values.name,
-        phone: values.phone || null,
         campusId: config.defaultCampusId,
       });
-      return authApi.requestOtp({
-        email: values.email,
-        purpose: 'LOGIN',
-        campusId: config.defaultCampusId,
-      });
+      /*
+       * The account now exists. If the code request fails after that, the
+       * visitor must NOT be dropped back onto a registration form telling them
+       * to check their connection - registering again would only fail on the
+       * duplicate, and their account is already there.
+       *
+       * Observed: this second call comes back net::ERR_ABORTED after the
+       * register succeeds, and the whole mutation then reports a network
+       * failure. Root cause not yet established. Whatever aborts it, the
+       * recoverable state is the verify screen, which already has a working
+       * "resend code" button.
+       */
+      try {
+        return await authApi.requestOtp({
+          email: values.email,
+          purpose: 'LOGIN',
+          campusId: config.defaultCampusId,
+        });
+      } catch {
+        return null;
+      }
     },
     onSuccess: (challenge, values) =>
       navigate('/login/verify', { state: { email: values.email, challenge } }),
@@ -87,23 +102,6 @@ export default function VisitorRegisterPage() {
               aria-describedby={describedBy}
               invalid={!!form.formState.errors.email}
               {...form.register('email')}
-            />
-          )}
-        </Field>
-
-        <Field
-          label="Phone number"
-          hint="Optional. Include the country code, for example +919876543210."
-          error={form.formState.errors.phone?.message}
-        >
-          {({ id, describedBy }) => (
-            <Input
-              id={id}
-              type="tel"
-              autoComplete="tel"
-              aria-describedby={describedBy}
-              invalid={!!form.formState.errors.phone}
-              {...form.register('phone')}
             />
           )}
         </Field>

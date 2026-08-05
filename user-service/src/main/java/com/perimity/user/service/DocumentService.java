@@ -260,14 +260,49 @@ public class DocumentService {
      */
     @Transactional
     public void delete(Long id) {
-        currentUser.requireAdministrative();
-
         Document document = require(id);
         requireVisibleHolder(document.getUserId());
 
+        /*
+         * A VERIFIED document is never deletable, by anyone. It is the evidence
+         * that somebody checked this person's identity, and the pass issued on
+         * the back of it. Replace it, do not erase it.
+         */
         if (document.isVerified()) {
             throw new IllegalStateException(
                     "A verified document cannot be deleted. Upload a replacement instead.");
+        }
+
+        /*
+         * WHO MAY DELETE AN UNVERIFIED DOCUMENT
+         *
+         * Administrators: any of them, as before.
+         *
+         * The owner: only their own, and only while it is still AWAITING REVIEW.
+         *
+         * The case this exists for is the obvious one - a student uploads the
+         * wrong file and, until now, could do nothing about it. It stayed on
+         * their record, staff reviewed it, and the only remedy was to upload a
+         * second file and leave the mistake sitting underneath it.
+         *
+         * A REJECTED document is deliberately NOT self-deletable even though it
+         * is unverified. Its remarks are the reviewer's reasoning, and they are
+         * the only thing telling the student what to fix; letting the subject of
+         * the decision delete the decision would lose that, and would let a
+         * refusal be quietly cleared from their record before anyone else saw
+         * it. Rejections are staff's to remove.
+         */
+        boolean rejected = document.getVerificationRemarks() != null
+                && !document.getVerificationRemarks().isBlank();
+
+        if (!currentUser.require().isAdministrative()) {
+            currentUser.requireSelfOrStaff(document.getUserId());
+
+            if (rejected) {
+                throw new ForbiddenException(
+                        "A document that has been reviewed and rejected cannot be removed here. "
+                        + "Upload a corrected copy instead.");
+            }
         }
 
         String key = document.getS3Key();

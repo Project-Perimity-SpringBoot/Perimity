@@ -29,7 +29,16 @@ public record IdentityBatchResponseDto(
                 example = "102")
         int reusedCount,
 
-        @Schema(description = "New lightweight VISITOR identities created", example = "478")
+        /*
+         * "identities", not "VISITOR identities". This record now serves two
+         * endpoints: /batch creates visitors, /students creates students. The
+         * shape of the answer is identical - per-row outcomes with an id - and
+         * duplicating it would mean two things to keep in step for no gain.
+         *
+         * Which kind of account was created is decided by which endpoint was
+         * called, and is not something the caller needs told back.
+         */
+        @Schema(description = "New identities created", example = "478")
         int createdCount,
 
         @Schema(description = "Rows refused by the blocklist", example = "15")

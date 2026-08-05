@@ -56,11 +56,21 @@ import org.springframework.web.cors.CorsConfigurationSource;
  *  WHAT IS STILL NOT ENFORCED, STATED PLAINLY
  * ======================================================================
  * GET /api/qr/{passId} is authenticated but NOT ownership-scoped: a signed-in
- * student can still read another holder's QR keys by changing the id. Closing
- * that needs the holder's identity, which lives in gatepass-service, so it is a
- * cross-service call on a read path rather than a matcher - a real change with
- * a real design decision behind it, not a line in this file. Authentication is
- * the part that could be fixed correctly today, so it is the part fixed today.
+ * student can still read another holder's QR keys by changing the id.
+ *
+ * GET /api/qr/{passId}/pdf USED TO SHARE THAT GAP AND NO LONGER DOES. It was
+ * the worse of the two by a distance - not keys, but the pass itself, a PDF
+ * whose QR opens a gate - and it was confirmed exploitable: one signed-in
+ * student pulled another holder's pass and that pass scanned ALLOWED. It is
+ * now owner-or-staff, enforced in QrRecordService.download.
+ *
+ * The fix did not need the cross-service call this comment once assumed.
+ * QrGenerationJob already carried holderUserId and the listener was dropping
+ * it, so the holder is persisted on QrRecord at generation time and the read
+ * path stays local. The same approach would close /api/qr/{passId}.
+ *
+ * Note the two are NOT equivalent in risk: the metadata endpoint leaks storage
+ * keys, which are useless without this service handing over the object.
  */
 @Configuration
 public class SecurityConfig {
@@ -99,6 +109,20 @@ public class SecurityConfig {
 
                     // ---- The paths that must be public in every service ----
                     .requestMatchers("/api/qr/ping").permitAll()
+
+                    // Spring Boot runs this filter chain on ERROR dispatches as
+                    // well as REQUEST ones. Without this line an unhandled 500 is
+                    // re-dispatched to /error with no credentials attached, and
+                    // anyRequest().authenticated() reports it as
+                    // 401 "Authentication required" - hiding the real fault.
+                    //
+                    // Found in user-service, where a broken database column
+                    // surfaced as a 401 on an internal endpoint whose API key was
+                    // correct all along. All six services had it.
+                    //
+                    // Safe: Spring Boot's server.error.include-message and
+                    // include-stacktrace are both off by default.
+                    .requestMatchers("/error").permitAll()
                     .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
                                      "/api-docs", "/api-docs/**",
                                      "/v3/api-docs", "/v3/api-docs/**").permitAll()

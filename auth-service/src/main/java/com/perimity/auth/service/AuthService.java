@@ -1,5 +1,6 @@
 package com.perimity.auth.service;
 
+import com.perimity.auth.client.GatepassVisitorClient;
 import com.perimity.auth.dto.request.LoginRequestDto;
 import com.perimity.auth.dto.request.OtpRequestDto;
 import com.perimity.auth.dto.request.OtpVerifyDto;
@@ -10,6 +11,7 @@ import com.perimity.auth.entity.OtpVerification;
 import com.perimity.auth.entity.User;
 import com.perimity.auth.entity.enums.AuditAction;
 import com.perimity.auth.entity.enums.OtpPurpose;
+import com.perimity.auth.entity.enums.Role;
 import com.perimity.auth.exception.AuthenticationFailedException;
 import com.perimity.auth.exception.RateLimitedException;
 import com.perimity.auth.repository.OtpVerificationRepository;
@@ -50,6 +52,7 @@ public class AuthService {
     private final AuditService audit;
     private final LoginAttemptService loginAttempts;
     private final EmailService emailService;
+    private final GatepassVisitorClient gatepassVisitorClient;
 
     private final int maxFailedAttempts;
     private final int lockoutMinutes;
@@ -67,6 +70,7 @@ public class AuthService {
                        AuditService audit,
                        LoginAttemptService loginAttempts,
                        EmailService emailService,
+                       GatepassVisitorClient gatepassVisitorClient,
                        @Value("${perimity.password.max-failed-attempts}") int maxFailedAttempts,
                        @Value("${perimity.password.lockout-minutes}") int lockoutMinutes,
                        @Value("${perimity.otp.length}") int otpLength,
@@ -82,6 +86,7 @@ public class AuthService {
         this.audit = audit;
         this.loginAttempts = loginAttempts;
         this.emailService = emailService;
+        this.gatepassVisitorClient = gatepassVisitorClient;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutMinutes = lockoutMinutes;
         this.otpLength = otpLength;
@@ -284,6 +289,30 @@ public class AuthService {
 
         audit.record(AuditAction.LOGIN_SUCCESS, user.getId(), user.getRole(),
                 user.getCampusId(), "user:" + user.getId(), "Signed in with a one-time code");
+
+        /*
+         * Tell gatepass-service the address is confirmed.
+         *
+         * KEYED ON ROLE, NOT PURPOSE. It used to fire only for
+         * VISITOR_VERIFICATION - an enum value no client ever sends. Every
+         * visitor screen requests and verifies with purpose LOGIN, so the call
+         * could never happen, otpVerified stayed false on every request, and
+         * approval was refused with "this visitor has not verified their email
+         * yet". The gate was so precise it could not fire.
+         *
+         * A visitor's login OTP proves exactly what a verification OTP proves
+         * about the address. Scoping on VISITOR also answers the original
+         * concern properly: staff sign-ins never reach this, and for a visitor
+         * a pending request is the normal case rather than the exception.
+         *
+         * After the audit record and before the token on purpose. The visitor
+         * gets their token whatever gatepass says - see GatepassVisitorClient
+         * for why this cannot be allowed to fail a sign-in.
+         */
+        if (user.getRole() == Role.VISITOR
+                || dto.getPurpose() == OtpPurpose.VISITOR_VERIFICATION) {
+            gatepassVisitorClient.markEmailVerified(user.getEmail(), user.getId());
+        }
 
         return tokenFor(user);
     }

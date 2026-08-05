@@ -167,13 +167,19 @@
             <version>2.28.16</version>
         </dependency>
 
-        <!-- Day 10 onwards, uncomment when you get there.
+        <!--
+          AMQP - consumes user.created from auth-service and provisions the
+          profile for a new STUDENT or FACULTY account.
 
+          Before this, the profile was created by a second API call from the
+          browser after the account was made. Any account whose second call did
+          not happen could sign in with no profile, and nothing in the product
+          could create the missing row afterwards.
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
-        -->
     </dependencies>
 
     <build>

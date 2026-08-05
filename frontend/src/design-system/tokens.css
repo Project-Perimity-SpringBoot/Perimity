@@ -42,6 +42,16 @@
   --status-bg: #f0f0f1;
   --status-border: #e0e0e6;
 
+  /* ---- AUTH SCREENS ---------------------------------------------------
+     The sign-in surfaces are dark and full-bleed: one lit card on a dark
+     field, so the eye lands on the form and nothing else. Same reasoning as
+     the guard shell, different reason — there it is sunlight, here it is
+     focus. */
+  --auth-bg: linear-gradient(155deg, #1e3a8a 0%, #172554 55%, #0f172a 100%);
+  --auth-ink: #c7d2fe;
+  --auth-tile: rgba(255, 255, 255, 0.07);
+  --auth-tile-border: rgba(255, 255, 255, 0.12);
+
   /* ---- Typography ---- */
   --font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
@@ -56,6 +66,15 @@
   --t-caption-size: 12px; --t-caption-weight: 500;
   --t-label-size: 11px;   --t-label-weight: 600;   --t-label-tracking: 0.08em;
   --t-mono-size: 13px;    --t-mono-weight: 600;    --t-mono-tracking: 0.02em;
+
+  /* Landing-page type scale. Separate from --t-display-* because the home
+     page is the one screen that is a poster rather than a tool, and clamping
+     it here is what stops a 56px headline from wrapping to four lines on a
+     phone. Declared as tokens so HomePage.tsx still declares no sizes. */
+  --t-hero-size: clamp(36px, 7vw, 56px);
+  --t-hero-sub-size: clamp(22px, 3.6vw, 30px);
+  --t-section-size: clamp(26px, 4.2vw, 40px);
+  --t-stat-size: clamp(28px, 3.4vw, 34px);
 
   /* ---- Spacing. 4px base. Only these eight. ---- */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
@@ -74,6 +93,43 @@
   --motion-slow: 320ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---- HOME PAGE ONLY -------------------------------------------------
+     The public landing page is the one surface that is marketing rather
+     than product, so it carries tints nothing else may use. They live here
+     rather than in HomePage.tsx because the rule at the top of this file
+     has no exceptions: a feature file declares no colour.
+
+     Deliberately NOT reusing --allow-* or --deny-*. Those are the guard's
+     verdict colours, and a green "get started" button on the landing page
+     teaches the eye that green is decorative before the guard ever sees a
+     gate. Everything below is brand or neutral for that reason. */
+
+  --home-bar: #1e40af;
+  --home-bar-ink: #dbeafe;
+  --home-hero-panel: #eef2ff;
+  --home-ink-deep: #1e3a8a;
+
+  /* Role cards, darkest to lightest. One gradient per portal. */
+  --portal-1: linear-gradient(160deg, #3b5bdb 0%, #2f49b8 100%);
+  --portal-2: linear-gradient(160deg, #4c6ef5 0%, #3b5bdb 100%);
+  --portal-3: linear-gradient(160deg, #5c7cfa 0%, #4c6ef5 100%);
+  --portal-4: linear-gradient(160deg, #748ffc 0%, #5c7cfa 100%);
+  --portal-5: linear-gradient(160deg, #8da2fb 0%, #748ffc 100%);
+  --portal-6: linear-gradient(160deg, #a5b4fc 0%, #8da2fb 100%);
+
+  /* Feature tints. Pastel fill + a matching icon ink. */
+  --feat-1-bg: #eff6ff; --feat-1-fg: #1d4ed8;
+  --feat-2-bg: #f0fdf4; --feat-2-fg: #15803d;
+  --feat-3-bg: #fdf4ff; --feat-3-fg: #a21caf;
+  --feat-4-bg: #fff7ed; --feat-4-fg: #c2410c;
+  --feat-5-bg: #fef2f2; --feat-5-fg: #b91c1c;
+  --feat-6-bg: #eef2ff; --feat-6-fg: #4338ca;
+  --feat-7-bg: #fefce8; --feat-7-fg: #a16207;
+  --feat-8-bg: #f0fdfa; --feat-8-fg: #0f766e;
+
+  --home-footer: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
+  --home-footer-ink: #c7d2fe;
 
   /* ---- Layout ---- */
   --sidebar-w: 248px;
@@ -96,6 +152,30 @@
   --ink-900: #f7f7f8;
   --ink-700: #d4d4d9;
   --ink-500: #a1a1ac;
+
+  /* Home page, dark. The tints go translucent rather than being restated:
+     a pastel that reads as "soft" on white reads as "washed out" on black. */
+  --home-bar: #16213f;
+  --home-bar-ink: #a5b4fc;
+  --home-hero-panel: #1a1a24;
+  --home-ink-deep: #c7d2fe;
+
+  --feat-1-bg: rgba(59, 130, 246, 0.10);  --feat-1-fg: #93c5fd;
+  --feat-2-bg: rgba(34, 197, 94, 0.10);   --feat-2-fg: #86efac;
+  --feat-3-bg: rgba(217, 70, 239, 0.10);  --feat-3-fg: #f0abfc;
+  --feat-4-bg: rgba(249, 115, 22, 0.10);  --feat-4-fg: #fdba74;
+  --feat-5-bg: rgba(239, 68, 68, 0.10);   --feat-5-fg: #fca5a5;
+  --feat-6-bg: rgba(99, 102, 241, 0.10);  --feat-6-fg: #a5b4fc;
+  --feat-7-bg: rgba(234, 179, 8, 0.10);   --feat-7-fg: #fde047;
+  --feat-8-bg: rgba(20, 184, 166, 0.10);  --feat-8-fg: #5eead4;
+
+  --home-footer: linear-gradient(180deg, #12121a 0%, #08080c 100%);
+  --home-footer-ink: #a1a1ac;
+
+  --auth-bg: linear-gradient(155deg, #14141c 0%, #0d0d13 55%, #08080c 100%);
+  --auth-ink: #a1a1ac;
+
+
   --ink-400: #7b7b86;
   --status-fg: #e5e5ea;
   --status-bg: #26262f;

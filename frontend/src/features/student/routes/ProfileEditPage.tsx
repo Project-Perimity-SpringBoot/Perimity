@@ -1,58 +1,73 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { AlertTriangle, ArrowLeft, Trash2 } from 'lucide-react';
-import {
-  Button, Field, Input, NativeSelect, SkeletonText, Textarea,
-} from '@ui/index';
-import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
-import { PageHeader } from '@components/data';
+import { Button, SkeletonText } from '@ui/index';
+import { ConfirmDialog, ErrorState } from '@components/feedback';
+import { DescriptionList, PageHeader } from '@components/data';
 import { FileDropzone } from '@components/upload';
-import { departmentApi, studentApi } from '@lib/api/services/user.api';
-import { departmentKeys, passKeys, profileKeys } from '@lib/query/keys';
+import { studentApi } from '@lib/api/services/user.api';
+import { passKeys, profileKeys } from '@lib/query/keys';
 import { UPLOAD_RULES } from '@lib/validation/patterns';
-import { useApiFormErrors } from '@hooks/useApiForm';
-import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
-import { studentProfileSchema, type StudentProfileValues } from '../schemas/student.schemas';
 
 /**
- * Phase 3 screen 7 — profile edit.
+ * Profile edit — the photo, and nothing else.
  *
  * ==========================================================================
- * THREE WARNINGS, ALL REQUIRED, AND WHY THAT IS NOT OVERKILL
+ * WHY A STUDENT MAY CHANGE THEIR PHOTO AND NOTHING ELSE ON THIS PAGE
  * ==========================================================================
- * Four fields pause every active pass when changed: name, photo, government ID
- * and department. Each gets
+ * The test is not "is this field sensitive", it is WHO OWNS THE FACT.
  *
- *   1. a warning glyph on the field itself   - visible while deciding
- *   2. a persistent banner above the form    - visible before starting
- *   3. a confirmation modal naming the field - unavoidable before saving
+ *   photo          the student's own face          -> theirs to change
+ *   government ID  the state's, checked by staff   -> not theirs to rewrite
+ *   roll number    assigned by the institution     -> not theirs to choose
+ *   department     enrolment, not a preference     -> not theirs to reassign
  *
- * Three feels like a lot until you consider the failure: a student edits their
- * department on Sunday, notices nothing, and is refused at the gate on Monday
- * morning in front of a queue. The pause is correct behaviour — the whole point
- * is that a guard's visual check stays meaningful — but being surprised by it
- * is not.
+ * The three institutional fields used to be editable here. A student could
+ * silently reassign their own department, rewrite the government ID a member of
+ * staff had verified against a physical document, and set a roll number that
+ * collides with a classmate's - the column carries uk_student_campus_roll, so
+ * that last one fails with a message about somebody else's data.
  *
- * The modal names the specific field that triggered it rather than saying "some
- * of your changes", because a student who edited four things needs to know
- * which one costs them their pass.
+ * The government ID case is the sharpest: that number is only worth anything
+ * BECAUSE someone checked it. Letting the subject of the check rewrite it
+ * afterwards makes the verification decorative.
  *
- * NAME IS NOT EDITABLE HERE. It lives on the auth-service user record, not the
- * student profile, and this screen only has PUT /students/{id}. Rendering a
- * name field that silently fails to save would be worse than saying so.
+ * They are shown, not hidden. A student needs to see what is on file - that is
+ * how a mistyped digit gets noticed - and needs somewhere to go when it is
+ * wrong, which is the line under the values.
+ *
+ * ==========================================================================
+ * THE PREVIOUS VERSION OF THIS PAGE WAS FACTUALLY WRONG
+ * ==========================================================================
+ * Its banner and field labels claimed:
+ *
+ *   department    "pauses pass"                 -> it does NOT
+ *   roll number   "Does not pause your passes"  -> it DOES
+ *
+ * StudentProfileService.update adds to sensitiveChanges for exactly three
+ * fields - rollNo, govId, photoS3Key - and department is set outside that
+ * block. A student following the old labels would change their roll number
+ * believing it was safe and be refused at the gate, which is the precise
+ * failure the warnings existed to prevent.
+ *
+ * With only the photo editable here, the warning is finally a single true
+ * statement instead of a list that has to be kept in sync with the server.
+ *
+ * ==========================================================================
+ * STILL TRUE, AND STILL A GAP
+ * ==========================================================================
+ * The SERVER continues to accept a crafted PUT /students/{id} from a student
+ * changing their own roll number or government ID - requireSelfOrStaff permits
+ * the holder. This page no longer offers it; that is a UI-honesty fix, not an
+ * authorisation one. Closing it properly means splitting StudentProfileUpdateDto
+ * so a self-edit cannot carry institutional fields.
  */
 export default function ProfileEditPage() {
-  const { identity } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [formErrors, setFormErrors] = useState<string[]>([]);
-  const [pendingValues, setPendingValues] = useState<StudentProfileValues | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [confirmingPhoto, setConfirmingPhoto] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState(false);
@@ -62,48 +77,12 @@ export default function ProfileEditPage() {
     queryFn: () => studentApi.me(),
   });
 
-  const departments = useQuery({
-    queryKey: departmentKeys.list(identity?.campusId ?? undefined, true),
-    queryFn: () => departmentApi.list(identity?.campusId ?? undefined, true),
-    enabled: identity?.campusId != null,
-  });
-
-  const form = useForm<StudentProfileValues>({
-    resolver: zodResolver(studentProfileSchema),
-    values: {
-      departmentId: profile.data?.departmentId ?? '',
-      rollNo: profile.data?.rollNo ?? '',
-      govId: '',
-      address: profile.data?.address ?? '',
-    },
-  });
-  const applyApiErrors = useApiFormErrors<StudentProfileValues>(form.setError, setFormErrors);
-
   const invalidateAfterPause = () => {
     void queryClient.invalidateQueries({ queryKey: profileKeys.myStudent() });
     // Passes may have moved to PAUSED server-side. Without this the banner does
     // not appear until a reload, which is the one moment it needs to.
     void queryClient.invalidateQueries({ queryKey: passKeys.all });
   };
-
-  const save = useMutation({
-    mutationFn: (values: StudentProfileValues) =>
-      studentApi.update(profile.data?.id as number, {
-        departmentId: values.departmentId === '' ? null : Number(values.departmentId),
-        ...(values.rollNo ? { rollNo: values.rollNo } : { rollNo: null }),
-        // An empty govId means "leave it alone" - the server never sent us the
-        // real one, so sending "" would clear a value the student never saw.
-        ...(values.govId ? { govId: values.govId } : {}),
-        ...(values.address ? { address: values.address } : { address: null }),
-      }),
-    onSuccess: () => {
-      invalidateAfterPause();
-      toast.success('Profile updated');
-      setPendingValues(null);
-      navigate('/student/profile');
-    },
-    onError: (error) => { setFormErrors([]); applyApiErrors(error); setPendingValues(null); },
-  });
 
   const uploadPhoto = useMutation({
     mutationFn: (file: File) => studentApi.uploadPhoto(profile.data?.id as number, file),
@@ -133,24 +112,7 @@ export default function ProfileEditPage() {
     return <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />;
   }
 
-  /** Which pause-triggering fields this submission actually changes. */
-  const changedPausingFields = (values: StudentProfileValues): string[] => {
-    const changed: string[] = [];
-    const currentDept = profile.data.departmentId ?? '';
-    if (String(values.departmentId ?? '') !== String(currentDept)) changed.push('department');
-    if (values.govId) changed.push('government ID');
-    return changed;
-  };
-
-  const onSubmit = (values: StudentProfileValues) => {
-    setFormErrors([]);
-    // Warning 3. Only when something pausing actually changed - a modal on an
-    // address edit would train the student to dismiss it unread.
-    if (changedPausingFields(values).length > 0) setPendingValues(values);
-    else save.mutate(values);
-  };
-
-  const pausingNow = pendingValues ? changedPausingFields(pendingValues) : [];
+  const p = profile.data;
 
   return (
     <div className="flex flex-col gap-[var(--sp-6)]">
@@ -158,99 +120,28 @@ export default function ProfileEditPage() {
         <Link to="/student/profile"><ArrowLeft aria-hidden />Back to your profile</Link>
       </Button>
 
-      <PageHeader title="Edit your profile" />
+      <PageHeader
+        title="Change your photo"
+        description="The only thing on your profile you can change yourself."
+      />
 
-      {/* Warning 2: persistent, above the form, present before any edit. */}
+      {/* One warning, and now a true one: the photo is the only pausing field
+          a student can reach from this page. */}
       <section className="flex items-start gap-[var(--sp-3)] rounded-[var(--r-md)]
                           border border-[var(--status-border)] bg-[var(--status-bg)] p-[var(--sp-4)]">
         <AlertTriangle aria-hidden className="mt-[2px] size-5 shrink-0 text-[var(--ink-700)]" />
         <div>
           <h2 className="text-body-md text-[var(--ink-900)]">
-            Some changes pause your passes
+            Changing your photo pauses your passes
           </h2>
           <p className="text-small mt-[var(--sp-1)] text-[var(--ink-700)]">
-            Your photo, government ID and department are what a guard checks against you at
-            the gate. Change any of them and your passes stop scanning until staff
-            re-verify. Marked below with a warning symbol.
+            A guard compares this picture against your face at the gate, so every active
+            pass stops scanning until staff re-verify you. You keep the same QR code —
+            nothing is reissued.
           </p>
         </div>
       </section>
 
-      <form
-        noValidate
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]"
-      >
-        <FormError messages={formErrors} />
-
-        {/* Warning 1 on each pausing field, via Field's own pausesPass prop. */}
-        <Field
-          label="Department"
-          pausesPass
-          hint="Changing this pauses your passes."
-          error={form.formState.errors.departmentId?.message}
-        >
-          {({ id, describedBy }) => (
-            <NativeSelect id={id} aria-describedby={describedBy} {...form.register('departmentId')}>
-              <option value="">Not set</option>
-              {(departments.data ?? []).map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </NativeSelect>
-          )}
-        </Field>
-
-        <Field
-          label="Government ID"
-          pausesPass
-          hint={
-            profile.data.govIdPresent
-              ? `We hold ${profile.data.govIdMasked ?? 'one'}. Leave blank to keep it.`
-              : 'Optional. Changing this pauses your passes.'
-          }
-          error={form.formState.errors.govId?.message}
-        >
-          {({ id, describedBy }) => (
-            <Input
-              id={id}
-              autoComplete="off"
-              placeholder={profile.data.govIdPresent ? 'Leave blank to keep the current one' : ''}
-              aria-describedby={describedBy}
-              invalid={Boolean(form.formState.errors.govId)}
-              {...form.register('govId')}
-            />
-          )}
-        </Field>
-
-        <Field
-          label="Roll number"
-          hint="Does not pause your passes."
-          error={form.formState.errors.rollNo?.message}
-        >
-          {({ id, describedBy }) => (
-            <Input id={id} aria-describedby={describedBy}
-                   invalid={Boolean(form.formState.errors.rollNo)} {...form.register('rollNo')} />
-          )}
-        </Field>
-
-        <Field label="Address" error={form.formState.errors.address?.message}>
-          {({ id, describedBy }) => (
-            <Textarea id={id} rows={3} aria-describedby={describedBy}
-                      invalid={Boolean(form.formState.errors.address)} {...form.register('address')} />
-          )}
-        </Field>
-
-        <div className="flex flex-wrap gap-[var(--sp-3)]">
-          <Button type="submit" loading={save.isPending}>Save changes</Button>
-          <Button type="button" variant="secondary" asChild>
-            <Link to="/student/profile">Cancel</Link>
-          </Button>
-        </div>
-      </form>
-
-      {/* Photo is a separate upload, not part of the form - it posts multipart
-          to its own endpoint, and mixing it in would mean one failure rolling
-          back the other. Same three warnings apply. */}
       <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
         <div className="flex items-center gap-[var(--sp-2)]">
           <AlertTriangle aria-hidden className="size-4 text-[var(--ink-700)]" />
@@ -268,7 +159,7 @@ export default function ProfileEditPage() {
           disabled={uploadPhoto.isPending}
         />
 
-        {profile.data.photoS3Key && (
+        {p.photoS3Key && (
           <Button
             type="button"
             variant="ghost"
@@ -280,16 +171,35 @@ export default function ProfileEditPage() {
         )}
       </section>
 
-      {/* Warning 3, for the form fields. Names exactly what pauses. */}
-      <ConfirmDialog
-        open={pendingValues !== null}
-        onOpenChange={(open) => { if (!open) setPendingValues(null); }}
-        title="This will pause your passes"
-        description={`You changed your ${pausingNow.join(' and ')}. Every active pass stops scanning at the gate until staff re-verify your profile. You keep the same QR code — nothing is reissued.`}
-        confirmLabel="Save and pause"
-        loading={save.isPending}
-        onConfirm={() => { if (pendingValues) save.mutate(pendingValues); }}
-      />
+      {/* Read-only, because these are the institution's facts, not the
+          student's. Shown rather than hidden so a wrong value can be noticed. */}
+      <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+        <h2 className="text-h3 text-[var(--ink-900)]">Set by your institution</h2>
+
+        <DescriptionList
+          items={[
+            { label: 'Department', value: p.departmentName ?? 'Not set' },
+            { label: 'Roll number', value: p.rollNo ?? '—' },
+            {
+              label: 'Government ID',
+              value: p.govIdPresent ? (p.govIdMasked ?? '••••••••') : 'None on file',
+            },
+          ]}
+        />
+
+        <p className="text-caption text-[var(--ink-500)]">
+          These are set when you are enrolled and cannot be changed here. If any of them is
+          wrong, ask the faculty member who enrolled you to correct it — changing the
+          government ID or roll number pauses your passes, so it is done by staff with a
+          reason recorded.
+        </p>
+      </section>
+
+      <p className="text-caption text-[var(--ink-500)]">
+        Your name, date of birth, address and phone numbers are on{' '}
+        <Link className="underline" to="/student/profile/details">My details</Link>, because
+        faculty check those.
+      </p>
 
       <ConfirmDialog
         open={confirmingPhoto}

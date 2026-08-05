@@ -64,6 +64,21 @@ public class QrRecord {
     private Long campusId;
 
     /**
+     * Whose pass this is. Cross-service reference by id, like passId.
+     *
+     * The download endpoint needs an owner to compare the caller against, and
+     * campus scope is not an answer - every holder on a campus shares it, which
+     * is exactly how any signed-in account could pull anyone's pass PDF.
+     *
+     * NULLABLE on purpose. Rows written before this column existed have no
+     * holder and can never gain one retroactively, so the read path treats null
+     * as "unknown owner" and allows staff only. Re-issuing the pass (POST
+     * /api/gatepass/passes/{id}/republish) writes a fresh record that has it.
+     */
+    @Column(name = "holder_user_id")
+    private Long holderUserId;
+
+    /**
      * SHA-256 of the encrypted token. Never the token itself.
      * The regex is a tripwire: if anything ever writes a non-hex value here,
      * validation fails loudly instead of silently storing a plain token.

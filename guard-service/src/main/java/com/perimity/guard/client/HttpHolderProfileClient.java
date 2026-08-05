@@ -65,7 +65,8 @@ public class HttpHolderProfileClient implements HolderProfileClient {
                 return Optional.empty();
             }
             SummaryView v = response.data();
-            return Optional.of(new HolderProfile(v.userId(), v.identifierCode(), v.photoS3Key()));
+            return Optional.of(new HolderProfile(
+                    v.userId(), v.identifierCode(), v.photoS3Key(), v.photoUrl()));
 
         } catch (RuntimeException ex) {
             // debug, not warn: a visitor has no profile in user-service at all,
@@ -78,6 +79,14 @@ public class HttpHolderProfileClient implements HolderProfileClient {
 
     record SummaryEnvelope(boolean success, String message, SummaryView data) { }
 
-    /** Only the three fields the gate is entitled to. Jackson ignores the rest. */
-    record SummaryView(Long userId, String identifierCode, String photoS3Key) { }
+    /**
+     * Only the fields the gate is entitled to. Jackson ignores the rest — and
+     * the rest is the point: a roll number, a department or an address would
+     * arrive in the same payload and must not be picked up here.
+     *
+     * photoUrl was already being sent by user-service and simply not read. It
+     * is a presigned link with a short expiry, which is why it is never stored
+     * anywhere — it is fetched at scan time and rendered immediately.
+     */
+    record SummaryView(Long userId, String identifierCode, String photoS3Key, String photoUrl) { }
 }

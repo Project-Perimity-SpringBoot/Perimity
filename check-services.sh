@@ -76,7 +76,7 @@ echo "  $UP of 6 services reachable."
 if [ "$UP" -lt 6 ]; then
     echo ""
     echo "  Start a missing one with:"
-    echo "    cd <name>-service && ./mvnw spring-boot:run"
+    echo "    cd <name>-service && mvn spring-boot:run"
     echo ""
     echo "  Skipping contract checks - they need every service up."
     exit 1
@@ -120,14 +120,24 @@ code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
 #
 # If this ever returns 200, gatepass-service has started serving both spellings
 # and the ambiguity that caused the original bug is back.
+#
+# 401 and 403 count as absent too. Once gatepass-service gained a security
+# filter chain it began rejecting unmatched paths before routing, so an
+# unknown path answers 401 rather than 404 - the request never reaches the
+# dispatcher that would have produced the 404. Treating 401 as "the wrong
+# spelling is back" made this warn on every clean run, which is how a check
+# stops being read. Only 200 proves the path is actually served.
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
     "http://localhost:8083/api/internal/gatepass/passes/1" \
     -H "X-Internal-Api-Key: $KEY" 2>/dev/null)
-if [ "$code" = "404" ]; then
-    pass "old wrong path /api/internal/gatepass/passes/1 is absent (404) - as it should be"
-else
-    warn "old wrong path /api/internal/gatepass/passes/1 answered $code - two spellings now exist"
-fi
+case "$code" in
+    404|401|403)
+        pass "old wrong path /api/internal/gatepass/passes/1 is absent ($code) - as it should be" ;;
+    200)
+        fail "old wrong path /api/internal/gatepass/passes/1 is SERVED (200) - two spellings exist again" ;;
+    *)
+        warn "old wrong path /api/internal/gatepass/passes/1 answered $code - unexpected, check by hand" ;;
+esac
 
 # --- gatepass -> auth ---
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \

@@ -5,11 +5,14 @@ import type { DownloadedFile } from '@/types/api';
 import type { BatchProgressResponse, JobStatusResponse, QrRecordResponse } from '@/types/qr.types';
 
 /**
- * qr-service has no Spring Security beyond an internal key filter on
- * /api/qr/internal/**, so these three reads accept any caller. The token is
- * still attached — costless, and nothing here changes the day a SecurityConfig
- * lands. Treat everything returned as non-sensitive display data and never make
- * an authorization decision from it.
+ * qr-service now has a SecurityConfig: everything except /api/qr/ping and the
+ * key-filtered /api/qr/internal/** requires a Bearer token, so these reads are
+ * authenticated.
+ *
+ * Authenticated is not the same as scoped, and the difference still matters
+ * here: GET /api/qr/{passId} admits any signed-in caller, not only the pass
+ * holder. Treat what comes back as display data and never make an
+ * authorization decision from it.
  */
 export const qrApi = {
   async jobStatus(jobId: number): Promise<JobStatusResponse> {
@@ -34,7 +37,8 @@ export const qrApi = {
    * dereferenceable would mean a public bucket. These stream the bytes
    * instead, so storage stays private.
    *
-   * Both are behind flags.passDownload until qr-service's endpoints merge.
+   * Both endpoints now exist, so flags.passDownload defaults on and only
+   * remains as a kill switch.
    *
    * NOTE FOR ANY CALLER: these need the Bearer token, so a plain
    * <img src="/api/qr/1/image"> will 401 — an image tag sends no Authorization
