@@ -70,7 +70,19 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /build
 
 COPY pom.xml .
-RUN --mount=type=cache,target=/root/.m2,sharing=locked mvn -B dependency:go-offline
+# BOTH SIDES OF A MERGE, because they solved different problems.
+#
+# dependency:resolve rather than dependency:go-offline: go-offline hit SSL
+# failures on some networks, and it is famously incomplete anyway - it misses
+# plugin dependencies, so `mvn package` re-downloads part of what it just
+# fetched. resolve + resolve-plugins is the honest version of the same step.
+#
+# The cache mount is kept. It is orthogonal to which goal runs: it is what
+# makes seven parallel builds share ONE /root/.m2 instead of each pulling
+# Spring Boot's ~200MB tree down a single home connection at the same time.
+# Dropping it is what made `docker compose build` look like it hung.
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    mvn -B dependency:resolve dependency:resolve-plugins
 
 COPY src ./src
 # Tests run in CI, not here. A Docker build that runs tests fails deploys for

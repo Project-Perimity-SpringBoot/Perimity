@@ -50,3 +50,4 @@ user-service/.factorypath
 .factorypath
 
 storage-dev/
+.claude/launch.json

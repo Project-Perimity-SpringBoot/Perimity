@@ -1,5 +1,6 @@
 package com.perimity.auth.service;
 
+import com.perimity.auth.client.GatepassVisitorClient;
 import com.perimity.auth.dto.request.LoginRequestDto;
 import com.perimity.auth.dto.request.OtpRequestDto;
 import com.perimity.auth.dto.request.OtpVerifyDto;
@@ -50,6 +51,7 @@ public class AuthService {
     private final AuditService audit;
     private final LoginAttemptService loginAttempts;
     private final EmailService emailService;
+    private final GatepassVisitorClient gatepassVisitorClient;
 
     private final int maxFailedAttempts;
     private final int lockoutMinutes;
@@ -67,6 +69,7 @@ public class AuthService {
                        AuditService audit,
                        LoginAttemptService loginAttempts,
                        EmailService emailService,
+                       GatepassVisitorClient gatepassVisitorClient,
                        @Value("${perimity.password.max-failed-attempts}") int maxFailedAttempts,
                        @Value("${perimity.password.lockout-minutes}") int lockoutMinutes,
                        @Value("${perimity.otp.length}") int otpLength,
@@ -82,6 +85,7 @@ public class AuthService {
         this.audit = audit;
         this.loginAttempts = loginAttempts;
         this.emailService = emailService;
+        this.gatepassVisitorClient = gatepassVisitorClient;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutMinutes = lockoutMinutes;
         this.otpLength = otpLength;
@@ -284,6 +288,22 @@ public class AuthService {
 
         audit.record(AuditAction.LOGIN_SUCCESS, user.getId(), user.getRole(),
                 user.getCampusId(), "user:" + user.getId(), "Signed in with a one-time code");
+
+        /*
+         * PROPOSAL. Tell gatepass-service the address is confirmed.
+         *
+         * Only for VISITOR_VERIFICATION: a LOGIN or PASS_RETRIEVAL code proves
+         * the same thing about the address, but there is no request waiting on
+         * it, and calling for those would turn a normal sign-in into a 404 and
+         * an ERROR line every time.
+         *
+         * After the audit record and before the token on purpose. The visitor
+         * gets their token whatever gatepass says - see GatepassVisitorClient
+         * for why this cannot be allowed to fail a sign-in.
+         */
+        if (dto.getPurpose() == OtpPurpose.VISITOR_VERIFICATION) {
+            gatepassVisitorClient.markEmailVerified(user.getEmail(), user.getId());
+        }
 
         return tokenFor(user);
     }

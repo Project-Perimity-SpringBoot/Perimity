@@ -102,6 +102,10 @@
 }
 
 @layer utilities {
+  .text-hero { font-size: var(--t-hero-size); font-weight: var(--t-display-weight); letter-spacing: var(--t-display-tracking); line-height: 1.05; }
+  .text-hero-sub { font-size: var(--t-hero-sub-size); font-weight: var(--t-h1-weight); letter-spacing: var(--t-display-tracking); line-height: 1.2; }
+  .text-section { font-size: var(--t-section-size); font-weight: var(--t-display-weight); letter-spacing: var(--t-display-tracking); line-height: 1.15; }
+  .text-stat { font-size: var(--t-stat-size); font-weight: var(--t-display-weight); letter-spacing: var(--t-display-tracking); line-height: 1; }
   .text-display { font-size: var(--t-display-size); font-weight: var(--t-display-weight); letter-spacing: var(--t-display-tracking); line-height: 1.15; }
   .text-h1 { font-size: var(--t-h1-size); font-weight: var(--t-h1-weight); letter-spacing: var(--t-h1-tracking); line-height: 1.2; }
   .text-h2 { font-size: var(--t-h2-size); font-weight: var(--t-h2-weight); letter-spacing: var(--t-h2-tracking); line-height: 1.3; }

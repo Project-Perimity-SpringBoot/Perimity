@@ -9,9 +9,8 @@ import { LIMITS, RX } from '@lib/validation/patterns';
 export const campusSchema = z.object({
   code: z
     .string()
-    .min(LIMITS.campusCode.min, 'Codes are at least 2 characters')
-    .max(LIMITS.campusCode.max, 'Codes are at most 32 characters')
-    .regex(RX.CAMPUS_CODE, 'Letters, numbers and hyphens only'),
+    .length(4, 'Campus code must be exactly 4 characters')
+    .regex(/^[A-Z]{4}$/, 'Campus code must contain capital letters only (A-Z)'),
   name: z
     .string()
     .min(1, 'A name is required')
@@ -19,7 +18,11 @@ export const campusSchema = z.object({
     .regex(RX.DISPLAY_NAME, 'Use letters, numbers and basic punctuation'),
   address: z.string().max(LIMITS.address.max, 'Keep the address under 250 characters').or(z.literal('')).optional(),
   contactEmail: z.string().regex(RX.EMAIL, 'Enter a valid email address').or(z.literal('')).optional(),
-  contactPhone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+  contactPhone: z
+    .string()
+    .regex(/^\d{10}$/, 'Contact phone must be exactly 10 digits')
+    .or(z.literal(''))
+    .optional(),
 });
 export type CampusValues = z.infer<typeof campusSchema>;
 
@@ -42,6 +45,36 @@ export const firstAdminSchema = z.object({
     .regex(RX.PASSWORD_POLICY, 'Include an uppercase letter, a lowercase letter and a number'),
 });
 export type FirstAdminValues = z.infer<typeof firstAdminSchema>;
+
+export const createAdminSchema = z.object({
+  campusId: z.coerce.number().min(1, 'Please select a campus'),
+  name: z
+    .string()
+    .min(LIMITS.personName.min, 'Name is required')
+    .max(LIMITS.personName.max, 'Name may be at most 120 characters')
+    .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .max(LIMITS.email.max, 'That address is too long')
+    .regex(RX.EMAIL, 'Enter a valid email address'),
+  temporaryPassword: z
+    .string()
+    .min(LIMITS.password.min, 'Use at least 8 characters')
+    .max(LIMITS.password.max, 'Passwords are capped at 72 characters')
+    .regex(RX.PASSWORD_POLICY, 'Include an uppercase letter, a lowercase letter and a number'),
+});
+export type CreateAdminValues = z.infer<typeof createAdminSchema>;
+
+export const adminEditSchema = z.object({
+  name: z
+    .string()
+    .min(LIMITS.personName.min, 'Name is required')
+    .max(LIMITS.personName.max, 'Name may be at most 120 characters')
+    .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
+  phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits').or(z.literal('')).optional(),
+});
+export type AdminEditValues = z.infer<typeof adminEditSchema>;
 
 /**
  * CampusStatusUpdateDto requires a reason of 3–500 characters. Kept here rather

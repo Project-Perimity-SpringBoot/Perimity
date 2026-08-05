@@ -27,6 +27,17 @@ import {
 
 const isRole = (value: string): value is Role => (ROLES as readonly string[]).includes(value);
 
+/*
+ * The role matrix that lived here has MOVED to @/types/enums as CREATABLE_ROLES,
+ * read through creatableRolesFor(). Deleted rather than left in place: main and
+ * this branch each grew a copy of the same table, and two mirrors of one server
+ * constant is how they end up disagreeing.
+ *
+ * The table is a mirror of auth-service's UserAdminController.CREATABLE. A
+ * Campus Admin gets FACULTY and GUARD - not STUDENT, and not another
+ * CAMPUS_ADMIN. Change the server first, then the mirror.
+ */
+
 /**
  * Batch 5 screens 3 and 4 — user management.
  *
@@ -53,6 +64,23 @@ export default function UsersPage() {
   const [deactivating, setDeactivating] = useState<UserResponse | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
+  /*
+   * What this admin may actually create, per UserAdminController.CREATABLE.
+   * A CAMPUS_ADMIN gets FACULTY and GUARD - not STUDENT (faculty create their
+   * own students) and not another CAMPUS_ADMIN (that is the Super Admin's call).
+   *
+   * Empty for any role the server lets nowhere near this endpoint, which is
+   * also the signal to hide "Add user" entirely rather than open a form with an
+   * empty dropdown.
+   *
+   * MERGE NOTE: main and this branch fixed the same bug independently and both
+   * survived, leaving two variables for one value. Kept main's NAME, because
+   * other lines in this file already read it, and this branch's ACCESSOR -
+   * creatableRolesFor() handles a null role internally, where the direct map
+   * lookup needed CREATABLE_ROLES imported and it was not.
+   */
+  const creatableRoles = creatableRolesFor(identity?.role);
+
   const listQuery = { ...pageRequest, ...(isRole(roleParam) ? { role: roleParam } : {}) };
 
   const users = useQuery({
@@ -70,24 +98,24 @@ export default function UsersPage() {
     );
   }, [users.data, debounced]);
 
-  /*
-   * What this admin may actually create, per UserAdminController.CREATABLE.
-   * A CAMPUS_ADMIN gets FACULTY and GUARD - not STUDENT (faculty create their
-   * own students) and not another CAMPUS_ADMIN (that is the Super Admin's call).
-   */
-  const creatable = creatableRolesFor(identity?.role);
-
   const createForm = useForm<UserCreateValues>({
     resolver: zodResolver(userCreateSchema),
     defaultValues: {
       email: '',
       name: '',
       phone: '',
-      // Was hardcoded to STUDENT, which is the ONE role a Campus Admin cannot
-      // create - so the form opened pre-set to fail. Default to the first role
-      // this actor is actually allowed to make.
-      role: creatable[0] ?? 'FACULTY',
       temporaryPassword: '',
+      /*
+       * Was hardcoded to STUDENT, which is the ONE role a Campus Admin cannot
+       * create - so the form opened pre-set to fail. Default to the first role
+       * this actor is actually allowed to make.
+       *
+       * FACULTY, not STUDENT, as the last-resort fallback. It only fires when
+       * the list is empty, in which case the form should not be reachable at
+       * all - but if it ever is, falling back to the single role this page's
+       * own audience is forbidden from creating would recreate the bug.
+       */
+      role: creatableRoles[0] ?? 'FACULTY',
     },
   });
   const applyCreateErrors = useApiFormErrors<UserCreateValues>(createForm.setError, setFormErrors);
@@ -201,7 +229,9 @@ export default function UsersPage() {
       <PageHeader
         title="Users"
         description="Accounts at this campus. Deactivated accounts keep their history."
-        actions={<Button onClick={() => setCreating(true)}><Plus aria-hidden />Add user</Button>}
+        actions={creatableRoles.length > 0
+          ? <Button onClick={() => setCreating(true)}><Plus aria-hidden />Add user</Button>
+          : undefined}
       />
 
       <SearchFilterBar
@@ -292,7 +322,7 @@ export default function UsersPage() {
                        Campus Admin could pick STUDENT and get a 403 after
                        filling the whole form. See CREATABLE_ROLES. */
                     <NativeSelect id={id} aria-describedby={describedBy} {...createForm.register('role')}>
-                      {creatable.map((role) => (
+                      {creatableRoles.map((role) => (
                         <option key={role} value={role}>{ROLE_LABEL[role]}</option>
                       ))}
                     </NativeSelect>
