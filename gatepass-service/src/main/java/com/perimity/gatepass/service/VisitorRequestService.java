@@ -84,6 +84,18 @@ public class VisitorRequestService {
     @Transactional
     public VisitorRequestResponse submit(VisitorRequestCreateDto dto) {
 
+        /*
+         * The campus must exist. It is client-chosen since the campus-queue
+         * change, and an unknown id would create a request in a queue no
+         * faculty can ever see - the visitor would wait for an approval nobody
+         * is shown. Checked before the duplicate rule below, so an unknown
+         * campus reports itself rather than hiding behind "you already have a
+         * request".
+         */
+        if (internal.campusOf(dto.getCampusId()).isEmpty()) {
+            throw ResourceNotFoundException.of("Campus", dto.getCampusId());
+        }
+
         // One open request per person per campus. Without this, refreshing the
         // form five times gives a host five identical rows to approve, and
         // approving two of them issues two passes to one visitor.
