@@ -134,13 +134,18 @@ export default function ApplyPage() {
       >
         <FormError messages={formErrors} />
 
-<fieldset className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-5)]">
-          {/* fieldset + legend rather than a div and an h2: a screen reader
-              announces which group a field belongs to, which is the whole
-              point of grouping them. */}
-          <legend className="text-body-md font-medium text-[var(--ink-900)]">
-            1. Visitor information
-          </legend>
+<section className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+          <div className="flex items-center gap-[var(--sp-3)]">
+            <span
+              aria-hidden
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-100)] text-caption font-semibold text-[var(--brand-700)]"
+            >
+              1
+            </span>
+            <h2 className="text-body-lg font-medium text-[var(--ink-900)]">
+              Visitor information
+            </h2>
+          </div>
 
           <div className="grid gap-[var(--sp-4)] md:grid-cols-3">
             <Field
@@ -193,15 +198,32 @@ export default function ApplyPage() {
               )}
             </Field>
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-5)]">
-          {/* fieldset + legend rather than a div and an h2: a screen reader
-              announces which group a field belongs to, which is the whole
-              point of grouping them. */}
-          <legend className="text-body-md font-medium text-[var(--ink-900)]">
-            2. Visit details
-          </legend>
+        <section
+          aria-labelledby="section-2"
+          className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]"
+        >
+          {/*
+            * A section with aria-labelledby, not a fieldset. A <legend>
+            * renders inside the border and ignores the padding, so the
+            * heading sat on the border and the fields pressed against the
+            * edges. This announces the group name just as well and lays
+            * out predictably.
+            */}
+          <div className="flex items-center gap-[var(--sp-3)]">
+            <span
+              aria-hidden
+              className="flex size-7 shrink-0 items-center justify-center rounded-full
+                         bg-[var(--brand-100)] text-caption font-semibold
+                         text-[var(--brand-700)]"
+            >
+              2
+            </span>
+            <h2 id="section-2" className="text-body-lg font-medium text-[var(--ink-900)]">
+              Visit details
+            </h2>
+          </div>
 
           <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
             <Field
@@ -297,15 +319,32 @@ export default function ApplyPage() {
               )}
             </Field>
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-5)]">
-          {/* fieldset + legend rather than a div and an h2: a screen reader
-              announces which group a field belongs to, which is the whole
-              point of grouping them. */}
-          <legend className="text-body-md font-medium text-[var(--ink-900)]">
-            3. Identification and notes
-          </legend>
+        <section
+          aria-labelledby="section-3"
+          className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]"
+        >
+          {/*
+            * A section with aria-labelledby, not a fieldset. A <legend>
+            * renders inside the border and ignores the padding, so the
+            * heading sat on the border and the fields pressed against the
+            * edges. This announces the group name just as well and lays
+            * out predictably.
+            */}
+          <div className="flex items-center gap-[var(--sp-3)]">
+            <span
+              aria-hidden
+              className="flex size-7 shrink-0 items-center justify-center rounded-full
+                         bg-[var(--brand-100)] text-caption font-semibold
+                         text-[var(--brand-700)]"
+            >
+              3
+            </span>
+            <h2 id="section-3" className="text-body-lg font-medium text-[var(--ink-900)]">
+              Identification and notes
+            </h2>
+          </div>
 
           <div className="grid gap-[var(--sp-4)] md:grid-cols-3">
             <Field
@@ -394,7 +433,7 @@ export default function ApplyPage() {
               />
             )}
           </Field>
-        </fieldset>
+        </section>
 
 
         <div className="flex flex-wrap justify-end gap-[var(--sp-3)]">
