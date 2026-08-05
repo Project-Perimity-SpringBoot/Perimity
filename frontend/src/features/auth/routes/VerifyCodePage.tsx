@@ -12,7 +12,8 @@ import type { OtpChallengeResponse } from '@/types/auth.types';
 
 interface VerifyState {
   email: string;
-  challenge: OtpChallengeResponse;
+  /** Null when the code request failed after the account was created. */
+  challenge: OtpChallengeResponse | null;
 }
 
 export default function VerifyCodePage() {
@@ -64,7 +65,7 @@ export default function VerifyCodePage() {
       <div>
         <h1 className="text-h1 text-[var(--ink-900)]">Enter your code</h1>
         <p className="text-small mt-[var(--sp-1)] text-[var(--ink-500)]">
-          Sent to {state.challenge.maskedEmail ?? state.email}. It expires in{' '}
+          Sent to {state.challenge?.maskedEmail ?? state.email}. It expires in{' '}
           {OTP_RULES.expiryMinutes} minutes.
         </p>
       </div>
