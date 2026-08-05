@@ -20,7 +20,7 @@ export default function VisitorRegisterPage() {
     // press the button. Silent on arrival, live once they start correcting.
     mode: 'onTouched',
     reValidateMode: 'onChange',
-    defaultValues: { email: '', name: '', phone: '' },
+    defaultValues: { email: '', name: '' },
   });
   const applyApiErrors = useApiFormErrors<VisitorRegistrationValues>(form.setError, setFormErrors);
 
@@ -32,7 +32,6 @@ export default function VisitorRegisterPage() {
       await authApi.registerVisitor({
         email: values.email,
         name: values.name,
-        phone: values.phone || null,
         campusId: config.defaultCampusId,
       });
       return authApi.requestOtp({
@@ -87,23 +86,6 @@ export default function VisitorRegisterPage() {
               aria-describedby={describedBy}
               invalid={!!form.formState.errors.email}
               {...form.register('email')}
-            />
-          )}
-        </Field>
-
-        <Field
-          label="Phone number"
-          hint="Optional. Include the country code, for example +919876543210."
-          error={form.formState.errors.phone?.message}
-        >
-          {({ id, describedBy }) => (
-            <Input
-              id={id}
-              type="tel"
-              autoComplete="tel"
-              aria-describedby={describedBy}
-              invalid={!!form.formState.errors.phone}
-              {...form.register('phone')}
             />
           )}
         </Field>
