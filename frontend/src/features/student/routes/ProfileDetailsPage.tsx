@@ -236,7 +236,7 @@ export default function ProfileDetailsPage() {
   const unsaved = form.formState.isDirty;
 
   return (
-    <div className="space-y-[var(--sp-5)]">
+    <div className="flex flex-col gap-[var(--sp-6)]">
       <PageHeader
         title="My details"
         description="Your own information, checked by faculty before it counts."
@@ -251,7 +251,7 @@ export default function ProfileDetailsPage() {
           Status. First thing on the page because it decides what the rest
           of the page can do.
          --------------------------------------------------------------- */}
-      <div className="surface-card space-y-[var(--sp-2)] p-[var(--sp-4)]">
+      <div className="surface-card space-y-[var(--sp-2)] p-[var(--sp-6)]">
         <div className="flex items-center gap-[var(--sp-2)]">
           <ProfileVerificationBadge status={status} />
           {profile.data?.submittedAt && status === 'SUBMITTED' && (
@@ -305,7 +305,7 @@ export default function ProfileDetailsPage() {
           to storage, not a form value, and pretending otherwise would mean
           holding the file in memory until an unrelated button is pressed.
          --------------------------------------------------------------- */}
-      <section className="surface-card space-y-[var(--sp-4)] p-[var(--sp-4)]">
+      <section className="surface-card space-y-[var(--sp-4)] p-[var(--sp-6)]">
         <div className="flex items-start justify-between gap-[var(--sp-4)]">
           <div className="min-w-0">
             <h2 className="text-label text-[var(--ink-900)]">Passport photo</h2>
@@ -322,7 +322,7 @@ export default function ProfileDetailsPage() {
           */}
         </div>
 
-        <div className="flex flex-wrap items-start gap-[var(--sp-5)]">
+        <div className="flex flex-wrap items-start gap-[var(--sp-6)]">
           <div className="shrink-0">
             {/*
               AuthedImage, not a plain <img>. In local-storage mode the URL is

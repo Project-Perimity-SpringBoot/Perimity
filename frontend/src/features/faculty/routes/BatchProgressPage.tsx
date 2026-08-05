@@ -94,7 +94,7 @@ export default function BatchProgressPage() {
         }
       />
 
-      <div className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+      <div className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
         <Progress
           value={data.percentComplete}
           label={`${data.processedRows} of ${data.validRows} generated`}
@@ -188,7 +188,7 @@ export default function BatchProgressPage() {
 /** total = valid + invalid, stated in one place so it cannot drift. */
 function BatchFacts({ batch }: { batch: BulkUploadBatchResponse }) {
   return (
-    <dl className="surface-card grid grid-cols-2 gap-[var(--sp-4)] p-[var(--sp-5)] sm:grid-cols-4">
+    <dl className="surface-card grid grid-cols-2 gap-[var(--sp-4)] p-[var(--sp-6)] sm:grid-cols-4">
       <Fact label="Rows in sheet" value={batch.totalRows} />
       <Fact label="Valid" value={batch.validRows} />
       <Fact label="With errors" value={batch.invalidRows} />

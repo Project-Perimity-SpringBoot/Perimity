@@ -40,7 +40,7 @@ import { PageHeader } from '@components/data';
  */
 export default function ManualEntryPage() {
   return (
-    <div className="flex flex-col gap-[var(--sp-5)] p-[var(--sp-4)]">
+    <div className="flex flex-col gap-[var(--sp-6)] p-[var(--sp-4)]">
       <Button variant="link" asChild className="self-start">
         <Link to="/guard"><ArrowLeft aria-hidden />Back to scanning</Link>
       </Button>
