@@ -26,7 +26,7 @@ export default function RequestSubmittedPage() {
     <div className="flex flex-col gap-[var(--sp-6)]">
       <PageHeader title="Request sent" />
 
-      <section className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+      <section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
         <div className="flex items-start gap-[var(--sp-3)]">
           <MailCheck className="mt-[2px] size-5 shrink-0 text-[var(--ink-700)]" aria-hidden />
           <div className="flex flex-col gap-[var(--sp-1)]">

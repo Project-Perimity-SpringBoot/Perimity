@@ -130,15 +130,15 @@ export default function ApplyPage() {
       <form
         noValidate
         onSubmit={handleSubmit((values) => submit.mutate(values))}
-        className="flex flex-col gap-[var(--sp-5)]"
+        className="flex flex-col gap-[var(--sp-6)]"
       >
         <FormError messages={formErrors} />
 
-<section className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]">
+<section className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
           <div className="flex items-center gap-[var(--sp-3)]">
             <span
               aria-hidden
-              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-100)] text-caption font-semibold text-[var(--brand-700)]"
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-50)] text-caption font-semibold text-[var(--brand-600)]"
             >
               1
             </span>
@@ -202,7 +202,7 @@ export default function ApplyPage() {
 
         <section
           aria-labelledby="section-2"
-          className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]"
+          className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]"
         >
           {/*
             * A section with aria-labelledby, not a fieldset. A <legend>
@@ -215,8 +215,8 @@ export default function ApplyPage() {
             <span
               aria-hidden
               className="flex size-7 shrink-0 items-center justify-center rounded-full
-                         bg-[var(--brand-100)] text-caption font-semibold
-                         text-[var(--brand-700)]"
+                         bg-[var(--brand-50)] text-caption font-semibold
+                         text-[var(--brand-600)]"
             >
               2
             </span>
@@ -323,7 +323,7 @@ export default function ApplyPage() {
 
         <section
           aria-labelledby="section-3"
-          className="surface-card flex flex-col gap-[var(--sp-5)] p-[var(--sp-6)]"
+          className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]"
         >
           {/*
             * A section with aria-labelledby, not a fieldset. A <legend>
@@ -336,8 +336,8 @@ export default function ApplyPage() {
             <span
               aria-hidden
               className="flex size-7 shrink-0 items-center justify-center rounded-full
-                         bg-[var(--brand-100)] text-caption font-semibold
-                         text-[var(--brand-700)]"
+                         bg-[var(--brand-50)] text-caption font-semibold
+                         text-[var(--brand-600)]"
             >
               3
             </span>

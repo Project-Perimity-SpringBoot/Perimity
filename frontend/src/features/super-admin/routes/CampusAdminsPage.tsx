@@ -230,7 +230,7 @@ export default function CampusAdminsPage() {
         if (!campus) return <span className="text-[var(--ink-400)]">—</span>;
         return (
           <div className="min-w-0">
-            <p className="text-body-md truncate text-[var(--ink-800)]">{campus.name}</p>
+            <p className="text-body-md truncate text-[var(--ink-900)]">{campus.name}</p>
             <p className="text-caption text-mono text-[var(--ink-500)]">{campus.code}</p>
           </div>
         );
@@ -328,7 +328,7 @@ export default function CampusAdminsPage() {
                 {({ id }) => (
                   <select
                     id={id}
-                    className="flex h-10 w-full rounded-[var(--r-sm)] border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-body-md text-[var(--ink-900)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-500)]"
+                    className="flex h-10 w-full rounded-[var(--r-sm)] border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-body-md text-[var(--ink-900)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-600)]"
                     value={createForm.watch('campusId') || ''}
                     onChange={(e) => createForm.setValue('campusId', Number(e.target.value), { shouldValidate: true })}
                   >
