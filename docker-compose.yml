@@ -170,8 +170,8 @@ services:
       # its job: UserEventPublisher swallows a publish failure precisely so a
       # RabbitMQ hiccup cannot fail account creation. Waiting for the broker to
       # be HEALTHY before starting would undo that at the other end - a broken
-      # RabbitMQ would stop auth-service booting, and nobody could log in to
-      # anything. Sign-in must not depend on a message queue.
+      # RabbitMQ would stop auth-service booting, and nobody could sign in to
+      # anything. Login must not depend on a message queue.
       rabbitmq: { condition: service_started }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/api/auth/ping"]
@@ -190,6 +190,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
       GATEPASS_BASE_URL: http://gatepass-service:8083
+      # Bulk student onboarding asks auth-service to create the accounts.
+      # Container name, not localhost - inside a container localhost is the
+      # container itself.
+      AUTH_SERVICE_URL: http://auth-service:8081
       STORAGE_LOCAL_DIR: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
     volumes:
