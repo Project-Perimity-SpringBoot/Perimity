@@ -12,6 +12,7 @@ import { campusKeys, requestKeys } from '@lib/query/keys';
 import { LIMITS } from '@lib/validation/patterns';
 import { useApiFormErrors } from '@hooks/useApiForm';
 import { useAuth } from '@hooks/useAuth';
+import { ID_HINTS } from '@lib/validation/idDocuments';
 import {
   GENDERS, GENDER_LABELS, ID_TYPES, ID_TYPE_LABELS,
   PURPOSE_TYPES, PURPOSE_TYPE_LABELS, VISITOR_TYPES, VISITOR_TYPE_LABELS,
@@ -62,7 +63,7 @@ export default function ApplyPage() {
   });
 
   const {
-    register, handleSubmit, setError, formState: { errors },
+    register, handleSubmit, setError, watch, formState: { errors },
   } = useForm<VisitorRequestValues>({
     resolver: zodResolver(visitorRequestSchema),
     /*
@@ -81,6 +82,10 @@ export default function ApplyPage() {
     },
   });
   const applyApiErrors = useApiFormErrors<VisitorRequestValues>(setError, setFormErrors);
+
+  // Drives the ID hint. Watched rather than read on submit so it updates as
+  // soon as the visitor picks a document.
+  const selectedIdType = watch('idType');
 
   const submit = useMutation({
     mutationFn: (values: VisitorRequestValues) =>
@@ -295,7 +300,13 @@ export default function ApplyPage() {
           )}
         </Field>
 
-        <Field label="ID number" error={errors.idNumber?.message}>
+        {/* The hint follows the chosen document - a generic one would be wrong
+            for three of the four. */}
+        <Field
+          label="ID number"
+          hint={selectedIdType ? ID_HINTS[selectedIdType] : 'Choose an ID type first.'}
+          error={errors.idNumber?.message}
+        >
           {({ id, describedBy }) => (
             <Input
               id={id} aria-describedby={describedBy}

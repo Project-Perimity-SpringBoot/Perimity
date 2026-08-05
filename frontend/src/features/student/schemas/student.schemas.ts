@@ -119,11 +119,27 @@ export const studentSelfDetailsSchema = z
 
     gender: z.enum(GENDERS, { message: 'Choose an option' }),
 
+    /*
+     * min(1) is the same rule as "not empty", so the single word "address"
+     * passed - and did, in testing. This is a field FACULTY VERIFY, and
+     * attesting to a one-word address is attesting to nothing.
+     *
+     * Two cheap signals separate a real address from a placeholder: length,
+     * and at least one digit or comma - a house number, a PIN code, or a
+     * separator between street and city. Deliberately NOT a format rule:
+     * addresses differ far too much between countries for a regex to be
+     * honest, and this product is campus-agnostic.
+     */
     address: z
       .string()
       .trim()
       .min(1, 'Address is required')
-      .max(LIMITS.address.max, 'Keep the address under 250 characters'),
+      .min(10, 'Give the full address - house or street, area and city')
+      .max(LIMITS.address.max, 'Keep the address under 250 characters')
+      .refine(
+        (v) => /[0-9]/.test(v) || v.includes(','),
+        'Include a house or street number, or separate the parts with commas',
+      ),
 
     phoneCountryCode: z
       .string()
@@ -182,6 +198,24 @@ export const studentSelfDetailsSchema = z
     {
       path: ['altPhoneNumber'],
       message: 'Give both a country code and a number, or leave both empty',
+    },
+  )
+  /*
+   * A second number identical to the first is not a second contact.
+   *
+   * Compared with the country code included, so +91 9876543214 and
+   * +44 9876543214 are correctly treated as different numbers.
+   */
+  .refine(
+    (v) => {
+      const alt = v.altPhoneNumber?.trim();
+      if (!alt) return true;
+      const primary = `${v.phoneCountryCode.trim()}${v.phoneNumber.trim()}`;
+      return `${v.altPhoneCountryCode?.trim() ?? ''}${alt}` !== primary;
+    },
+    {
+      path: ['altPhoneNumber'],
+      message: 'The second number must be different from the first',
     },
   );
 
