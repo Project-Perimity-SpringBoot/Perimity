@@ -108,6 +108,23 @@ export const profileKeys = {
     [...profileKeys.all, 'student', 'pending', 'count', campusId] as const,
 };
 
+/**
+ * Bulk import batches.
+ *
+ * Under their own root rather than profileKeys, because invalidating profiles
+ * after a decision should not throw away a running import's progress — the two
+ * change for unrelated reasons.
+ */
+export const importKeys = {
+  all: ['student-imports'] as const,
+  list: (params: PageRequest) => [...importKeys.all, 'list', params] as const,
+  batch: (id: number) => [...importKeys.all, 'batch', id] as const,
+  rows: (id: number, outcome: string, params: PageRequest) =>
+    [...importKeys.all, 'batch', id, 'rows', outcome, params] as const,
+  /** The campus intake form. One per campus, so no parameter. */
+  settings: () => [...importKeys.all, 'settings'] as const,
+};
+
 export const departmentKeys = {
   all: ['departments'] as const,
   list: (campusId: number | undefined, activeOnly: boolean) =>

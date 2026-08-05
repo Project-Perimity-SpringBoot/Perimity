@@ -68,6 +68,8 @@ public class UserAccountService {
     private final int resetExpiryMinutes;
     private final int resetPerEmailPerDay;
     private final String resetUrlBase;
+    /** Where an imported student is told to sign in. */
+    private final String studentLoginUrl;
 
     public UserAccountService(UserRepository userRepository,
                               PasswordResetRepository resetRepository,
@@ -79,7 +81,9 @@ public class UserAccountService {
                               UserEventPublisher userEvents,
                               @Value("${perimity.password.reset-link-expiry-minutes}") int resetExpiryMinutes,
                               @Value("${perimity.ratelimit.reset.per-email-per-day}") int resetPerEmailPerDay,
-                              @Value("${perimity.frontend.reset-password-url}") String resetUrlBase) {
+                              @Value("${perimity.frontend.reset-password-url}") String resetUrlBase,
+                              @Value("${perimity.frontend.login-url:http://localhost:5173/login}")
+                              String studentLoginUrl) {
         this.userRepository = userRepository;
         this.resetRepository = resetRepository;
         this.blocklistRepository = blocklistRepository;
@@ -91,6 +95,7 @@ public class UserAccountService {
         this.resetExpiryMinutes = resetExpiryMinutes;
         this.resetPerEmailPerDay = resetPerEmailPerDay;
         this.resetUrlBase = resetUrlBase;
+        this.studentLoginUrl = studentLoginUrl;
     }
 
     // --------------------------------------------------------- accounts
@@ -391,6 +396,28 @@ public class UserAccountService {
              * two hundred rows at a time.
              */
             userEvents.publishCreatedAfterCommit(created);
+
+            /*
+             * Their sign-in details, or the account is unreachable.
+             *
+             * Sent from HERE rather than from user-service because this is the
+             * only place the plain password exists. Returning it across a
+             * service boundary so the caller could send the email would mean
+             * putting live credentials in an HTTP response body and, briefly,
+             * in whatever logs that response - for no gain.
+             *
+             * The email is fired per row rather than batched because
+             * EmailService swallows its own failures: one bad mailbox must not
+             * cost the other 199 students their notification, and a batched
+             * send has no obvious way to be partially successful.
+             */
+            if (row != null) {
+                emailService.sendStudentWelcome(
+                        created.getEmail(),
+                        created.getName(),
+                        row.getTemporaryPassword(),
+                        studentLoginUrl);
+            }
         }
 
         // Back into sheet order. Rows were split across two passes above, and a
