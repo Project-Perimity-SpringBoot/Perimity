@@ -163,6 +163,6 @@ public class UserAdminController {
             @RequestParam(required = false) Role role,
             @PageableDefault(size = 20) Pageable pageable) {
 
-        return ApiResponse.ok(service.byCampus(currentUser.campusId(), role, pageable));
+        return ApiResponse.ok(service.byCampus(currentUser.require().campusId(), role, pageable));
     }
 }

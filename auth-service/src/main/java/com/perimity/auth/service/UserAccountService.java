@@ -96,6 +96,14 @@ public class UserAccountService {
             throw new IllegalArgumentException("An account already exists for that email.");
         }
 
+        if (dto.getRole() == Role.CAMPUS_ADMIN && dto.getCampusId() != null) {
+            long activeCount = userRepository.countByCampusIdAndRoleAndActiveTrue(dto.getCampusId(), Role.CAMPUS_ADMIN);
+            if (activeCount > 0) {
+                throw new IllegalArgumentException(
+                        "This campus already has an active Campus Admin. Please suspend or deactivate the existing admin account before creating a new one.");
+            }
+        }
+
         String hash = dto.getRole().canLoginWithPassword()
                 ? passwordEncoder.encode(dto.getTemporaryPassword())
                 : null;
@@ -394,6 +402,14 @@ public class UserAccountService {
                     + (user.isActive() ? "active" : "inactive") + ".");
         }
 
+        if (dto.getActive() && user.getRole() == Role.CAMPUS_ADMIN && user.getCampusId() != null) {
+            long activeCount = userRepository.countByCampusIdAndRoleAndActiveTrue(user.getCampusId(), Role.CAMPUS_ADMIN);
+            if (activeCount > 0) {
+                throw new IllegalArgumentException(
+                        "This campus already has an active Campus Admin. Please suspend the other admin before activating this one.");
+            }
+        }
+
         user.setActive(dto.getActive());
         if (!dto.getActive()) {
             // Deactivating clears the lock so reactivation is not blocked by a
@@ -407,9 +423,6 @@ public class UserAccountService {
                 actorUserId, actorRole, user.getCampusId(), "user:" + user.getId(),
                 dto.getReason());
 
-        // TODO Day 8: when deactivating a holder, call gatepass-service
-        //   POST /internal/passes/holder/{id}/pause
-        // so their live passes stop opening gates immediately.
         return UserResponse.from(user);
     }
 
@@ -420,6 +433,13 @@ public class UserAccountService {
 
     @Transactional(readOnly = true)
     public PageResponse<UserResponse> byCampus(Long campusId, Role role, Pageable pageable) {
+        if (campusId == null) {
+            return PageResponse.from(
+                    role == null
+                            ? userRepository.findAll(pageable)
+                            : userRepository.findByRoleOrderByNameAsc(role, pageable),
+                    UserResponse::from);
+        }
         return PageResponse.from(
                 role == null
                         ? userRepository.findByCampusIdOrderByNameAsc(campusId, pageable)
