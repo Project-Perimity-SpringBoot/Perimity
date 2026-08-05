@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LIMITS } from '@lib/validation/patterns';
+import { LIMITS, RX } from '@lib/validation/patterns';
 
 /**
  * EventCreateRequest / EventUpdateRequest.
@@ -67,3 +67,70 @@ export const bulkUploadSchema = z
   });
 
 export type BulkUploadValues = z.infer<typeof bulkUploadSchema>;
+
+/**
+ * One student, entered by hand.
+ *
+ * ==========================================================================
+ * THIS FORM DRIVES TWO CREATES, NOT ONE
+ * ==========================================================================
+ * A student is two records: the login account in auth-service, and the identity
+ * profile in user-service. This schema covers both halves of the form, and the
+ * screen submits them in order - account first, because the profile needs the
+ * userId the account create returns.
+ *
+ * campusId appears in neither half. It comes from the faculty member's token.
+ *
+ * NO SEMESTER FIELD. StudentProfileCreateDto says it plainly: the SRS excludes
+ * it, it is not needed for access control, and it must never appear in any form.
+ */
+export const addStudentSchema = z.object({
+  /* ---- the login account (auth-service) ---- */
+  name: z
+    .string()
+    .min(LIMITS.personName.min, 'Name is required')
+    .max(LIMITS.personName.max, 'Name may be at most 120 characters')
+    .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
+
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .max(LIMITS.email.max, 'That address is too long')
+    .regex(RX.EMAIL, 'Enter a valid email address'),
+
+  phone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+
+  temporaryPassword: z
+    .string()
+    .regex(
+      RX.PASSWORD_POLICY,
+      'At least 8 characters with an uppercase letter, a lowercase letter and a number',
+    ),
+
+  /* ---- the identity profile (user-service) ---- */
+  departmentId: z.union([z.coerce.number().int().positive(), z.literal('')]).optional(),
+
+  rollNo: z
+    .string()
+    .max(LIMITS.identifierCode.max, 'Roll numbers are at most 32 characters')
+    .regex(RX.IDENTIFIER_CODE, 'Use letters, numbers and hyphens only')
+    .or(z.literal(''))
+    .optional(),
+
+  /*
+   * Exactly 12 digits or empty - StudentProfileCreateDto enforces ^$|^\d{12}$.
+   * Worth knowing that is an Aadhaar-shaped assumption in a product that calls
+   * itself campus-agnostic; it will reject any other country's ID.
+   */
+  govId: z
+    .string()
+    .regex(RX.GOV_ID, 'A government ID must be exactly 12 digits')
+    .optional(),
+
+  address: z
+    .string()
+    .max(LIMITS.address.max, 'Keep the address under 250 characters')
+    .or(z.literal(''))
+    .optional(),
+});
+export type AddStudentValues = z.infer<typeof addStudentSchema>;

@@ -8,6 +8,7 @@ import type {
   FacultyProfileCreateRequest, FacultyProfileResponse, FacultyProfileUpdateRequest,
   PresignedUrlResponse,
   StudentProfileCreateRequest, StudentProfileResponse, StudentProfileUpdateRequest,
+  StudentSelfDetailsRequest, StudentVerificationDecisionRequest,
 } from '@/types/user.types';
 
 const STUDENTS = '/api/user/students';
@@ -62,6 +63,74 @@ export const studentApi = {
   },
   async removePhoto(id: number): Promise<StudentProfileResponse> {
     const { data } = await userClient.delete<unknown>(`${STUDENTS}/${id}/photo`);
+    return unwrap<StudentProfileResponse>(data);
+  },
+
+  /* ------------------------------------------------------------------
+   * Self-declared details and verification
+   * ------------------------------------------------------------------ */
+
+  /**
+   * Save the signed-in student's own details.
+   *
+   * No id in the path — the server reads the account from the token. That is
+   * the point: there is no parameter here that could be swapped for another
+   * student's, so no ownership check can be forgotten.
+   *
+   * WHOLE-OBJECT. Unlike update() above, which patches, this replaces every
+   * field. Send the complete form, not a diff.
+   *
+   * Refused with 409 while the profile is SUBMITTED. Succeeds while VERIFIED
+   * but resets the profile to DRAFT and clears the approval.
+   */
+  async updateOwnDetails(body: StudentSelfDetailsRequest): Promise<StudentProfileResponse> {
+    const { data } = await userClient.put<unknown>(`${STUDENTS}/me/details`, body);
+    return unwrap<StudentProfileResponse>(data);
+  },
+
+  /**
+   * Hand the details to faculty. No body — the only input is who is asking.
+   *
+   * Not idempotent, and the server refuses a second call with 409: submitting
+   * stamps the timestamp the review queue is ordered by, so a double click
+   * would otherwise send the student to the back of it.
+   */
+  async submitOwnDetails(): Promise<StudentProfileResponse> {
+    const { data } = await userClient.post<unknown>(`${STUDENTS}/me/details/submit`);
+    return unwrap<StudentProfileResponse>(data);
+  },
+
+  /**
+   * The reviewer's queue — students waiting for a decision, OLDEST FIRST.
+   *
+   * Do not add a sort parameter. The server orders by submittedAt ascending on
+   * purpose so nobody is buried at the back of a backlog, and passing a Sort
+   * makes Spring Data emit two ORDER BY clauses.
+   */
+  async listPendingVerification(query: DirectoryQuery = {}): Promise<Paged<StudentProfileResponse>> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/pending`, { params: query });
+    return unwrapPage<StudentProfileResponse>(data);
+  },
+
+  async countPendingVerification(campusId?: number): Promise<number> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/pending/count`, {
+      params: { campusId },
+    });
+    return unwrapScalar<number>(data, SCALAR_KEYS.profileCount);
+  },
+
+  /**
+   * Approve or reject a student's submitted details.
+   *
+   * remarks is mandatory when approved is false — the student reads it and
+   * cannot correct anything without it. The reviewer's identity is NOT sent;
+   * the server takes it from the token.
+   */
+  async decideVerification(
+    id: number,
+    body: StudentVerificationDecisionRequest,
+  ): Promise<StudentProfileResponse> {
+    const { data } = await userClient.patch<unknown>(`${STUDENTS}/${id}/verification`, body);
     return unwrap<StudentProfileResponse>(data);
   },
 };

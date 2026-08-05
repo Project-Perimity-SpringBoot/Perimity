@@ -2,7 +2,8 @@ import { Suspense } from 'react';
 import { Outlet } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { visitorRequestApi } from '@lib/api/services/gatepass.api';
-import { requestKeys } from '@lib/query/keys';
+import { studentApi } from '@lib/api/services/user.api';
+import { profileKeys, requestKeys } from '@lib/query/keys';
 import { POLL } from '@lib/query/queryClient';
 import { useAuth } from '@hooks/useAuth';
 import { useIsDesktop, useIsMobile } from '@hooks/useMediaQuery';
@@ -36,12 +37,28 @@ export function AppShell() {
     refetchInterval: POLL.pendingCountMs,
   });
 
+  /*
+   * Gated on the same capability as the nav item itself. Without `enabled` this
+   * fires for every signed-in user, and a student or guard would get a 403 on
+   * every poll — a steady stream of errors in the console and the server log
+   * caused entirely by a badge they cannot see.
+   */
+  const pendingDetails = useQuery({
+    queryKey: profileKeys.pendingVerificationCount(),
+    queryFn: () => studentApi.countPendingVerification(),
+    enabled: can('profile:createStudent'),
+    refetchInterval: POLL.pendingCountMs,
+  });
+
   return (
     <div className="flex min-h-dvh bg-[var(--desk)]">
       {!isMobile && (
         <Sidebar
           items={items}
-          badges={{ pendingRequests: pending.data ?? 0 }}
+          badges={{
+            pendingRequests: pending.data ?? 0,
+            pendingStudentVerification: pendingDetails.data ?? 0,
+          }}
           variant={isDesktop ? 'full' : 'rail'}
         />
       )}

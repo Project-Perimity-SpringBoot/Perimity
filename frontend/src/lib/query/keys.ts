@@ -94,6 +94,18 @@ export const profileKeys = {
   facultyCount: (campusId?: number) => [...profileKeys.all, 'faculty', 'count', campusId] as const,
   photoUrl: (kind: 'student' | 'faculty', id: number) =>
     [...profileKeys.all, kind, id, 'photo-url'] as const,
+
+  /*
+   * The verification queue.
+   *
+   * Under profileKeys.all rather than a key of its own, so that invalidating
+   * profiles after a decision also refreshes the queue. A reviewer who approves
+   * someone and still sees them in the list will click again and get a 409.
+   */
+  pendingVerification: (params: PageRequest & { campusId?: number }) =>
+    [...profileKeys.all, 'student', 'pending', params] as const,
+  pendingVerificationCount: (campusId?: number) =>
+    [...profileKeys.all, 'student', 'pending', 'count', campusId] as const,
 };
 
 export const departmentKeys = {

@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router';
 import { AlertTriangle, ArrowLeft, Trash2 } from 'lucide-react';
 import {
-  Button, Field, Input, NativeSelect, SkeletonText, Textarea,
+  Button, Field, Input, NativeSelect, SkeletonText,
 } from '@ui/index';
 import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
 import { PageHeader } from '@components/data';
@@ -74,7 +74,6 @@ export default function ProfileEditPage() {
       departmentId: profile.data?.departmentId ?? '',
       rollNo: profile.data?.rollNo ?? '',
       govId: '',
-      address: profile.data?.address ?? '',
     },
   });
   const applyApiErrors = useApiFormErrors<StudentProfileValues>(form.setError, setFormErrors);
@@ -94,7 +93,17 @@ export default function ProfileEditPage() {
         // An empty govId means "leave it alone" - the server never sent us the
         // real one, so sending "" would clear a value the student never saw.
         ...(values.govId ? { govId: values.govId } : {}),
-        ...(values.address ? { address: values.address } : { address: null }),
+        /*
+         * ADDRESS IS DELIBERATELY ABSENT, and must stay absent.
+         *
+         * It used to be sent here as `values.address ? address : null`. With the
+         * field moved to /profile/details there is nothing to populate it, so
+         * that line would send null on every save and silently erase the
+         * student's address each time they changed their department.
+         *
+         * Omitting the key entirely is what the update contract means by "leave
+         * it alone" — null means "clear it".
+         */
       }),
     onSuccess: () => {
       invalidateAfterPause();
@@ -233,12 +242,22 @@ export default function ProfileEditPage() {
           )}
         </Field>
 
-        <Field label="Address" error={form.formState.errors.address?.message}>
-          {({ id, describedBy }) => (
-            <Textarea id={id} rows={3} aria-describedby={describedBy}
-                      invalid={Boolean(form.formState.errors.address)} {...form.register('address')} />
-          )}
-        </Field>
+        {/*
+          ADDRESS MOVED to /student/profile/details.
+
+          It is part of the record faculty verify now, so changing it has to
+          reset that verification. This screen sends a partial update and cannot
+          do that — an address edited here would keep a Verified badge sitting
+          over an address nobody has checked.
+
+          A link rather than a silent removal: a student who came here to change
+          their address needs to be told where it went.
+        */}
+        <p className="text-caption text-[var(--ink-500)]">
+          Your address, name, date of birth and phone numbers are on{' '}
+          <Link to="/student/profile/details" className="underline">My details</Link>,
+          because faculty check those.
+        </p>
 
         <div className="flex flex-wrap gap-[var(--sp-3)]">
           <Button type="submit" loading={save.isPending}>Save changes</Button>

@@ -1,6 +1,7 @@
 package com.perimity.user.repository;
 
 import com.perimity.user.entity.StudentProfile;
+import com.perimity.user.entity.enums.ProfileVerificationStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -27,4 +28,23 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
     List<StudentProfile> findByDepartmentId(Long departmentId);
 
     long countByCampusId(Long campusId);
+
+    /**
+     * The faculty review queue: students on this campus waiting for a decision.
+     *
+     * Ordered by submittedAt ASCENDING - oldest first. The default id-descending
+     * order used by the directory would put the newest submission at the top and
+     * bury whoever has been waiting longest at the bottom of the last page,
+     * which is how a queue turns into a backlog nobody clears.
+     *
+     * Campus-scoped in the query itself, not filtered afterwards. Faculty on one
+     * campus must never see another campus's students, and a scope applied after
+     * the page has been cut would return short pages as a side effect of the
+     * filtering.
+     */
+    Page<StudentProfile> findByCampusIdAndVerificationStatusOrderBySubmittedAtAsc(
+            Long campusId, ProfileVerificationStatus verificationStatus, Pageable pageable);
+
+    long countByCampusIdAndVerificationStatus(
+            Long campusId, ProfileVerificationStatus verificationStatus);
 }
