@@ -131,6 +131,31 @@ export interface ImportBatchResponse {
   confirmable: boolean;
 }
 
+/**
+ * The campus intake form.
+ *
+ * `configured` and `driveAvailable` are separate on purpose. A campus can have
+ * its form set up perfectly while the server has no Drive access at all, and
+ * the two need different advice — "finish setting up" versus "download the
+ * sheet and upload it instead". One flag would send people to fix the wrong
+ * thing.
+ */
+export interface ImportSettingsResponse {
+  campusId: number;
+  formUrl: string | null;
+  responsesSheetId: string | null;
+  configured: boolean;
+  driveAvailable: boolean;
+  updatedBy: number | null;
+  updatedAt: string | null;
+}
+
+export interface ImportSettingsRequest {
+  formUrl?: string | null;
+  /** A whole Google Sheets URL. The server pulls the id out of it. */
+  responsesSheetUrl?: string | null;
+}
+
 export interface ImportRowResponse {
   id: number;
   /** 1-based, counting the header, so it matches the spreadsheet on screen. */
