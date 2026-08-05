@@ -71,12 +71,22 @@ export default function VerifyCodePage() {
 
       <FormError messages={formErrors} />
 
+      {/*
+        * No onComplete. The sixth digit used to submit the code the instant it
+        * landed, so a visitor who mistyped one digit had the attempt spent
+        * before they could look at what they had typed - and the boxes were
+        * disabled while that request was in flight, so they could not correct
+        * it either. Both together made a typo unrecoverable without reloading,
+        * which costs the code as well.
+        *
+        * The Verify button below is now the only way to submit. Typing all six
+        * digits does nothing until the visitor says so.
+        */}
       <OtpInput
         value={code}
         onChange={setCode}
-        onComplete={(value) => verify.mutate(value)}
         invalid={formErrors.length > 0}
-        disabled={verify.isPending || remaining === 0}
+        disabled={remaining === 0}
         autoFocus
       />
 
