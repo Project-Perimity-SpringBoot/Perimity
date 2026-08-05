@@ -314,7 +314,12 @@ export default function ProfileDetailsPage() {
               clear, front-facing picture.
             </p>
           </div>
-          {hasPhoto && <ProfileVerificationBadge status={status} />}
+          {/*
+            The page-level badge above already reports this status, and it is a
+            PROFILE status, not a photo one. Repeating it beside the photo read
+            as "the photo has not been submitted", which is a different claim
+            and not one this component can make.
+          */}
         </div>
 
         <div className="flex flex-wrap items-start gap-[var(--sp-5)]">
@@ -412,6 +417,37 @@ export default function ProfileDetailsPage() {
           <p className="text-caption text-[var(--ink-500)]">
             Your pass carries the name on your account. These are for your record.
           </p>
+
+          {/*
+            The government ID, read-only, because faculty verify it and the
+            student could not see it.
+
+            It is entered by whoever enrolled the student and is not part of
+            this form, so a mistyped digit was invisible on the one screen that
+            asks "are these details correct?" - the student was being asked to
+            attest to a value the page never showed them.
+
+            Read-only rather than editable: changing it PAUSES every pass the
+            student holds (StudentProfileService adds "government ID" to
+            sensitiveChanges), and a field that can suspend your own gate access
+            does not belong on a form whose save button is pressed casually.
+            The edit screen keeps that, with its warning.
+
+            Masked, never full - the server sends govIdMasked and govIdPresent
+            and never the real digits.
+          */}
+          {profile.data?.govIdPresent ? (
+            <div className="flex flex-wrap items-baseline gap-[var(--sp-2)]">
+              <span className="text-label text-[var(--ink-900)]">Government ID</span>
+              <span className="text-mono text-[var(--ink-700)]">
+                {profile.data.govIdMasked ?? '••••••••'}
+              </span>
+              <span className="text-caption text-[var(--ink-500)]">
+                on file — if this is wrong, ask the faculty who enrolled you to correct it
+                before you submit.
+              </span>
+            </div>
+          ) : null}
 
           <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
             <Field label="Date of birth" required error={form.formState.errors.dateOfBirth?.message}>
