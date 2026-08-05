@@ -57,8 +57,12 @@ public class VisitorRequestController {
         // why that is safe. The service checks it exists; the rule lives next
         // to the row it is about, as the ownership checks do.
 
+        // A visitor here is signed in, and a visitor signs in only by email OTP.
+        // Their address is already proven, so the request is created verified.
+        Long verifiedVisitor = currentUser.require().isVisitor() ? currentUser.userId() : null;
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Request submitted", service.submit(dto)));
+                .body(ApiResponse.ok("Request submitted", service.submit(dto, verifiedVisitor)));
     }
 
     @PatchMapping("/{id}/decision")
