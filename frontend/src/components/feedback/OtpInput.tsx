@@ -45,21 +45,51 @@ export function OtpInput({ value, onChange, onComplete, invalid, disabled, autoF
           }}
           inputMode="numeric"
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
+          /*
+           * NOT maxLength={1}.
+           *
+           * With it, a box that already holds a digit silently rejects the next
+           * keystroke - so typing at any speed dropped characters: the handler
+           * moves focus only after React re-renders, and anything arriving
+           * before that hit a full box and was discarded. Typing 598738 landed
+           * a single 5.
+           *
+           * It also broke SMS autofill, which delivers all six characters to
+           * one box at once: the old handler took slice(-1) and threw five
+           * away.
+           */
+          maxLength={OTP_RULES.length}
           disabled={disabled}
           aria-label={`Digit ${i + 1}`}
           aria-invalid={invalid || undefined}
           value={value[i] ?? ''}
           onChange={(e) => {
-            const digit = e.target.value.replace(/\D/g, '').slice(-1);
-            // An empty value means the box was cleared - honour it. Returning
-            // early here is what made a wrong digit unfixable without a reload.
-            if (!digit) {
+            const typed = e.target.value.replace(/\D/g, '');
+
+            // Cleared. Honour it - returning early here is what once made a
+            // wrong digit unfixable without reloading.
+            if (!typed) {
               setAt(i, '');
               return;
             }
-            setAt(i, digit);
-            refs.current[i + 1]?.focus();
+
+            /*
+             * Spread everything that arrived across this box and the ones
+             * after it, rather than keeping one character. Covers fast typing,
+             * a paste into the middle, and autofill, with no special cases.
+             */
+            const next = value.padEnd(OTP_RULES.length, ' ').split('');
+            typed.split('').forEach((char, offset) => {
+              if (i + offset < OTP_RULES.length) next[i + offset] = char;
+            });
+
+            const joined = next.join('').trimEnd();
+            onChange(joined);
+            if (joined.replace(/\s/g, '').length === OTP_RULES.length) onComplete?.(joined);
+
+            // Land on the box after the last one filled, or the final box.
+            const landing = Math.min(i + typed.length, OTP_RULES.length - 1);
+            refs.current[landing]?.focus();
           }}
           onKeyDown={(e) => {
             if (e.key === 'Backspace') {
