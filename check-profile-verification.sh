@@ -130,6 +130,34 @@ PROFILE_ID=$(jq -r '.data.id // empty' <<<"$PROFILE")
 [[ -n "$PROFILE_ID" ]] && info "student profile id $PROFILE_ID" \
   || { fail "student has no profile row — create one via the faculty screen first"; exit 1; }
 
+# --------------------------------------------------------------------
+# NORMALISE THE STARTING STATE
+#
+# A test that only passes on a pristine account is a test nobody runs twice.
+# If the profile is already SUBMITTED, every write below is refused with 409 -
+# correctly - and the run reports a dozen failures that all mean "you ran this
+# before".
+#
+# So: have faculty send a stranded submission back, which is a legitimate
+# transition through the real endpoint, not a database poke. VERIFIED and
+# REJECTED are both editable already and are left alone.
+# --------------------------------------------------------------------
+START_STATUS=$(jq -r '.data.verificationStatus // "DRAFT"' <<<"$PROFILE")
+if [[ "$START_STATUS" == "SUBMITTED" ]]; then
+  info "profile is SUBMITTED from an earlier run — asking faculty to send it back"
+  r=$(req PATCH "$USER/api/user/students/$PROFILE_ID/verification" "$F_TOKEN" \
+        '{"approved":false,"remarks":"Reset by check-profile-verification.sh"}')
+  if [[ "$(code "$r")" == "200" ]]; then
+    PROFILE=$(body "$(req GET "$USER/api/user/students/me" "$S_TOKEN")")
+    info "reset to $(jq -r '.data.verificationStatus' <<<"$PROFILE")"
+  else
+    fail "could not reset the profile — is the faculty account on the same campus?"
+    exit 1
+  fi
+else
+  info "starting from $START_STATUS"
+fi
+
 echo ""
 echo "=============================================="
 echo " 1. VALIDATION — the DTO should refuse bad input"
@@ -160,6 +188,47 @@ r=$(req PUT "$USER/api/user/students/me/details" "$S_TOKEN" "$DETAILS")
 expect "student saves their details" 200 "$r"
 [[ "$(jq -r '.data.verificationStatus' <<<"$(body "$r")")" == "DRAFT" ]] \
   && pass "status is DRAFT after saving" || fail "status should be DRAFT after saving"
+
+# --------------------------------------------------------------------
+# The passport photo is mandatory before submitting.
+#
+# The refusal is only asserted when the profile genuinely has no photo yet -
+# on a re-run against an account that already uploaded one, asserting it would
+# fail for a reason that has nothing to do with the rule.
+# --------------------------------------------------------------------
+HAS_PHOTO=$(jq -r '.data.photoS3Key // empty' <<<"$PROFILE")
+
+if [[ -z "$HAS_PHOTO" ]]; then
+  r=$(req POST "$USER/api/user/students/me/details/submit" "$S_TOKEN")
+  expect_refused "submitting with no passport photo is refused" "$r"
+else
+  info "profile already has a photo - skipping the no-photo refusal check"
+fi
+
+# A real 1x1 PNG. The server checks magic bytes, not just the declared content
+# type, so a text file renamed .png is rejected - which is the point.
+#
+# WRITTEN BESIDE THIS SCRIPT, NOT IN /tmp, and that is not a style choice.
+# In Git Bash the shell is POSIX but curl is a native Windows binary, so a path
+# like /tmp/x.png means nothing to it - the file is never opened, the request is
+# never sent, and %{http_code} comes back as 000 with no error text. A relative
+# path resolves for both.
+PNG="./perimity-test-photo.$$.png"
+base64 -d > "$PNG" <<'B64'
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+B64
+
+if [[ ! -s "$PNG" ]]; then
+  fail "could not write the test image - is base64 available?"
+else
+  # --show-error so a transport failure says why instead of returning a bare 000.
+  r=$(curl -s --show-error -w '\n%{http_code}' \
+        -X POST "$USER/api/user/students/$PROFILE_ID/photo" \
+        -H "Authorization: Bearer $S_TOKEN" \
+        -F "file=@$PNG;type=image/png" 2>&1)
+  expect "student uploads a passport photo" 200 "$r"
+fi
+rm -f "$PNG"
 
 r=$(req POST "$USER/api/user/students/me/details/submit" "$S_TOKEN")
 expect "student submits for verification" 200 "$r"
