@@ -60,11 +60,22 @@ export const visitorRequestSchema = z
       .min(LIMITS.purpose.min, 'Say briefly why you are visiting — your host reads this')
       .max(LIMITS.purpose.max, `Keep it under ${LIMITS.purpose.max} characters`),
 
-    /** The faculty member who will approve or reject. Chosen, never typed. */
-    hostUserId: z.coerce
-      .number({ invalid_type_error: 'Choose a host' })
+    /**
+     * The campus being visited. Chosen, never typed.
+     *
+     * Replaces the host picker. A visitor rarely knows which faculty member to
+     * name, and naming the wrong one parked the request in an inbox nobody
+     * watched. Any faculty of this campus can now verify it, and whoever does
+     * is recorded as the approver server-side.
+     *
+     * Required here even though VisitorRequestCreateDto marks campusId
+     * @JsonIgnore: the value is sent as a query parameter rather than in the
+     * body, and a request with no campus has no queue to land in.
+     */
+    campusId: z.coerce
+      .number({ invalid_type_error: 'Choose the campus you are visiting' })
       .int()
-      .positive('Choose a host'),
+      .positive('Choose the campus you are visiting'),
 
     visitFrom: z.string().min(1, 'Pick the first day of your visit'),
     visitTo: z.string().min(1, 'Pick the last day of your visit'),

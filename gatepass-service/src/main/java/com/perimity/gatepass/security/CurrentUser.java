@@ -37,6 +37,37 @@ public class CurrentUser {
     }
 
     /**
+     * The campus a listing should read, given an optional requested one.
+     *
+     * A Super Admin has no campus of their own, so campusId() throws for them.
+     * They must name one explicitly - refused rather than defaulted, because
+     * silently showing the wrong campus's approval queue is worse than an
+     * error. Mirrors CurrentUser.resolveCampusForListing in user-service; the
+     * two must stay in step or the same request behaves differently depending
+     * on which service answers it.
+     *
+     * Anyone else is pinned to their own campus. A supplied id that is not
+     * theirs is refused, not ignored - quietly returning their own campus
+     * would make a broken caller look like it worked.
+     */
+    public Long resolveCampusForListing(Long requested) {
+        PerimityPrincipal p = require();
+
+        if (p.isSuperAdmin()) {
+            if (requested == null) {
+                throw new IllegalArgumentException(
+                        "A Super Admin must name a campus: add ?campusId= to this request.");
+            }
+            return requested;
+        }
+
+        if (requested != null && !requested.equals(p.campusId())) {
+            throw new AccessDeniedInThisServiceException("That campus is not yours.");
+        }
+        return campusId();
+    }
+
+    /**
      * A student or visitor may only touch their own records; staff may touch
      * anyone's on their campus.
      *

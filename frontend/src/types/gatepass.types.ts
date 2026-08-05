@@ -154,11 +154,20 @@ export interface GatePassStatusUpdateRequest {
 }
 
 export interface VisitorRequestCreateRequest {
+  /**
+   * The campus being visited, chosen by the visitor.
+   *
+   * Used to be omitted here because the server took it from the token and
+   * marked the DTO field @JsonIgnore. It is now a required part of the body:
+   * any faculty of this campus can approve the request.
+   */
+  campusId: number;
   visitorName: string;
   visitorEmail: string;
   visitorPhone?: string | null;
   purpose: string;
-  hostUserId: number;
+  /** Optional. Only when the visitor knows who invited them. */
+  hostUserId?: number | null;
   eventId?: number | null;
   visitFrom: string;
   visitTo: string;

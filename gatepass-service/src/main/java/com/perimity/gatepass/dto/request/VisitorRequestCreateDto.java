@@ -35,19 +35,30 @@ import lombok.Setter;
 public class VisitorRequestCreateDto {
 
     /**
-     * SERVER-OWNED since Day 7. Taken from the JWT by the controller, never
-     * from the request body.
+     * The campus being visited. CLIENT-CHOSEN, and that is a reversal.
      *
-     * @JsonIgnore is the important part: without it a caller could put their
-     * own value here and the controller's overwrite would be the only thing
-     * stopping them. With it, Jackson discards the key and the field cannot be
-     * injected at all.
+     * Server-owned from Day 7 until this change, taken from the JWT.
      *
-     * No @NotNull either - validation runs BEFORE the controller sets it, so a
-     * constraint here would reject every request.
+     * It used to be @JsonIgnore and overwritten from the token, on the grounds
+     * that "taking it from the body would let anyone request entry to any
+     * institution". Requesting is not entering. A request against a campus is
+     * inert until a faculty member OF THAT CAMPUS approves it, and the approval
+     * queue is campus-scoped from the token - see VisitorRequestController.
+     * Approval is the gate; this field is only which queue to join.
+     *
+     * What the old design actually prevented was a visitor applying anywhere
+     * except the campus their account was pinned to at registration - which is
+     * campus 1 for everyone, because the frontend hardcodes
+     * VITE_DEFAULT_CAMPUS_ID. That is the behaviour being fixed.
+     *
+     * The controller still checks the campus exists before the request is
+     * stored. It cannot yet check the campus is ACTIVE: CampusView carries only
+     * id, code and name. The picker lists active campuses only, so this is a
+     * UI-side guarantee, not a server-side one. Worth closing.
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    @Schema(hidden = true)
+    @NotNull(message = "Choose the campus you are visiting")
+    @Positive(message = "Campus id must be a positive number")
+    @Schema(description = "The campus being visited. Chosen by the visitor.", example = "1")
     private Long campusId;
 
     @NotBlank(message = "Visitor name is required")
@@ -72,9 +83,24 @@ public class VisitorRequestCreateDto {
     @Schema(example = "Meeting the project guide for thesis review")
     private String purpose;
 
-    @NotNull(message = "Host is required")
+    /**
+     * Optional since the campus-queue change.
+     *
+     * A visitor picks a CAMPUS, not a person - they rarely know which faculty
+     * member to name, and naming the wrong one used to park the request in an
+     * inbox nobody was watching. Any faculty of the chosen campus can now
+     * verify it, and whoever does is recorded in reviewedBy, so the audit trail
+     * still names a real approver.
+     *
+     * Still accepted when present: a visitor who was invited by a specific host
+     * can say so, and the request carries that hint into the queue. It is no
+     * longer a requirement for the request to be actionable.
+     *
+     * @Positive still applies when supplied - Bean Validation skips nulls.
+     */
     @Positive(message = "Host user id must be a positive number")
-    @Schema(description = "Faculty or staff member being visited", example = "42")
+    @Schema(description = "Optional. The specific person being visited, if known.",
+            example = "42")
     private Long hostUserId;
 
     @Positive(message = "Event id must be a positive number")
