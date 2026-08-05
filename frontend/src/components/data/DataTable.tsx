@@ -135,10 +135,21 @@ export function DataTable<T>({
               onClick={onRowClick ? () => onRowClick(row.original) : undefined}
               className="surface-card p-[var(--sp-3)]"
             >
+              {/*
+                * A DIV, not a P.
+                *
+                * This wraps whatever a column's cell renderer returns, and a
+                * cell is free to return block content - UsersPage's name column
+                * renders a <div> holding a <p> for the name and another for the
+                * email. Nesting that inside a <p> is invalid HTML: the browser
+                * auto-closes the outer paragraph, so React's tree and the real
+                * DOM stop matching and every affected row logged a hydration
+                * error. Nothing renders a paragraph here that needs to be one.
+                */}
               {primary && (
-                <p className="text-body-md text-[var(--ink-900)]">
+                <div className="text-body-md text-[var(--ink-900)]">
                   {flexRender(primary.column.columnDef.cell, primary.getContext())}
-                </p>
+                </div>
               )}
               <dl className="mt-[var(--sp-2)] grid grid-cols-[auto_1fr] gap-x-[var(--sp-4)] gap-y-[var(--sp-1)]">
                 {rest.map((cell) => (

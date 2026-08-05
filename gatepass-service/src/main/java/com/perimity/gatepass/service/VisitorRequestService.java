@@ -185,6 +185,42 @@ public class VisitorRequestService {
         return VisitorRequestResponse.from(request);
     }
 
+    /**
+     * PROPOSAL. The same verification, addressed by the visitor's email instead
+     * of by a request id.
+     *
+     * auth-service is the only caller this path can ever have, and it does not
+     * know request ids - after an OTP it holds an email, a purpose and a user,
+     * and has no concept of a visitor request at all. Requiring an id is why
+     * the id-keyed method above has never been called by anything, and why
+     * otpVerified has stayed false for every request ever created. Since
+     * markEmailVerified is what issues the pass, no visitor has ever received
+     * one.
+     *
+     * Picks the newest request that is still PENDING and unverified. A visitor
+     * who applied twice has two rows: marking the older one would leave the
+     * request they are actually waiting on untouched, which fails silently and
+     * looks exactly like the bug this replaces.
+     *
+     * Identity still comes from the body, never from the path. The email says
+     * which request; dto.visitorUserId says who the holder is, and that is the
+     * value the pass is issued against. A caller that could forge the email
+     * therefore still cannot redirect a pass to a different user - and the
+     * caller is already behind InternalApiKeyFilter.
+     */
+    @Transactional
+    public VisitorRequestResponse markEmailVerifiedByEmail(String visitorEmail,
+                                                           VisitorEmailVerifiedDto dto) {
+        VisitorRequest target = requestRepository
+                .findByVisitorEmailOrderByCreatedAtDesc(visitorEmail).stream()
+                .filter(r -> !r.isOtpVerified() && r.getStatus() == RequestStatus.PENDING)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No visitor request is awaiting email verification for " + visitorEmail));
+
+        return markEmailVerified(target.getId(), dto);
+    }
+
     // ------------------------------------------------------------- decide
 
     /**

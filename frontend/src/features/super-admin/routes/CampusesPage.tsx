@@ -80,6 +80,17 @@ export default function CampusesPage() {
 
   const save = useMutation({
     mutationFn: (values: CampusValues) => {
+      if (!editing) {
+        const formattedCode = values.code.trim().toUpperCase();
+        const exists = campuses.data?.some((c) => c.code.toUpperCase() === formattedCode);
+        if (exists) {
+          campusForm.setError('code', {
+            type: 'manual',
+            message: `Campus code "${formattedCode}" is already taken by another campus`,
+          });
+          throw new Error(`Campus code "${formattedCode}" is already taken`);
+        }
+      }
       const shared = {
         name: values.name,
         ...(values.address ? { address: values.address } : {}),
@@ -90,7 +101,7 @@ export default function CampusesPage() {
       // ever part of the create body.
       return editing
         ? campusApi.update(editing.id, shared)
-        : campusApi.create({ code: values.code, ...shared });
+        : campusApi.create({ code: values.code.trim().toUpperCase(), ...shared });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: campusKeys.all });
@@ -277,12 +288,28 @@ export default function CampusesPage() {
               <Field
                 label="Campus code" required
                 error={campusForm.formState.errors.code?.message}
-                hint={editing ? 'Permanent.' : 'Short, letters, numbers and hyphens. Permanent.'}
+                hint={editing ? 'Permanent.' : 'Exactly 4 capital letters (A-Z). Permanent.'}
               >
                 {({ id, describedBy }) => (
                   <Input id={id} aria-describedby={describedBy} disabled={editing !== null}
+                         maxLength={4}
+                         placeholder="ABCD"
                          invalid={Boolean(campusForm.formState.errors.code)}
-                         {...campusForm.register('code')} />
+                         {...campusForm.register('code', {
+                           onChange: (e) => {
+                             const upper = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+                             campusForm.setValue('code', upper, { shouldValidate: true });
+                             if (!editing && upper.length === 4) {
+                               const exists = campuses.data?.some((c) => c.code.toUpperCase() === upper);
+                               if (exists) {
+                                 campusForm.setError('code', {
+                                   type: 'manual',
+                                   message: `Campus code "${upper}" is already taken by another campus`,
+                                 });
+                               }
+                             }
+                           },
+                         })} />
                 )}
               </Field>
 
@@ -294,11 +321,17 @@ export default function CampusesPage() {
                            {...campusForm.register('contactEmail')} />
                   )}
                 </Field>
-                <Field label="Contact phone" error={campusForm.formState.errors.contactPhone?.message}>
+                <Field label="Contact phone" error={campusForm.formState.errors.contactPhone?.message} hint="10 digits only">
                   {({ id, describedBy }) => (
-                    <Input id={id} type="tel" placeholder="+919876543210" aria-describedby={describedBy}
+                    <Input id={id} type="tel" placeholder="9876543210" aria-describedby={describedBy}
+                           maxLength={10}
                            invalid={Boolean(campusForm.formState.errors.contactPhone)}
-                           {...campusForm.register('contactPhone')} />
+                           {...campusForm.register('contactPhone', {
+                             onChange: (e) => {
+                               const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                               campusForm.setValue('contactPhone', digits, { shouldValidate: true });
+                             },
+                           })} />
                   )}
                 </Field>
               </div>
