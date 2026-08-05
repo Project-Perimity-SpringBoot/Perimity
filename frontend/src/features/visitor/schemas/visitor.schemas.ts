@@ -53,7 +53,7 @@ export const visitorRequestSchema = z
     visitorPhone: z
       .string()
       .trim()
-      .regex(RX.PHONE, 'Enter a phone number with country code, e.g. +919876543210')
+      .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
       .or(z.literal(''))
       .optional(),
 
