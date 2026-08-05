@@ -1,7 +1,11 @@
 package com.perimity.gatepass.dto.response;
 
 import com.perimity.gatepass.entity.VisitorRequest;
+import com.perimity.gatepass.entity.enums.Gender;
+import com.perimity.gatepass.entity.enums.IdType;
+import com.perimity.gatepass.entity.enums.PurposeType;
 import com.perimity.gatepass.entity.enums.RequestStatus;
+import com.perimity.gatepass.entity.enums.VisitorType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -20,6 +24,12 @@ public record VisitorRequestResponse(
         String visitorEmail,
         String visitorPhone,
         String purpose,
+        PurposeType purposeType,
+        VisitorType visitorType,
+        Gender gender,
+        LocalDate dateOfBirth,
+        IdType idType,
+        String idNumber,
         Long hostUserId,
         Long eventId,
         LocalDate visitFrom,
@@ -42,6 +52,12 @@ public record VisitorRequestResponse(
                 e.getVisitorEmail(),
                 e.getVisitorPhone(),
                 e.getPurpose(),
+                e.getPurposeType(),
+                e.getVisitorType(),
+                e.getGender(),
+                e.getDateOfBirth(),
+                e.getIdType(),
+                e.getIdNumber(),
                 e.getHostUserId(),
                 e.getEventId(),
                 e.getVisitFrom(),

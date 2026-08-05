@@ -1,6 +1,10 @@
 package com.perimity.gatepass.entity;
 
+import com.perimity.gatepass.entity.enums.Gender;
+import com.perimity.gatepass.entity.enums.IdType;
+import com.perimity.gatepass.entity.enums.PurposeType;
 import com.perimity.gatepass.entity.enums.RequestStatus;
+import com.perimity.gatepass.entity.enums.VisitorType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,6 +21,7 @@ import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -72,14 +77,82 @@ public class VisitorRequest {
     @Column(name = "visitor_email", nullable = false, length = 180)
     private String visitorEmail;
 
-    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
+    @Pattern(regexp = ValidationPatterns.PHONE_IN, message = ValidationPatterns.PHONE_IN_MESSAGE)
     @Column(name = "visitor_phone", length = 20)
     private String visitorPhone;
 
-    @NotBlank
-    @Size(min = 5, max = 500, message = "Describe the purpose of the visit in at least 5 characters")
-    @Column(name = "purpose", nullable = false, length = 500)
+    /**
+     * Free-text detail. OPTIONAL since purposeType arrived - the category is
+     * what the queue filters on, this is the sentence the approver reads.
+     *
+     * Was NOT NULL. See db/migration/V2__visitor_request_identity_fields.sql.
+     */
+    @Size(max = 500, message = "Keep the description under 500 characters")
+    @Column(name = "purpose", length = 500)
     private String purpose;
+
+    /** The category of visit. Required - a queue needs something to group by. */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose_type", nullable = false, length = 20)
+    private PurposeType purposeType;
+
+    /** Who the visitor is, as distinct from why they are here. */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visitor_type", nullable = false, length = 20)
+    private VisitorType visitorType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 20)
+    private Gender gender;
+
+    /**
+     * Date of birth, not age. An age column is wrong the day after it is
+     * written; this is correct forever and the age is derived when displayed.
+     */
+    @Past(message = "Date of birth must be in the past")
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "id_type", length = 20)
+    private IdType idType;
+
+    /**
+     * The identity document number.
+     *
+     * ==================================================================
+     *  STORED IN FULL TODAY. THAT SHOULD NOT SURVIVE THIS PROJECT.
+     * ==================================================================
+     * IdType.AADHAAR means this column can hold a full Aadhaar number, which is
+     * regulated personal data in India - the Aadhaar Act restricts who may
+     * store it and obliges them to protect it. A campus gate log is not a
+     * lawful reason to keep one.
+     *
+     * What a gate actually needs is "the guard checked a document and it
+     * matched": the last four digits plus the type is enough for that, and a
+     * breach of four digits is not a breach of an identity. Recording the full
+     * value buys nothing at the gate and creates a liability in the database.
+     *
+     * Left whole here because the requirement asked for the field, and
+     * truncating without saying so would hide the decision. Flagged for the
+     * team rather than decided unilaterally.
+     */
+    @Size(max = 40)
+    @Pattern(regexp = "^$|^[A-Za-z0-9-]{4,40}$",
+            message = "An ID number uses letters, digits and hyphens, 4 to 40 characters")
+    @Column(name = "id_number", length = 40)
+    private String idNumber;
+
+    /** Object-storage keys, not URLs. Same convention as qrKey and pdfKey. */
+    @Size(max = 300)
+    @Column(name = "id_proof_key", length = 300)
+    private String idProofKey;
+
+    @Size(max = 300)
+    @Column(name = "photo_key", length = 300)
+    private String photoKey;
 
     /**
      * Faculty / staff user being visited. Lives in AuthDB - reference by id
