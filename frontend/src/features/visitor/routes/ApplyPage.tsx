@@ -65,6 +65,14 @@ export default function ApplyPage() {
     register, handleSubmit, setError, formState: { errors },
   } = useForm<VisitorRequestValues>({
     resolver: zodResolver(visitorRequestSchema),
+    /*
+     * Validate once a field has been touched, then live as it is corrected.
+     * The default is submit-only, which is why an error could sit under a field
+     * the visitor had already fixed - it had no reason to re-check until the
+     * next submit.
+     */
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
     defaultValues: {
       visitorName: identity?.name ?? '', visitorEmail: identity?.email ?? '', visitorPhone: '', purpose: '',
       purposeType: undefined, visitorType: undefined, gender: '', dateOfBirth: '',
@@ -312,11 +320,19 @@ export default function ApplyPage() {
         </Field>
 
         <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-          <Field label="First day" required error={errors.visitFrom?.message}>
+          <Field
+            label="First day"
+            required
+            hint="Visiting for one day? Put the same date in both."
+            error={errors.visitFrom?.message}
+          >
             {({ id, describedBy }) => (
               <Input
                 id={id} type="date" aria-describedby={describedBy}
                 invalid={Boolean(errors.visitFrom)}
+                // Mirrors the server's @FutureOrPresent. Without it the picker
+                // happily offers yesterday and the rejection arrives later.
+                min={new Date().toISOString().slice(0, 10)}
                 {...register('visitFrom')}
               />
             )}
