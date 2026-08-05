@@ -84,6 +84,10 @@ class AuthServiceVisitorVerificationTest {
     }
 
     private void givenAValidCodeFor(OtpPurpose purpose) {
+        givenAValidCodeFor(purpose, Role.VISITOR);
+    }
+
+    private void givenAValidCodeFor(OtpPurpose purpose, Role role) {
         OtpVerification otp = new OtpVerification();
         otp.setEmail(EMAIL);
         otp.setPurpose(purpose);
@@ -101,7 +105,7 @@ class AuthServiceVisitorVerificationTest {
         visitor.setId(7L);
         visitor.setEmail(EMAIL);
         visitor.setName("A Visitor");
-        visitor.setRole(Role.VISITOR);
+        visitor.setRole(role);
         visitor.setActive(true);
 
         given(userRepository.findByEmailIgnoreCaseAndActiveTrue(EMAIL))
@@ -116,9 +120,24 @@ class AuthServiceVisitorVerificationTest {
         return d;
     }
 
+    /**
+     * THE PATH THE APP ACTUALLY USES. Every visitor screen - register, request
+     * a code, verify it - sends purpose LOGIN. The previous version of this
+     * test asserted VISITOR_VERIFICATION, an enum value no client sends, so it
+     * passed while the feature could never fire.
+     */
     @Test
-    void tellsGatepassWhenAVisitorConfirmsTheirEmail() {
-        givenAValidCodeFor(OtpPurpose.VISITOR_VERIFICATION);
+    void tellsGatepassWhenAVisitorSignsInWithALoginCode() {
+        givenAValidCodeFor(OtpPurpose.LOGIN, Role.VISITOR);
+
+        service.verifyOtp(dto(OtpPurpose.LOGIN));
+
+        verify(gatepassVisitorClient).markEmailVerified(EMAIL, 7L);
+    }
+
+    @Test
+    void tellsGatepassOnAnExplicitVerificationCodeToo() {
+        givenAValidCodeFor(OtpPurpose.VISITOR_VERIFICATION, Role.VISITOR);
 
         service.verifyOtp(dto(OtpPurpose.VISITOR_VERIFICATION));
 
@@ -126,13 +145,13 @@ class AuthServiceVisitorVerificationTest {
     }
 
     /**
-     * A LOGIN code proves the same thing about the address, but no request is
-     * waiting on it. Calling anyway would 404 and log an ERROR on every
-     * ordinary visitor sign-in.
+     * Staff never have a visitor request pending. Scoping on role keeps their
+     * sign-ins off this path entirely, which is what the purpose gate was
+     * trying and failing to achieve.
      */
     @Test
-    void staysQuietOnAnOrdinaryLogin() {
-        givenAValidCodeFor(OtpPurpose.LOGIN);
+    void staysQuietWhenStaffSignInWithACode() {
+        givenAValidCodeFor(OtpPurpose.LOGIN, Role.FACULTY);
 
         service.verifyOtp(dto(OtpPurpose.LOGIN));
 
@@ -140,10 +159,10 @@ class AuthServiceVisitorVerificationTest {
     }
 
     @Test
-    void staysQuietOnPassRetrieval() {
-        givenAValidCodeFor(OtpPurpose.PASS_RETRIEVAL);
+    void staysQuietForAStudent() {
+        givenAValidCodeFor(OtpPurpose.LOGIN, Role.STUDENT);
 
-        service.verifyOtp(dto(OtpPurpose.PASS_RETRIEVAL));
+        service.verifyOtp(dto(OtpPurpose.LOGIN));
 
         verify(gatepassVisitorClient, never()).markEmailVerified(anyString(), anyLong());
     }
@@ -155,11 +174,11 @@ class AuthServiceVisitorVerificationTest {
      */
     @Test
     void signInStillSucceedsWhenGatepassIsUnreachable() {
-        givenAValidCodeFor(OtpPurpose.VISITOR_VERIFICATION);
+        givenAValidCodeFor(OtpPurpose.LOGIN, Role.VISITOR);
         given(gatepassVisitorClient.markEmailVerified(anyString(), anyLong()))
                 .willReturn(false);
 
-        var response = service.verifyOtp(dto(OtpPurpose.VISITOR_VERIFICATION));
+        var response = service.verifyOtp(dto(OtpPurpose.LOGIN));
 
         assertThat(response).isNotNull();
         assertThat(response.token()).isEqualTo("a.b.c");
