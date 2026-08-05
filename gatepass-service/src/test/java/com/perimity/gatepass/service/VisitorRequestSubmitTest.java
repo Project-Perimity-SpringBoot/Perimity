@@ -156,6 +156,34 @@ class VisitorRequestSubmitTest {
         verify(requestRepository, never()).save(any());
     }
 
+    /**
+     * The full number must never reach the database. It is validated whole -
+     * checksum and all - and then reduced to what a gate actually needs.
+     */
+    @Test
+    void keepsOnlyTheLastFourOfAnIdNumber() {
+        VisitorRequestCreateDto d = dto();
+        d.setIdType(com.perimity.gatepass.entity.enums.IdType.AADHAAR);
+        d.setIdNumber("234123412346");
+
+        service.submit(d);
+
+        ArgumentCaptor<VisitorRequest> saved = ArgumentCaptor.forClass(VisitorRequest.class);
+        verify(requestRepository).save(saved.capture());
+
+        assertThat(saved.getValue().getIdNumber()).isEqualTo("2346");
+        assertThat(saved.getValue().getIdNumber()).doesNotContain("234123412346");
+    }
+
+    @Test
+    void leavesTheIdNumberNullWhenNoneWasGiven() {
+        service.submit(dto());
+
+        ArgumentCaptor<VisitorRequest> saved = ArgumentCaptor.forClass(VisitorRequest.class);
+        verify(requestRepository).save(saved.capture());
+        assertThat(saved.getValue().getIdNumber()).isNull();
+    }
+
     /** Stored lowercase so identity matching by email cannot miss on case. */
     @Test
     void normalisesTheEmailAndTrimsTheName() {
