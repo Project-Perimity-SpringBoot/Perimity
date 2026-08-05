@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: true,
       port: 5173,
       proxy: Object.fromEntries(
         Object.entries(SERVICE_PORTS).map(([path, port]) => [
