@@ -1,3 +1,9 @@
+# Scratch image written by check-profile-verification.sh. It lives beside the
+# script rather than in /tmp because Git Bash's curl is a Windows binary and
+# cannot open a POSIX /tmp path. Removed on exit, but ignored so an interrupted
+# run cannot leave it staged.
+perimity-test-photo.*.png
+
 # Java / Spring Boot
 target/
 *.class
