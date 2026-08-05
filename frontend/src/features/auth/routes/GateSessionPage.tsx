@@ -43,7 +43,6 @@ export default function GateSessionPage() {
   const start = useMutation({
     mutationFn: (gate: { id: number; name: string }) =>
       sessionApi.start({
-        campusId: campusId as number,
         gateId: gate.id,
         gateName: gate.name,
         // Flat and bounded — DeviceInfoRules caps it at ten short entries and

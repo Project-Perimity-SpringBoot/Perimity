@@ -96,7 +96,17 @@ export interface ScanRequest {
 }
 
 export interface ScanSessionStartRequest {
-  campusId: number;
+  /*
+   * campusId is NOT sent, and must not be added back.
+   *
+   * ScanSessionStartDto dropped it deliberately. A client-supplied campus let a
+   * guard open a shift naming ANY campus — and because every scan inherits its
+   * campus from the open session, that shift could then admit people against
+   * another campus's passes and write entry logs into another campus's
+   * register. Writing into another tenant's evidence, not just reading it.
+   *
+   * The server takes it from the verified JWT instead.
+   */
   gateId: number;
   gateName: string;
   deviceInfo?: Record<string, string | number | boolean | null>;
