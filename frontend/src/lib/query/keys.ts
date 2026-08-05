@@ -121,6 +121,8 @@ export const importKeys = {
   batch: (id: number) => [...importKeys.all, 'batch', id] as const,
   rows: (id: number, outcome: string, params: PageRequest) =>
     [...importKeys.all, 'batch', id, 'rows', outcome, params] as const,
+  /** The campus intake form. One per campus, so no parameter. */
+  settings: () => [...importKeys.all, 'settings'] as const,
 };
 
 export const departmentKeys = {

@@ -1,6 +1,7 @@
 import { userClient } from '../client';
 import { unwrap, unwrapList, unwrapPage, unwrapScalar, SCALAR_KEYS } from '../normalize';
-import type { Paged, PageRequest } from '@/types/api';
+import { fetchFile } from '../download';
+import type { DownloadedFile, Paged, PageRequest } from '@/types/api';
 import type { DocumentType } from '@/types/enums';
 import type {
   DepartmentCreateRequest, DepartmentResponse, DepartmentUpdateRequest,
@@ -10,6 +11,7 @@ import type {
   StudentProfileCreateRequest, StudentProfileResponse, StudentProfileUpdateRequest,
   StudentSelfDetailsRequest, StudentVerificationDecisionRequest,
   ImportBatchResponse, ImportRowResponse, ImportRowOutcome,
+  ImportSettingsRequest, ImportSettingsResponse,
 } from '@/types/user.types';
 
 const STUDENTS = '/api/user/students';
@@ -194,6 +196,42 @@ export const studentImportApi = {
   async list(query: PageRequest = {}): Promise<Paged<ImportBatchResponse>> {
     const { data } = await userClient.get<unknown>(`${STUDENTS}/import`, { params: query });
     return unwrapPage<ImportBatchResponse>(data);
+  },
+
+  /* ---------------------------------------------------------------- form */
+
+  async settings(): Promise<ImportSettingsResponse> {
+    const { data } = await userClient.get<unknown>(`${STUDENTS}/import/settings`);
+    return unwrap<ImportSettingsResponse>(data);
+  },
+
+  /**
+   * Both fields take whole URLs. The server extracts the ids, and refuses a
+   * form link pasted where the responses sheet belongs — they are both
+   * docs.google.com addresses with the id in the same place, so nothing about
+   * the shape tells them apart.
+   */
+  async saveSettings(body: ImportSettingsRequest): Promise<ImportSettingsResponse> {
+    const { data } = await userClient.put<unknown>(`${STUDENTS}/import/settings`, body);
+    return unwrap<ImportSettingsResponse>(data);
+  },
+
+  /**
+   * Read the latest responses straight from Drive and check every row.
+   *
+   * Same parser, validator and preview as an upload — only the source differs.
+   * It exists because downloading a file and immediately uploading it again is
+   * a round trip the server can do itself, and every manual step is a chance
+   * to import last month's copy out of a downloads folder.
+   */
+  async pull(): Promise<ImportBatchResponse> {
+    const { data } = await userClient.post<unknown>(`${STUDENTS}/import/pull`);
+    return unwrap<ImportBatchResponse>(data);
+  },
+
+  /** The responses sheet as a file, for reading in Excel before importing. */
+  async download(): Promise<DownloadedFile> {
+    return fetchFile(userClient, `${STUDENTS}/import/download`);
   },
 };
 

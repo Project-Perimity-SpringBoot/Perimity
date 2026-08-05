@@ -6,6 +6,7 @@ import { Badge, Button, SkeletonText } from '@ui/index';
 import { DataTable, PageHeader } from '@components/data';
 import { ConfirmDialog, ErrorState } from '@components/feedback';
 import { FileDropzone } from '@components/upload';
+import { IntakeFormPanel } from '../components/IntakeFormPanel';
 import { studentImportApi } from '@lib/api/services/user.api';
 import { importKeys } from '@lib/query/keys';
 import { UPLOAD_RULES } from '@lib/validation/patterns';
@@ -135,9 +136,15 @@ export default function StudentImportPage() {
         description="Upload the responses sheet from your intake form. Nothing is created until you confirm."
       />
 
+      {/* The form itself: share it, or pull the responses straight back. */}
+      <IntakeFormPanel onPulled={(b) => setBatchId(b.id)} />
+
       {/* ---------------------------------------------------------------
-          Phase 1 — upload. Stays visible after a batch so a wrong file can
-          be replaced without leaving the page.
+          Upload, kept as the fallback rather than the main path.
+
+          Pull does the same thing without the round trip, but a sheet can
+          come from anywhere - another campus's export, a form nobody linked,
+          a file someone was emailed - and those still need a way in.
          --------------------------------------------------------------- */}
       <section className="surface-card space-y-[var(--sp-4)] p-[var(--sp-5)]">
         <div className="flex items-start gap-[var(--sp-3)]">
