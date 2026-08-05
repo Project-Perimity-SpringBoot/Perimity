@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { userClient } from '@lib/api/client';
+import { needsToken } from '@lib/api/download';
 import { cn } from '@lib/utils/cn';
 
 /**
@@ -33,23 +34,14 @@ import { cn } from '@lib/utils/cn';
  * through userClient — that would attach our Authorization header to a request
  * to Amazon and, more practically, break on CORS.
  *
- * So: same-origin or relative URLs are fetched with credentials; absolute URLs
- * pointing elsewhere are handed straight to the img. isSameOrigin decides.
+ * So: relative URLs are fetched with the token; absolute URLs are handed
+ * straight to the img. needsToken decides.
  */
-/**
- * Relative means ours; absolute means already signed.
- *
- * LocalFileStorageService.presignedReadUrl returns "/api/user/storage/local/{key}"
- * — a path, which axios resolves against userClient's baseURL and the
- * interceptor adds the token to. S3's presigner returns a full
- * https://…amazonaws.com/… URL carrying its own signature.
- *
- * So the two cases are exactly relative vs absolute, and comparing origins
- * would be a more fragile way of asking the same question.
+/*
+ * needsToken lives in lib/api/download.ts. The Documents page needs the same
+ * rule to decide whether it can point a tab straight at a URL, and two copies
+ * of it would eventually disagree.
  */
-function needsToken(url: string): boolean {
-  return !/^https?:\/\//i.test(url);
-}
 
 export interface AuthedImageProps {
   /** The presigned or local URL. Null while it is still being fetched. */
