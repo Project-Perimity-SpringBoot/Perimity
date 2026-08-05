@@ -1,7 +1,17 @@
 package com.perimity.user.controller;
 
 import com.perimity.user.dto.ApiResponse;
+import com.perimity.user.dto.request.ImportSettingsDto;
 import com.perimity.user.dto.response.ImportBatchResponse;
+import com.perimity.user.dto.response.ImportSettingsResponse;
+import com.perimity.user.service.ImportSettingsService;
+import jakarta.validation.Valid;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import com.perimity.user.dto.response.ImportRowResponse;
 import com.perimity.user.dto.response.PageResponse;
 import com.perimity.user.entity.enums.ImportRowOutcome;
@@ -61,9 +71,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class StudentImportController {
 
     private final StudentImportService importService;
+    private final ImportSettingsService settingsService;
 
-    public StudentImportController(StudentImportService importService) {
+    public StudentImportController(StudentImportService importService,
+                                   ImportSettingsService settingsService) {
         this.importService = importService;
+        this.settingsService = settingsService;
     }
 
     /**
@@ -136,6 +149,81 @@ public class StudentImportController {
     public ApiResponse<ImportBatchResponse> confirm(@PathVariable @Positive Long id) {
         return ApiResponse.ok("Import finished",
                 ImportBatchResponse.from(importService.confirm(id)));
+    }
+
+    /* =========================================================
+     *  THE INTAKE FORM
+     * ========================================================= */
+
+    /**
+     * This campus's form link and responses sheet.
+     *
+     * Returns a blank record rather than 404 when nothing is configured - "not
+     * set up yet" is a state the screen renders setup instructions for, not an
+     * error.
+     */
+    @GetMapping("/settings")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "The campus intake form link and its responses sheet")
+    public ApiResponse<ImportSettingsResponse> settings() {
+        return ApiResponse.ok(ImportSettingsResponse.from(
+                settingsService.forCurrentCampus(), importService.driveAvailable()));
+    }
+
+    /**
+     * Store the form link and the responses sheet.
+     *
+     * Both may be pasted as whole URLs - nobody should have to know which part
+     * of a Google address is the id.
+     */
+    @PutMapping("/settings")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "Save the campus intake form link and responses sheet")
+    public ApiResponse<ImportSettingsResponse> saveSettings(
+            @Valid @RequestBody ImportSettingsDto dto) {
+
+        return ApiResponse.ok("Form settings saved", ImportSettingsResponse.from(
+                settingsService.save(dto.getFormUrl(), dto.getResponsesSheetUrl()),
+                importService.driveAvailable()));
+    }
+
+    /**
+     * Validate the campus's responses sheet straight from Drive.
+     *
+     * The same parser, validator and preview as an upload - only the source
+     * differs. It exists because downloading a file and immediately uploading
+     * it again is a round trip the server can do itself, and every manual step
+     * is a chance to import last month's copy from a downloads folder.
+     */
+    @PostMapping("/pull")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "Read the latest form responses from Drive and check every row")
+    public ApiResponse<ImportBatchResponse> pull() {
+        return ApiResponse.ok("Responses checked",
+                ImportBatchResponse.from(importService.validateFromDrive()));
+    }
+
+    /**
+     * The responses sheet as a file, for anyone who wants to look at it in
+     * Excel before importing.
+     *
+     * Not the main path - Pull does the same thing without the round trip - but
+     * a person who wants to read two hundred rows in a spreadsheet should not
+     * have to go to Drive to do it.
+     */
+    @GetMapping("/download")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "Download the responses sheet as .xlsx")
+    public ResponseEntity<Resource> download() {
+        byte[] workbook = importService.downloadResponsesSheet();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"student-responses.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentLength(workbook.length)
+                .body(new ByteArrayResource(workbook));
     }
 
     /** Recent imports on this campus, newest first. */

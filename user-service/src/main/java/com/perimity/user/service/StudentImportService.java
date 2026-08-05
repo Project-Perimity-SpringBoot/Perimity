@@ -12,6 +12,7 @@ import com.perimity.user.storage.StorageKeys;
 import com.perimity.user.storage.StorageService;
 import com.perimity.user.storage.StoredObject;
 import java.io.ByteArrayInputStream;
+import com.perimity.user.entity.CampusImportSettings;
 import com.perimity.user.entity.StudentImportBatch;
 import com.perimity.user.entity.StudentImportRow;
 import com.perimity.user.entity.StudentProfile;
@@ -80,6 +81,7 @@ public class StudentImportService {
     private final StudentProfileRepository studentRepository;
     private final DrivePhotoFetcher photoFetcher;
     private final StorageService storage;
+    private final ImportSettingsService settingsService;
     private final CurrentUser currentUser;
     private final String defaultCountryCode;
 
@@ -91,6 +93,7 @@ public class StudentImportService {
                                 StudentProfileRepository studentRepository,
                                 DrivePhotoFetcher photoFetcher,
                                 StorageService storage,
+                                ImportSettingsService settingsService,
                                 CurrentUser currentUser,
                                 @Value("${perimity.import.default-country-code:+91}")
                                 String defaultCountryCode) {
@@ -102,6 +105,7 @@ public class StudentImportService {
         this.studentRepository = studentRepository;
         this.photoFetcher = photoFetcher;
         this.storage = storage;
+        this.settingsService = settingsService;
         this.currentUser = currentUser;
         this.defaultCountryCode = defaultCountryCode;
     }
@@ -169,6 +173,99 @@ public class StudentImportService {
                 batch.getId(), rows.size(), rows.size() - rejected, rejected, batch.getFilename());
 
         return batchRepository.save(batch);
+    }
+
+    /**
+     * Validate the campus's responses sheet straight from Drive.
+     *
+     * ==================================================================
+     *  THE SAME CODE PATH AS AN UPLOAD, DELIBERATELY
+     * ==================================================================
+     * Drive exports the sheet as .xlsx and it goes through the identical
+     * parser and validator. Nothing about "pulled" versus "uploaded" is
+     * special-cased anywhere downstream, so a bug cannot exist on one route
+     * and not the other - which is exactly what would happen if pulling had
+     * its own reader.
+     *
+     * It exists because downloading a file and immediately uploading it again
+     * is a round trip the server can do itself, and every manual step is a
+     * chance to import last month's copy from a downloads folder.
+     */
+    @Transactional
+    public StudentImportBatch validateFromDrive() {
+        CampusImportSettings settings = settingsService.forCurrentCampus();
+
+        if (!settings.isComplete()) {
+            throw new IllegalStateException(
+                    "This campus has no intake form set up yet. Add the form link and "
+                            + "its responses sheet first.");
+        }
+        if (!photoFetcher.isUsable()) {
+            // Distinguished from a missing sheet: one is a setup step somebody
+            // has to do, the other is a deployment that has no Drive access at
+            // all, and telling them apart is the difference between a fixable
+            // problem and a confusing one.
+            throw new IllegalStateException(
+                    "Google Drive is not available on this server, so responses cannot be "
+                            + "pulled. Download the sheet and upload it instead.");
+        }
+
+        byte[] workbook = photoFetcher.exportSheet(settings.getResponsesSheetId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Could not read the responses sheet. Check it is shared with the "
+                                + "service account, and that the link points at the "
+                                + "responses spreadsheet rather than the form."));
+
+        return validate(new DriveWorkbook(workbook, "responses.xlsx"));
+    }
+
+    /**
+     * The exported bytes wrapped as a MultipartFile.
+     *
+     * A shim, so validate() takes one type and neither it nor the parser has to
+     * know where a workbook came from. The alternative - a second validate()
+     * overload taking bytes - is two code paths that must be kept identical
+     * forever, which is a thing nobody manages.
+     */
+    private record DriveWorkbook(byte[] content, String name) implements MultipartFile {
+        @Override public String getName() { return "file"; }
+        @Override public String getOriginalFilename() { return name; }
+        @Override public String getContentType() {
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        }
+        @Override public boolean isEmpty() { return content.length == 0; }
+        @Override public long getSize() { return content.length; }
+        @Override public byte[] getBytes() { return content; }
+        @Override public java.io.InputStream getInputStream() {
+            return new ByteArrayInputStream(content);
+        }
+        @Override public void transferTo(java.io.File dest) throws java.io.IOException {
+            java.nio.file.Files.write(dest.toPath(), content);
+        }
+    }
+
+    /**
+     * Whether this server can reach Drive at all.
+     *
+     * Drives what the screen offers rather than what it allows - a Pull button
+     * that always fails is worse than no Pull button, because the second tells
+     * you to download the sheet instead.
+     */
+    public boolean driveAvailable() {
+        return photoFetcher.isUsable();
+    }
+
+    /** The raw .xlsx, for the Download button. */
+    @Transactional(readOnly = true)
+    public byte[] downloadResponsesSheet() {
+        CampusImportSettings settings = settingsService.forCurrentCampus();
+        if (!settings.isComplete()) {
+            throw new IllegalStateException("This campus has no intake form set up yet.");
+        }
+        return photoFetcher.exportSheet(settings.getResponsesSheetId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Could not read the responses sheet. Check it is shared with the "
+                                + "service account."));
     }
 
     // ---------------------------------------------------------------- read
@@ -420,6 +517,20 @@ public class StudentImportService {
                             .build());
 
             applyRow(profile, row, batch.getUploadedBy());
+
+            /*
+             * Outcome message FIRST, then the photo.
+             *
+             * attachPhoto appends to this message when it cannot get an image,
+             * so setting it afterwards would overwrite the explanation with a
+             * cheerful "Account created" and leave the count unexplained again
+             * - the exact problem this reporting was added to fix.
+             */
+            row.setOutcome(isNew ? ImportRowOutcome.CREATED : ImportRowOutcome.UPDATED);
+            row.setMessage(isNew
+                    ? "Account created and details verified"
+                    : "Existing account updated and details verified");
+
             attachPhoto(profile, row, batch.getCampusId());
 
             if (profile.getPhotoS3Key() == null) {
@@ -428,9 +539,6 @@ public class StudentImportService {
 
             studentRepository.save(profile);
 
-            row.setOutcome(isNew ? ImportRowOutcome.CREATED : ImportRowOutcome.UPDATED);
-            row.setMessage(isNew ? "Account created and details verified"
-                    : "Existing account updated and details verified");
             if (isNew) {
                 created++;
             } else {
@@ -508,24 +616,62 @@ public class StudentImportService {
         if (profile.getPhotoS3Key() != null || row.getPhotoDriveId() == null) {
             return;
         }
-        photoFetcher.fetch(row.getPhotoDriveId()).ifPresent(photo -> {
-            try {
-                String key = StorageKeys.studentPhoto(
-                        campusId, profile.getUserId(), photo.filename());
-                StoredObject stored = storage.put(
-                        key,
-                        new ByteArrayInputStream(photo.bytes()),
-                        photo.bytes().length,
-                        photo.contentType());
-                profile.setPhotoS3Key(stored.key());
 
-            } catch (RuntimeException ex) {
-                // Storage failed rather than Drive. Same outcome for the
-                // student, and the batch carries on.
-                log.warn("Could not store the photo for account {}: {}",
-                        profile.getUserId(), ex.getMessage());
-            }
-        });
+        var photo = photoFetcher.fetch(row.getPhotoDriveId());
+
+        if (photo.isEmpty()) {
+            /*
+             * SAID OUT LOUD, on the row.
+             *
+             * This used to be a log line and a number: faculty saw "3 imported
+             * without a photo" and had no way to tell whether the folder was
+             * unshared, a link was dead, or somebody uploaded a PDF. Those need
+             * different fixes, and a count cannot distinguish them.
+             *
+             * The row already carries a message field that validation failures
+             * use, so a person opening the preview sees this the same way they
+             * see every other problem - against the student it belongs to.
+             */
+            row.setMessage(appendNote(row.getMessage(),
+                    photoFetcher.isUsable()
+                            ? "photo could not be read from Drive - check the responses "
+                                    + "folder is shared, and that the file is an image"
+                            : "no photo: Google Drive is not available on this server"));
+            return;
+        }
+
+        try {
+            String key = StorageKeys.studentPhoto(
+                    campusId, profile.getUserId(), photo.get().filename());
+            StoredObject stored = storage.put(
+                    key,
+                    new ByteArrayInputStream(photo.get().bytes()),
+                    photo.get().bytes().length,
+                    photo.get().contentType());
+            profile.setPhotoS3Key(stored.key());
+
+        } catch (RuntimeException ex) {
+            // Storage failed rather than Drive - a different cause, and worth
+            // saying so, because re-sharing a Drive folder will not fix it.
+            log.warn("Could not store the photo for account {}: {}",
+                    profile.getUserId(), ex.getMessage());
+            row.setMessage(appendNote(row.getMessage(),
+                    "photo downloaded but could not be saved"));
+        }
+    }
+
+    /**
+     * Adds a note to a row's message without losing what was already there.
+     *
+     * A row can be imported AND have a photo problem, so the outcome message
+     * ("Account created and details verified") has to survive alongside it.
+     * Overwriting would trade one piece of information for another.
+     */
+    private static String appendNote(String existing, String note) {
+        String combined = (existing == null || existing.isBlank())
+                ? note
+                : existing + " — " + note;
+        return truncate(combined);
     }
 
     /**
