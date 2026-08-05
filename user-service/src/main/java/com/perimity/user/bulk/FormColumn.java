@@ -37,6 +37,19 @@ public enum FormColumn {
     PHONE_NUMBER(true, "phone number", "phone", "mobile", "mobile number", "contact number"),
     ROLL_NO(true, "roll number", "roll no", "rollno", "roll", "enrollment number"),
     DEPARTMENT(true, "department", "branch", "course", "programme", "program"),
+    /**
+     * REQUIRED. A file-upload question puts a Drive LINK in the sheet rather
+     * than the image, and the parser keeps only the file id out of it.
+     *
+     * The bytes are fetched from Drive at confirm time with a service account.
+     * A row with no link cannot produce a photo, and a student with no photo
+     * cannot hold a pass - a guard would have no face to check against the
+     * person at the gate.
+     *
+     * If Drive is unavailable the import still runs and those students are
+     * counted as missing a photo, so an outage delays passes rather than
+     * stranding an intake. See GOOGLE_DRIVE_ENABLED.
+     */
     PHOTO(true, "passport photo", "photo", "photograph", "passport size photo",
             "upload your passport size photo");
 
@@ -56,9 +69,7 @@ public enum FormColumn {
      *
      * MIDDLE_NAME is optional because plenty of people do not have one.
      *
-     * Everything else is required, including the photo: a student with no photo
-     * cannot hold a pass, so importing them without one produces a person who
-     * cannot get through the gate.
+     * Everything else is required, including the photo - see its note below.
      */
     public boolean isRequired() {
         return required;
