@@ -56,7 +56,7 @@ export default function FacultyOverview() {
               <span>Faculty Dashboard & Action Queue</span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-              Welcome back, Dr. {nameStr}
+              Welcome back, {nameStr}
             </h1>
             <p className="text-sm leading-relaxed text-indigo-200/90">
               Manage visitor approvals naming you as host, onboard student cohorts, and monitor live campus events.
