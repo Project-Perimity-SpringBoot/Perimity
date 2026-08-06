@@ -76,6 +76,25 @@ public class UserAdminController {
      * If this needs revisiting, revisit the POLICY with the team - do not widen
      * the map because a screen threw a 403.
      */
+    /**
+     * Who each role may SEE in the account list.
+     *
+     * Mirrors CREATABLE deliberately: you see what you may create. A Campus
+     * Admin creating a Faculty account they cannot then find would be the
+     * obvious way to get this wrong, and keeping the two sets identical means
+     * the rule explains itself rather than needing a second one remembered
+     * alongside it.
+     *
+     * A Super Admin is absent and unrestricted - they are platform-wide.
+     *
+     * This is a real access rule, not a tidier menu. Enforced here rather than
+     * by narrowing the dropdown, because ?role=CAMPUS_ADMIN is one curl away
+     * from any browser.
+     */
+    private static final Map<Role, Set<Role>> VISIBLE = Map.of(
+            Role.CAMPUS_ADMIN, EnumSet.of(Role.FACULTY, Role.GUARD),
+            Role.FACULTY, EnumSet.of(Role.STUDENT));
+
     private static final Map<Role, Set<Role>> CREATABLE = Map.of(
             Role.CAMPUS_ADMIN, EnumSet.of(Role.FACULTY, Role.GUARD),
             Role.FACULTY, EnumSet.of(Role.STUDENT));
@@ -184,6 +203,34 @@ public class UserAdminController {
             @RequestParam(required = false) Role role,
             @PageableDefault(size = 20) Pageable pageable) {
 
-        return ApiResponse.ok(service.byCampus(currentUser.require().campusId(), role, pageable));
+        PerimityPrincipal actor = currentUser.require();
+
+        // Platform-wide, so unrestricted and campus-agnostic.
+        if (actor.isSuperAdmin()) {
+            return ApiResponse.ok(service.byCampus(actor.campusId(), role, pageable));
+        }
+
+        Set<Role> visible = VISIBLE.getOrDefault(actor.role(), EnumSet.noneOf(Role.class));
+
+        if (role != null && !visible.contains(role)) {
+            // Spring's own type, which GlobalExceptionHandler already shapes
+            // into a 403 with the standard body. A new exception class would
+            // only need wiring up to say the same thing.
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Your role cannot view " + role + " accounts.");
+        }
+
+        return ApiResponse.ok(service.byCampus(actor.campusId(), role, visible, pageable));
+    }
+
+    /** The roles this caller may filter by, so the UI need not guess. */
+    @GetMapping("/visible-roles")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAMPUS_ADMIN','FACULTY')")
+    @Operation(summary = "Which roles this caller may list. Drives the filter menu.")
+    public ApiResponse<Set<Role>> visibleRoles() {
+        PerimityPrincipal actor = currentUser.require();
+        return ApiResponse.ok(actor.isSuperAdmin()
+                ? EnumSet.allOf(Role.class)
+                : VISIBLE.getOrDefault(actor.role(), EnumSet.noneOf(Role.class)));
     }
 }
