@@ -1,12 +1,15 @@
 package com.perimity.user.bulk;
 
+import com.perimity.user.client.AuthFeignClient;
 import com.perimity.user.entity.Department;
 import com.perimity.user.entity.StudentImportRow;
+import com.perimity.user.entity.StudentProfile;
 import com.perimity.user.entity.enums.Gender;
 import com.perimity.user.entity.enums.ImportRowOutcome;
 import com.perimity.user.repository.DepartmentRepository;
 import com.perimity.user.repository.StudentProfileRepository;
 import com.perimity.user.validation.ValidationPatterns;
+import feign.FeignException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -17,6 +20,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,13 +56,18 @@ public class ImportRowValidator {
     private static final LocalDate DOB_FLOOR = LocalDate.of(1900, 1, 1);
     private static final int MIN_AGE_YEARS = 10;
 
+    private static final Logger log = LoggerFactory.getLogger(ImportRowValidator.class);
+
     private final DepartmentRepository departmentRepository;
     private final StudentProfileRepository studentRepository;
+    private final AuthFeignClient authClient;
 
     public ImportRowValidator(DepartmentRepository departmentRepository,
-                              StudentProfileRepository studentRepository) {
+                              StudentProfileRepository studentRepository,
+                              AuthFeignClient authClient) {
         this.departmentRepository = departmentRepository;
         this.studentRepository = studentRepository;
+        this.authClient = authClient;
     }
 
     /**
@@ -75,6 +85,7 @@ public class ImportRowValidator {
                                            String defaultCountryCode) {
 
         Map<String, Department> departments = departmentsByLabel(campusId);
+        Map<String, Long> accountIds = resolveAccountIds(parsed);
 
         // Both are lower-cased, because "CS-101" and "cs-101" are the same roll
         // number to the unique index and the same person to a human.
@@ -84,16 +95,81 @@ public class ImportRowValidator {
         List<StudentImportRow> rows = new ArrayList<>(parsed.size());
 
         for (ResponseSheetParser.ParsedRow source : parsed) {
-            rows.add(validateOne(batchId, campusId, source, departments,
+            rows.add(validateOne(batchId, campusId, source, departments, accountIds,
                     emailsSeen, rollNosSeen, defaultCountryCode));
         }
         return rows;
+    }
+
+    /**
+     * Every email in the sheet that already has an account, mapped to its id.
+     *
+     * ======================================================================
+     * WHAT THIS IS FOR
+     * ======================================================================
+     * Telling "somebody else already has roll number 158" apart from "this is
+     * student 158 sending the form a second time". Both look identical from a
+     * spreadsheet, because a sheet carries emails and a profile is keyed by
+     * account id.
+     *
+     * ======================================================================
+     * ONE CALL PER DISTINCT EMAIL, AND THAT IS DELIBERATE
+     * ======================================================================
+     * GET /by-email is an endpoint auth-service has had since Day 8. A batch
+     * version would be one round trip for the whole sheet, and was written
+     * and then removed: it needed a new DTO and a new method on auth-service's
+     * service layer, and those are fixed in this project. Distinct emails
+     * only, so a sheet where a student appears three times still costs one.
+     *
+     * ======================================================================
+     * A FAILURE HERE DOES NOT FAIL THE UPLOAD
+     * ======================================================================
+     * Any error - service down, timeout, a 404 for a genuinely new student -
+     * leaves that email simply unmapped. An unmapped email means the row is
+     * treated the old way, so the worst case is a returning student reported
+     * as a collision, which faculty can see and fix. That is much better than
+     * an upload that refuses to start because a service they have never heard
+     * of is unreachable.
+     */
+    private Map<String, Long> resolveAccountIds(List<ResponseSheetParser.ParsedRow> parsed) {
+        List<String> emails = parsed.stream()
+                .map(r -> lower(r.get(FormColumn.EMAIL)))
+                .filter(e -> e != null && !e.isBlank())
+                .distinct()
+                .toList();
+
+        Map<String, Long> byEmail = new HashMap<>();
+        int unreachable = 0;
+
+        for (String email : emails) {
+            try {
+                AuthFeignClient.UserEnvelope envelope = authClient.findByEmail(email);
+                if (envelope != null && envelope.data() != null && envelope.data().id() != null) {
+                    byEmail.put(email, envelope.data().id());
+                }
+            } catch (FeignException.NotFound notFound) {
+                // The normal answer for a new student. Not logged - a sheet of
+                // two hundred new students would otherwise produce two hundred
+                // warnings about nothing being wrong.
+                continue;
+            } catch (RuntimeException ex) {
+                unreachable++;
+            }
+        }
+
+        if (unreachable > 0) {
+            log.warn("Could not check {} of {} email(s) against the accounts service. "
+                    + "Any of those students already holding their roll number will be "
+                    + "reported as a collision.", unreachable, emails.size());
+        }
+        return byEmail;
     }
 
     private StudentImportRow validateOne(Long batchId,
                                          Long campusId,
                                          ResponseSheetParser.ParsedRow source,
                                          Map<String, Department> departments,
+                                         Map<String, Long> accountIds,
                                          Set<String> emailsSeen,
                                          Set<String> rollNosSeen,
                                          String defaultCountryCode) {
@@ -209,26 +285,35 @@ public class ImportRowValidator {
                     + "hyphens and slashes only");
         } else if (!rollNosSeen.add(rollNo.toLowerCase(Locale.ROOT))) {
             problems.add("roll number \"" + rollNo + "\" appears more than once in the sheet");
-        } else if (studentRepository.findByCampusIdAndRollNoIgnoreCase(campusId, rollNo)
-                .isPresent()) {
+        } else {
             /*
              * Unique per campus, never globally - two campuses may run the same
              * numbering scheme and neither is wrong.
              *
-             * This CANNOT tell whether the existing holder is the same student
-             * resubmitting the form, which is the common case. user-service
-             * knows profiles by account id and the sheet only has an email, and
-             * resolving one to the other means asking auth-service - a call per
-             * row, at validation time, for a question that confirm answers for
-             * free once the account is known.
+             * ==============================================================
+             *  A ROLL NUMBER THE ROW'S OWN STUDENT ALREADY HOLDS IS NOT A
+             *  COLLISION
+             * ==============================================================
+             * It is the most common case there is: students resubmit forms.
+             * This used to reject every one of them, because the check saw
+             * only "roll number 158 exists" and could not see that 158 belongs
+             * to the very person on this row.
              *
-             * So the message says both possibilities rather than asserting the
-             * wrong one. Confirm does the real check: if the roll number
-             * belongs to the account behind this email, it is an UPDATE, not a
-             * collision.
+             * accountIds was resolved once for the whole sheet before this
+             * loop, so the comparison costs nothing per row. If the email did
+             * not resolve - a new student, or auth-service being unreachable -
+             * there is no id to compare and the row is reported the old way.
              */
-            problems.add("roll number \"" + rollNo + "\" is already used on this campus "
-                    + "(fine if this is the same student resubmitting)");
+            Optional<Long> holder = studentRepository
+                    .findByCampusIdAndRollNoIgnoreCase(campusId, rollNo)
+                    .map(StudentProfile::getUserId);
+
+            Long thisStudent = email == null ? null : accountIds.get(email);
+
+            if (holder.isPresent() && !holder.get().equals(thisStudent)) {
+                problems.add("roll number \"" + rollNo + "\" is already used on this campus "
+                        + "by a different student");
+            }
         }
 
         /* ----------------------------------------------------- department */
