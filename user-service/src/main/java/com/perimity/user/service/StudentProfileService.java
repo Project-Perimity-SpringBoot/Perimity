@@ -275,10 +275,11 @@ public class StudentProfileService {
 
         StudentProfile saved = studentRepository.save(profile);
 
-        // After the save, deliberately. If gatepass-service is unreachable the
-        // edit still stands and the failure is logged - see PassPauseClient.
         if (!sensitiveChanges.isEmpty()) {
             pauseHolder(saved.getUserId(), sensitiveChanges);
+            saved.setVerificationStatus(ProfileVerificationStatus.SUBMITTED);
+            saved.setSubmittedAt(LocalDateTime.now());
+            saved = studentRepository.save(saved);
         }
 
         return StudentProfileResponse.from(saved, guard.departmentName(saved.getDepartmentId()));
@@ -340,11 +341,14 @@ public class StudentProfileService {
          * start typing would take away the instructions mid-task. Those remarks
          * are cleared on the next submit instead.
          */
-        if (status(profile) == ProfileVerificationStatus.VERIFIED) {
-            clearDecision(profile);
-            log.info("Student account {} edited a verified profile; verification cleared.", userId);
+        pauseHolder(userId, List.of("personal details update"));
+
+        if (isCompleteForSubmission(profile)) {
+            profile.setVerificationStatus(ProfileVerificationStatus.SUBMITTED);
+            profile.setSubmittedAt(LocalDateTime.now());
+        } else {
+            profile.setVerificationStatus(ProfileVerificationStatus.DRAFT);
         }
-        profile.setVerificationStatus(ProfileVerificationStatus.DRAFT);
 
         StudentProfile saved = studentRepository.save(profile);
         return StudentProfileResponse.from(saved, guard.departmentName(saved.getDepartmentId()));
@@ -535,6 +539,17 @@ public class StudentProfileService {
             throw new IllegalStateException(
                     "Fill these in before submitting: " + String.join(", ", missing) + ".");
         }
+    }
+
+    public static boolean isCompleteForSubmission(StudentProfile profile) {
+        return profile != null
+                && !isBlank(profile.getFirstName())
+                && !isBlank(profile.getLastName())
+                && profile.getDateOfBirth() != null
+                && profile.getGender() != null
+                && !isBlank(profile.getAddress())
+                && !isBlank(profile.getPhoneNumber())
+                && !isBlank(profile.getPhotoS3Key());
     }
 
     /** Wipes a previous decision so a re-review starts from nothing. */
