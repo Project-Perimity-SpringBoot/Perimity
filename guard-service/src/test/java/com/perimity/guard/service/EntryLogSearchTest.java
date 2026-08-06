@@ -108,6 +108,28 @@ class EntryLogSearchTest {
         assertThat(queryOf(f)).contains("\\Q");
     }
 
+    /**
+     * BOTH filters at once, which is the combination that throws.
+     *
+     * Criteria mixes .and(...) and .andOperator(...) here, and Spring rejects
+     * some orderings of that with InvalidMongoDbApiUsageException rather than
+     * building a bad query - so this fails loudly at construction if the two
+     * are ever combined the wrong way round. A campus admin narrowing to
+     * DENIED and then typing a name is an ordinary thing to do, not an edge.
+     */
+    @Test
+    void combinesAResultFilterWithASearchTerm() {
+        EntryLogFilterDto f = filter();
+        f.setScanResult(ScanResult.DENIED);
+        f.setQuery("Anita");
+
+        String json = queryOf(f);
+
+        assertThat(json).contains("scanResult");
+        assertThat(json).contains("holderName");
+        assertThat(json).contains("scannedAt");
+    }
+
     @Test
     void ignoresABlankSearchTerm() {
         EntryLogFilterDto f = filter();
