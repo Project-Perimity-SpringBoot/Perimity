@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarCheck, Check, X } from 'lucide-react';
 import { Avatar, Button } from '@ui/index';
 import { AuthedImage } from '@components/upload';
@@ -85,8 +86,22 @@ export function VerdictScreen({
   onDismiss: () => void;
 }) {
   const v = VERDICT[scan.result];
-
   const reason = denialText(scan.denialReason);
+  const [seconds, setSeconds] = useState(5);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onDismiss();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [onDismiss]);
 
   return (
     <section
@@ -180,7 +195,7 @@ export function VerdictScreen({
       </p>
 
       <Button size="lg" variant="secondary" block onClick={onDismiss}>
-        Next person
+        Next person ({seconds}s)
       </Button>
     </section>
   );

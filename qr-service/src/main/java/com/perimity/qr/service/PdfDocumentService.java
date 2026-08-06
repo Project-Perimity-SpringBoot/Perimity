@@ -55,17 +55,31 @@ public class PdfDocumentService {
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
 
                 cursorY -= 30f;
-                writeCentred(content, "GATE PASS",
-                        new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
-                        TITLE_SIZE, pageWidth, cursorY);
+                if (request.getCampusName() != null && !request.getCampusName().isBlank()) {
+                    writeCentred(content, request.getCampusName().toUpperCase(),
+                            new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
+                            TITLE_SIZE, pageWidth, cursorY);
+                    cursorY -= 20f;
+                    writeCentred(content, "GATE PASS",
+                            new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
+                            14f, pageWidth, cursorY);
+                } else {
+                    writeCentred(content, "GATE PASS",
+                            new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
+                            TITLE_SIZE, pageWidth, cursorY);
+                }
 
-                // The QR, centred, with real whitespace around it. ZXing's
-                // margin hint is measured in modules; printers and phone
-                // cameras want physical quiet space, which is this.
+                // The QR, centred, with real whitespace around it.
                 cursorY -= (QR_SIZE + 40f);
                 content.drawImage(qrImage, (pageWidth - QR_SIZE) / 2f, cursorY, QR_SIZE, QR_SIZE);
 
-                cursorY -= 50f;
+                cursorY -= 40f;
+                if (request.getHolderName() != null && !request.getHolderName().isBlank()) {
+                    cursorY = writeField(content, "HOLDER NAME", request.getHolderName(), MARGIN, cursorY);
+                }
+                if (request.getDepartmentName() != null && !request.getDepartmentName().isBlank()) {
+                    cursorY = writeField(content, "DEPARTMENT", request.getDepartmentName(), MARGIN, cursorY);
+                }
                 cursorY = writeField(content, "PASS ID",
                         String.valueOf(request.getPassId()), MARGIN, cursorY);
 
