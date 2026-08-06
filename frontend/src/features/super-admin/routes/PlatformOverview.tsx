@@ -25,9 +25,6 @@ import type { CampusResponse } from '@/types/campus.types';
  *
  * Everything below the placeholders IS reachable and is real.
  */
-const UNREACHABLE =
-  'Not available to platform accounts — every count is scoped to one campus.';
-
 export default function PlatformOverview() {
   const stats = useQuery({ queryKey: campusKeys.stats(), queryFn: () => campusApi.stats() });
 
@@ -84,7 +81,7 @@ export default function PlatformOverview() {
         }
       />
 
-      <div className="grid gap-[var(--sp-4)] sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-[var(--sp-4)] sm:grid-cols-3 lg:grid-cols-3">
         <StatCard label="Campuses" icon={Building2}
                   loading={stats.isPending} value={stats.data?.totalCampuses ?? 0} />
         <StatCard label="Active" icon={CircleCheck}
@@ -92,25 +89,8 @@ export default function PlatformOverview() {
         <StatCard label="Suspended" icon={CircleSlash}
                   loading={stats.isPending} value={stats.data?.inactiveCampuses ?? 0}
                   hint="Read-only. Nothing is deleted." />
-        <StatCard label="Total users" value={null} unavailableReason={UNREACHABLE} />
       </div>
 
-      <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-        <StatCard label="Active passes, platform-wide" value={null} unavailableReason={UNREACHABLE} />
-        <StatCard label="Entries today, platform-wide" value={null} unavailableReason={UNREACHABLE} />
-      </div>
-
-      {/*
-        * Zero-admin campuses first — the campus works right up until somebody
-        * tries to administer it.
-        *
-        * The wording is careful on purpose. This reads `campuses.admin_user_id`,
-        * a denormalised copy in campus-service. The authoritative link is
-        * `users.campus_id` in auth-service, which a platform account cannot
-        * read at all (blocker B5). So an admin may well exist and simply not be
-        * recorded here — asserting "has no admin" would be claiming more than
-        * this role can actually see.
-        */}
       {orphaned.length > 0 ? (
         <section aria-labelledby="attention" className="surface-card p-[var(--sp-6)]">
           <h2 id="attention" className="text-h3 text-[var(--ink-900)]">Needs attention</h2>
@@ -145,12 +125,6 @@ export default function PlatformOverview() {
           emptyDescription="Create the first one, then assign it a Campus Admin."
         />
       </section>
-
-      <p className="text-caption text-[var(--ink-500)]">
-        Per-campus user, pass and entry counts are not shown because no endpoint
-        exposes them to a platform account. Open a campus and sign in as its admin
-        to see those figures.
-      </p>
     </div>
   );
 }

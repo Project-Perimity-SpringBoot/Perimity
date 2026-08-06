@@ -51,12 +51,10 @@ const GuardManualEntryPage = lazy(() => import('@features/guard/routes/ManualEnt
 
 /* ── PHASE 2 · Campus Admin ── */
 const AdminOverview = lazy(() => import('@features/campus-admin/routes/AdminOverview'));
-const VisitorQueuePage = lazy(() => import('@features/campus-admin/routes/VisitorQueuePage'));
 const UsersPage = lazy(() => import('@features/campus-admin/routes/UsersPage'));
 const DepartmentsPage = lazy(() => import('@features/campus-admin/routes/DepartmentsPage'));
 const GatesPage = lazy(() => import('@features/campus-admin/routes/GatesPage'));
 const BlocklistPage = lazy(() => import('@features/campus-admin/routes/BlocklistPage'));
-const PolicyPage = lazy(() => import('@features/campus-admin/routes/PolicyPage'));
 const EntryLogsPage = lazy(() => import('@features/campus-admin/routes/EntryLogsPage'));
 
 /* ── PHASE 2 · Super Admin ── */
@@ -252,12 +250,10 @@ export const router = createBrowserRouter([
                 element: <AppShell />,
                 children: [
                   { path: '/admin', element: <AdminOverview /> },
-                  { path: '/admin/queue', element: <VisitorQueuePage /> },
                   { path: '/admin/users', element: <UsersPage /> },
                   { path: '/admin/departments', element: <DepartmentsPage /> },
                   { path: '/admin/gates', element: <GatesPage /> },
                   { path: '/admin/blocklist', element: <BlocklistPage /> },
-                  { path: '/admin/policy', element: <PolicyPage /> },
                   { path: '/admin/entry-logs', element: <EntryLogsPage /> },
                 ],
               },

@@ -7,11 +7,10 @@ import {
 import { Badge, Button, Skeleton } from '@ui/index';
 import { PageHeader, StatCard } from '@components/data';
 import { EmptyState, ErrorState } from '@components/feedback';
-import { passApi, visitorRequestApi } from '@lib/api/services/gatepass.api';
+import { passApi } from '@lib/api/services/gatepass.api';
 import { gateApi } from '@lib/api/services/campus.api';
 import { entryLogApi, sessionApi } from '@lib/api/services/guard.api';
-import { campusKeys, guardKeys, passKeys, requestKeys } from '@lib/query/keys';
-import { POLL } from '@lib/query/queryClient';
+import { campusKeys, guardKeys, passKeys } from '@lib/query/keys';
 import { formatTime, toServerDateTime } from '@lib/format/datetime';
 import type { EntryLogFilterRequest } from '@/types/guard.types';
 import { useAuth } from '@hooks/useAuth';
@@ -52,12 +51,6 @@ export default function AdminOverview() {
     queryFn: () => passApi.count('ACTIVE'),
   });
 
-  const pending = useQuery({
-    queryKey: requestKeys.pendingCount(),
-    queryFn: () => visitorRequestApi.pendingCount(),
-    refetchInterval: POLL.pendingCountMs,
-  });
-
   const gates = useQuery({
     queryKey: campusKeys.gates(campusId ?? 0, false),
     queryFn: () => gateApi.list(campusId as number),
@@ -92,23 +85,12 @@ export default function AdminOverview() {
   if (guardsOnDuty.length === 0 && openGates.length > 0) {
     attention.push({ text: 'No guard is on duty at any gate', to: '/admin/entry-logs' });
   }
-  if ((pending.data ?? 0) > 0) {
-    attention.push({
-      text: `${pending.data} visitor ${pending.data === 1 ? 'request is' : 'requests are'} waiting on a decision`,
-      to: '/admin/queue',
-    });
-  }
 
   return (
     <div className="flex flex-col gap-[var(--sp-6)]">
       <PageHeader
         title={`Good day${profile?.name ? `, ${profile.name}` : ''}`}
         description={dayjs().format('dddd, D MMMM YYYY')}
-        actions={
-          <Button asChild variant="secondary">
-            <Link to="/admin/queue">Visitor queue</Link>
-          </Button>
-        }
       />
 
       <div className="grid gap-[var(--sp-4)] sm:grid-cols-2 lg:grid-cols-4">
