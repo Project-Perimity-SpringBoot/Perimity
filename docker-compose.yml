@@ -75,7 +75,7 @@ services:
     restart: unless-stopped
     ports:
       - "1025:1025"
-      - "8025:8025"
+      - "8090:8025" # Web UI: http://localhost:8090 (Port 8025 blocked by Windows Hyper-V exclusion range 7941-8040)
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "1025"]
       interval: 10s

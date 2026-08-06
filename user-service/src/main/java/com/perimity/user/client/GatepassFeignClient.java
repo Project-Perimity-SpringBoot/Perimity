@@ -26,7 +26,23 @@ public interface GatepassFeignClient {
     PauseEnvelope pauseHolder(@PathVariable("id") Long holderUserId,
                               @RequestBody PauseRequest request);
 
+    @PostMapping("/api/gatepass/internal/passes/issue")
+    IssuePassEnvelope issuePass(@RequestBody IssuePassRequest request);
+
     record PauseRequest(String reason, Long changedBy) { }
 
     record PauseEnvelope(boolean success, String message, Object data) { }
+
+    record IssuePassRequest(
+            Long holderUserId,
+            String holderName,
+            Long campusId,
+            Long visitorRequestId,
+            String passType,
+            Long eventId,
+            java.time.LocalDate validFrom,
+            java.time.LocalDate validTo
+    ) { }
+
+    record IssuePassEnvelope(boolean success, String message, Object data) { }
 }

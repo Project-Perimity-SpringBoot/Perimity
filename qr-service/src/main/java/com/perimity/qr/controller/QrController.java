@@ -15,30 +15,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import com.perimity.qr.security.PerimityPrincipal;
+import com.perimity.qr.email.EmailSender;
+import com.perimity.qr.email.PassEmail;
+import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Public read endpoints for qr-service, matching the GET rows of the Team
- * Guide's API table (section 4.6).
- *
- * The service-to-service rows live in QrInternalController, behind the shared
- * internal API key.
- *
- * Everything in this class requires a Bearer token - see SecurityConfig. It is
- * authenticated but NOT ownership-scoped: a signed-in student can still read
- * another holder's QR keys by changing the id. Closing that needs the holder's
- * identity, which lives in gatepass-service, so it is a cross-service call on a
- * read path rather than a matcher.
- *
- * @Validated at class level is what makes the @Positive on the path variables
- * below actually run. Without it the annotations are silently ignored - a
- * common and invisible mistake, because nothing warns you.
- */
 @RestController
 @RequestMapping("/api/qr")
 @Validated
@@ -47,10 +34,14 @@ public class QrController {
 
     private final QrRecordService qrRecordService;
     private final GenerationJobService generationJobService;
+    private final EmailSender emailSender;
 
-    public QrController(QrRecordService qrRecordService, GenerationJobService generationJobService) {
+    public QrController(QrRecordService qrRecordService,
+                        GenerationJobService generationJobService,
+                        EmailSender emailSender) {
         this.qrRecordService = qrRecordService;
         this.generationJobService = generationJobService;
+        this.emailSender = emailSender;
     }
 
     @GetMapping("/jobs/{jobId}/status")
@@ -159,5 +150,32 @@ public class QrController {
     public ApiResponse<QrRecordResponse> getByPassId(
             @PathVariable @Positive(message = "passId must be a positive id") Long passId) {
         return ApiResponse.ok(qrRecordService.getActiveByPassId(passId));
+    }
+
+    @PostMapping("/{passId}/email")
+    @Operation(summary = "Send pass PDF to student's email")
+    public ApiResponse<Map<String, Object>> sendEmail(
+            @PathVariable @Positive(message = "passId must be a positive id") Long passId,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal PerimityPrincipal caller) {
+
+        byte[] pdf = qrRecordService.download(passId, true, caller);
+        String recipient = (caller != null && caller.email() != null && !caller.email().isBlank())
+                ? caller.email()
+                : null;
+
+        if (recipient == null) {
+            throw new IllegalArgumentException("No valid email address found for the current user.");
+        }
+
+        String passCode = "GP-" + String.format("%06d", passId);
+        String subject = "Your Perimity Gate Pass (" + passCode + ")";
+        String body = "Hello " + (caller.name() != null ? caller.name() : "Student") + ",\n\n"
+                + "Your campus gate pass (" + passCode + ") is attached to this email as a PDF.\n"
+                + "Present this QR code at any gate for campus access.\n\n"
+                + "Best regards,\nPerimity Campus Security";
+
+        emailSender.send(new PassEmail(recipient, subject, body, pdf));
+
+        return ApiResponse.ok("Pass emailed successfully to " + recipient, Map.of("sent", true, "email", recipient));
     }
 }
