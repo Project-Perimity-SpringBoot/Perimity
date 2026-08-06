@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, ClipboardCheck, Clock } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Clock, UserCheck, Sparkles } from 'lucide-react';
 import { Avatar, Button } from '@ui/index';
-import { DataTable, PageHeader } from '@components/data';
+import { DataTable } from '@components/data';
 import { ErrorState } from '@components/feedback';
 import { StudentDetailsReviewDrawer } from '@components/approval';
 import { studentApi } from '@lib/api/services/user.api';
@@ -12,40 +12,6 @@ import { formatDateTime, formatWaitingFor, isWaitingTooLong } from '@lib/format/
 import { useUrlPagination } from '@hooks/useUrlPagination';
 import type { StudentProfileResponse } from '@/types/user.types';
 
-/**
- * The student details review queue.
- *
- * ==========================================================================
- * WHY "REVIEW" AND NOT "VERIFY" ON EACH ROW
- * ==========================================================================
- * A Verify button here would approve details this table does not show. The row
- * carries a name, a roll number and a department; the things being verified —
- * date of birth, address, phone numbers — are deliberately not in it, because a
- * table of twenty students' contact details is a data export wearing the
- * costume of a review screen.
- *
- * So one-click verify from the list means attesting to values you have not
- * read, and the entire point of the verification record is that a named person
- * looked. Review opens the details; the Verify button lives there, one click
- * later, next to the information it refers to.
- *
- * The button also fixes the real complaint behind asking for one: the action
- * used to be an invisible click-anywhere-on-the-row, which is not an affordance
- * anybody can see.
- *
- * ==========================================================================
- * OLDEST FIRST, AND NO SORT CONTROL
- * ==========================================================================
- * The server orders by submittedAt ascending. Newest-first would bury whoever
- * has waited longest at the bottom of the last page, which is how a queue
- * becomes a backlog nobody clears.
- *
- * ==========================================================================
- * NO CAMPUS PICKER
- * ==========================================================================
- * campusId is not sent. The server takes it from the token and refuses a
- * mismatch, so a faculty member sees their own campus and no other.
- */
 export default function StudentVerificationPage() {
   const { request, setPage } = useUrlPagination();
   const [selected, setSelected] = useState<StudentProfileResponse | null>(null);
@@ -61,26 +27,26 @@ export default function StudentVerificationPage() {
   const columns: ColumnDef<StudentProfileResponse, unknown>[] = [
     {
       id: 'name',
-      header: 'Student',
-      // displayName is null until a name is filled in. Falling back to the roll
-      // number keeps the row identifiable instead of blank.
+      header: 'Student Profile',
       accessorFn: (row) => row.displayName ?? row.rollNo ?? `Profile ${row.id}`,
       cell: ({ row }) => {
         const name = row.original.displayName ?? row.original.rollNo ?? `Profile ${row.original.id}`;
         return (
-          <span className="flex min-w-0 items-center gap-[var(--sp-3)]">
+          <span className="flex min-w-0 items-center gap-3">
             <Avatar name={name} />
-            <span className="min-w-0 truncate font-medium text-[var(--ink-900)]">{name}</span>
+            <span className="min-w-0 truncate font-bold text-slate-900 text-sm">{name}</span>
           </span>
         );
       },
     },
     {
       id: 'rollNo',
-      header: 'Roll number',
+      header: 'Roll Number',
       accessorFn: (row) => row.rollNo ?? '—',
       cell: ({ row }) => (
-        <span className="text-mono text-[var(--ink-700)]">{row.original.rollNo ?? '—'}</span>
+        <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+          {row.original.rollNo ?? '—'}
+        </span>
       ),
     },
     {
@@ -88,33 +54,26 @@ export default function StudentVerificationPage() {
       header: 'Department',
       accessorFn: (row) => row.departmentName ?? '—',
       cell: ({ row }) => (
-        <span className="text-[var(--ink-700)]">{row.original.departmentName ?? 'Not set'}</span>
+        <span className="font-medium text-xs text-slate-700">{row.original.departmentName ?? 'Not set'}</span>
       ),
     },
     {
       id: 'submittedAt',
-      header: 'Waiting',
+      header: 'Waiting Time',
       accessorFn: (row) => row.submittedAt ?? '',
-      /*
-       * "3 days" rather than a timestamp: how long someone has been waiting is
-       * the number that decides what to do next. The exact submission time is
-       * on the detail view for anyone who needs it, and stays in the title
-       * attribute here.
-       */
       cell: ({ row }) => {
         const stale = isWaitingTooLong(row.original.submittedAt);
         return (
           <span
-            className="inline-flex items-center gap-[var(--sp-2)]"
+            className="inline-flex items-center gap-2 text-xs"
             title={formatDateTime(row.original.submittedAt)}
           >
-            {/* --review-fg is the AMBER family, already used for "needs a
-                second look" at the gate. Reusing it keeps one meaning for the
-                colour instead of inventing a second warning palette. */}
-            {stale
-              ? <AlertTriangle className="size-4 shrink-0 text-[var(--review-fg)]" aria-hidden />
-              : <Clock className="size-4 shrink-0 text-[var(--ink-500)]" aria-hidden />}
-            <span className={stale ? 'text-[var(--ink-900)]' : 'text-[var(--ink-500)]'}>
+            {stale ? (
+              <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+            ) : (
+              <Clock className="size-4 shrink-0 text-slate-400" />
+            )}
+            <span className={stale ? 'font-bold text-amber-700' : 'text-slate-600'}>
               {formatWaitingFor(row.original.submittedAt)}
             </span>
           </span>
@@ -128,14 +87,10 @@ export default function StudentVerificationPage() {
         <div className="flex justify-end">
           <Button
             size="sm"
-            /*
-             * The row is clickable too, and without stopPropagation this fires
-             * the row handler as well — opening the drawer twice, which flickers
-             * as it re-renders mid-animation.
-             */
+            className="bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-semibold"
             onClick={(e) => { e.stopPropagation(); review(row.original); }}
           >
-            Review
+            Review Profile
           </Button>
         </div>
       ),
@@ -152,58 +107,62 @@ export default function StudentVerificationPage() {
   ).length;
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title="Student details to check"
-        description="Students who have asked you to check what they entered. Oldest first."
-      />
+    <div className="mx-auto max-w-7xl space-y-6 pb-16">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <Sparkles className="size-3.5 text-indigo-300" /> Student Verification Desk
+            </div>
+            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Student Profile Verification</h1>
+            <p className="text-sm text-indigo-200/90 max-w-xl">
+              Review and attest submitted student profiles for gate pass issuance.
+            </p>
+          </div>
+        </div>
+      </div>
 
-      {/* ---------------------------------------------------------------
-          A one-line summary above the table.
-
-          "1 waiting" is the number a reviewer wants before deciding whether
-          this is a two-minute job or an afternoon, and the stale count calls
-          out the failure mode a queue actually has — not that it is long, but
-          that somebody at the bottom has been forgotten.
-         --------------------------------------------------------------- */}
       {!pending.isPending && total > 0 && (
-        <section className="surface-card flex flex-wrap items-center gap-[var(--sp-3)] p-[var(--sp-4)]">
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-circle)] bg-[var(--brand-50)]">
-            <ClipboardCheck className="size-5 text-[var(--brand-600)]" aria-hidden />
-          </span>
-          <p className="text-body min-w-0 flex-1 text-[var(--ink-700)]">
-            <strong className="text-[var(--ink-900)]">
-              {total} {total === 1 ? 'student is' : 'students are'} waiting
-            </strong>
-            {waitingTooLong > 0 && (
-              <span className="text-[var(--ink-500)]">
-                {' · '}{waitingTooLong} for more than three days
-              </span>
-            )}
-          </p>
-        </section>
+        <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 px-6 text-slate-800 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-600 text-white">
+              <ClipboardCheck className="size-5" />
+            </div>
+            <p className="text-sm">
+              <strong className="font-bold text-slate-900">
+                {total} {total === 1 ? 'student is' : 'students are'} waiting for profile review
+              </strong>
+              {waitingTooLong > 0 && (
+                <span className="text-amber-700 font-semibold ml-2">
+                  ({waitingTooLong} waiting &gt; 3 days)
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
       )}
 
-      <DataTable
-        columns={columns}
-        data={pending.data?.items ?? []}
-        loading={pending.isPending}
-        {...(pending.data ? { page: pending.data } : {})}
-        onPageChange={setPage}
-        mobilePrimaryColumn="name"
-        getRowId={(row) => String(row.id)}
-        emptyHeading="Nothing waiting"
-        emptyDescription="When a student sends their details for checking, they appear here."
-        onRowClick={review}
-      />
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <DataTable
+          columns={columns}
+          data={pending.data?.items ?? []}
+          loading={pending.isPending}
+          {...(pending.data ? { page: pending.data } : {})}
+          onPageChange={setPage}
+          mobilePrimaryColumn="name"
+          getRowId={(row) => String(row.id)}
+          emptyHeading="No pending student verifications"
+          emptyDescription="When a student submits their profile for verification, it will appear here."
+          onRowClick={review}
+        />
+      </div>
 
       <StudentDetailsReviewDrawer
         profile={selected}
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          // Keep `selected` until the panel has finished closing. Clearing it on
-          // the same tick empties the drawer before it slides away.
           if (!next) setTimeout(() => setSelected(null), 200);
         }}
       />

@@ -1,13 +1,10 @@
 import type { GatePassResponse } from '@/types/gatepass.types';
 
 /**
- * GatePass carries only an IDENTITY bigint — there is no passCode column in the
- * backend, and the design specifies human-readable codes on every pass surface.
- * Until that field exists this derives a stable display code from the id and
- * type so the UI is consistent, and it is NOT sent to the server or used for
- * lookup: only the numeric id addresses a pass.
+ * GatePass carries an IDENTITY bigint — derives a human-readable pass code
+ * (e.g. GP-000007, EV-000007, PM-000007) for every display surface.
  */
 export function displayPassCode(pass: Pick<GatePassResponse, 'id' | 'passType' | 'visitorRequestId'>): string {
-  const prefix = pass.passType === 'EVENT' ? 'EV' : pass.visitorRequestId !== null ? 'PM' : 'S';
-  return `${prefix}-${String(pass.id).padStart(4, '0')}`;
+  const prefix = pass.passType === 'EVENT' ? 'EV' : pass.visitorRequestId !== null ? 'PM' : 'GP';
+  return `${prefix}-${String(pass.id).padStart(6, '0')}`;
 }
