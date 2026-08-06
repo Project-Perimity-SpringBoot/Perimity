@@ -21,6 +21,8 @@ import { formatDateTime, formatValidity } from '@lib/format/datetime';
 import { useAuth } from '@hooks/useAuth';
 import type { VisitorRequestResponse } from '@/types/gatepass.types';
 import { ActiveBatchesPanel } from '../components/ActiveBatchesPanel';
+import { StudentStats } from '../components/StudentStats';
+import { RecentImportsPanel } from '../components/RecentImportsPanel';
 
 export default function FacultyOverview() {
   const { identity } = useAuth();
@@ -65,6 +67,9 @@ export default function FacultyOverview() {
           </>
         }
       />
+
+      {/* The cohort at a glance, directly under the welcome header */}
+      <StudentStats />
 
       <section aria-labelledby="pending-approvals" className="flex flex-col gap-[var(--sp-4)]">
         <SectionHeader
@@ -145,6 +150,14 @@ export default function FacultyOverview() {
         )}
       </section>
 
+      {/* Student cohort: the numbers above, the imports behind them here */}
+      <RecentImportsPanel />
+
+      {/*
+        Visitor bulk uploads, NOT student imports. The two are unrelated
+        features that both use the word "batch", so the student panel sits
+        above this one and names itself explicitly.
+      */}
       <ActiveBatchesPanel />
 
       <section aria-labelledby="live-events" className="flex flex-col gap-[var(--sp-4)]">
