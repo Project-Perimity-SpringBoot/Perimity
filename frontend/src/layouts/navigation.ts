@@ -1,6 +1,6 @@
 import {
   BadgeCheck, Building2, CalendarRange, ClipboardList, FileSpreadsheet, FileText, Gauge, IdCard,
-  LayoutDashboard, ListChecks, LogIn, ScanLine, Settings2, ShieldBan,
+  LayoutDashboard, ListChecks, LogIn, ScanLine, ShieldBan,
   UserPen, UserPlus, Users, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/types/enums';
@@ -29,7 +29,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
     { to: '/admin/departments', label: 'Departments', icon: UsersRound },
     { to: '/admin/gates', label: 'Gates', icon: LogIn },
     { to: '/admin/blocklist', label: 'Blocklist', icon: ShieldBan, capability: 'blocklist:manage' },
-    { to: '/admin/policy', label: 'Policy', icon: Settings2, capability: 'config:manage' },
     { to: '/admin/entry-logs', label: 'Entry logs', icon: ScanLine, capability: 'entrylog:view' },
   ],
   FACULTY: [
