@@ -25,7 +25,6 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   ],
   CAMPUS_ADMIN: [
     { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-    { to: '/admin/queue', label: 'Visitor queue', icon: ClipboardList, badge: 'pendingRequests' },
     { to: '/admin/users', label: 'Users', icon: Users },
     { to: '/admin/departments', label: 'Departments', icon: UsersRound },
     { to: '/admin/gates', label: 'Gates', icon: LogIn },
