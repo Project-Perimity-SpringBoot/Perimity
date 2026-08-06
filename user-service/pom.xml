@@ -86,6 +86,24 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+          Flyway. Two artifacts, not one.
+
+          Spring Boot 3.3 ships Flyway 10, which split the database-specific
+          support out of the core jar. flyway-core alone starts up and then
+          fails with "Unsupported Database: PostgreSQL 16" - a message that
+          reads like a version-compatibility problem and is actually a missing
+          dependency.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
