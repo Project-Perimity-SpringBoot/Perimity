@@ -44,9 +44,9 @@ public final class ValidationPatterns {
     // as [A-Za-z0-9_-]{24,512}={0,2} the bound would cover only the body, so a
     // padded token could reach 514 and disagree with the @Size(max = 512) that
     // guards it.
-    public static final String QR_TOKEN = "^(?=.{24,512}$)[A-Za-z0-9_-]+={0,2}$";
+    public static final String QR_TOKEN = "^(?=.{1,512}$)[A-Za-z0-9_-]+={0,2}$";
     public static final String QR_TOKEN_MESSAGE =
-            "Token must be URL-safe Base64, 24 to 512 characters";
+            "Token must be URL-safe Base64 or valid pass code, 1 to 512 characters";
 
     /**
      * Unicode-aware: Devanagari, Arabic and accented Latin names all pass.

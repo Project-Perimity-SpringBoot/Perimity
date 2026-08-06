@@ -49,4 +49,9 @@ export const qrApi = {
 
   pdf: (passId: number): Promise<DownloadedFile> =>
     fetchFile(qrClient, `/api/qr/${passId}/pdf`),
+
+  async sendEmail(passId: number): Promise<{ sent: boolean; email: string }> {
+    const { data } = await qrClient.post<unknown>(`/api/qr/${passId}/email`);
+    return unwrap<{ sent: boolean; email: string }>(data);
+  },
 };

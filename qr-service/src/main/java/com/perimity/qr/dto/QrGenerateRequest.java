@@ -84,4 +84,8 @@ public class QrGenerateRequest {
      * validFrom, which is legitimately in the past.
      */
     private LocalDate validTo;
+
+    private String holderName;
+    private String departmentName;
+    private String campusName;
 }
