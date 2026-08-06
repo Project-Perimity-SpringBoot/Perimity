@@ -40,7 +40,7 @@ export const flags = {
    */
   passDownload: bool('VITE_ENABLE_PASS_DOWNLOAD', true),
   /** B9 — a STUDENT gets 403 on /api/guard/entry-logs/**. */
-  studentEntryHistory: bool('VITE_ENABLE_STUDENT_ENTRY_HISTORY', false),
+  studentEntryHistory: bool('VITE_ENABLE_STUDENT_ENTRY_HISTORY', true),
   /** B8 — no manual lookup and no override endpoint exist. */
   guardManualLookup: bool('VITE_ENABLE_GUARD_MANUAL_LOOKUP', false),
   /** B10 — BlocklistController is SA/CA only, so faculty get 403. */

@@ -70,8 +70,8 @@ export const departmentSchema = z.object({
   code: z
     .string()
     .min(1, 'A code is required')
-    .max(LIMITS.departmentCode.max, 'Codes are at most 32 characters')
-    .regex(RX.DEPARTMENT_CODE, 'Letters, numbers, spaces, dots, underscores and hyphens'),
+    .length(4, 'Department code must be exactly 4 uppercase characters')
+    .regex(RX.DEPARTMENT_CODE, 'Must be 4 uppercase letters or digits (e.g. MATH, CS01)'),
   name: z
     .string()
     .min(1, 'A name is required')

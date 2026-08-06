@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ClipboardCheck, Filter, UserCheck } from 'lucide-react';
+import { Filter, UserCheck } from 'lucide-react';
 import { Button } from '@ui/index';
 import { DataTable } from '@components/data';
 import { ErrorState } from '@components/feedback';
