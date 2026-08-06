@@ -22,11 +22,17 @@ export default function VerifyCodePage() {
   const { completeSignIn } = useAuth();
   const state = location.state as VerifyState | null;
 
+  const storageKey = state?.email ? `perimity_otp_attempts_${state.email.toLowerCase()}` : '';
+
   const [code, setCode] = useState('');
   const [formErrors, setFormErrors] = useState<string[]>([]);
-  // The server does not return an attempt count, so this is tracked locally to
-  // tell the user how many tries remain before the code dies.
-  const [attemptsUsed, setAttemptsUsed] = useState(0);
+  // Tracked locally and persisted in sessionStorage so a page refresh does not
+  // reset the counter while the backend hash still counts the failed attempt.
+  const [attemptsUsed, setAttemptsUsed] = useState<number>(() => {
+    if (!storageKey) return 0;
+    const saved = sessionStorage.getItem(storageKey);
+    return saved ? parseInt(saved, 10) || 0 : 0;
+  });
   const [cooldown, setCooldown] = useState<number>(OTP_RULES.resendCooldownSeconds);
 
   useEffect(() => {
@@ -38,9 +44,16 @@ export default function VerifyCodePage() {
   const verify = useMutation({
     mutationFn: (value: string) =>
       authApi.verifyOtp({ email: state!.email, purpose: 'LOGIN', code: value }),
-    onSuccess: (auth) => navigate(completeSignIn(auth), { replace: true }),
+    onSuccess: (auth) => {
+      if (storageKey) sessionStorage.removeItem(storageKey);
+      navigate(completeSignIn(auth), { replace: true });
+    },
     onError: (error) => {
-      setAttemptsUsed((n) => n + 1);
+      setAttemptsUsed((n) => {
+        const next = n + 1;
+        if (storageKey) sessionStorage.setItem(storageKey, String(next));
+        return next;
+      });
       setCode('');
       setFormErrors([error instanceof ApiError ? error.message : 'That code is not correct.']);
     },
@@ -52,6 +65,7 @@ export default function VerifyCodePage() {
     onSuccess: () => {
       setCooldown(OTP_RULES.resendCooldownSeconds);
       setAttemptsUsed(0);
+      if (storageKey) sessionStorage.removeItem(storageKey);
       setFormErrors([]);
     },
   });
