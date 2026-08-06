@@ -1,11 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import dayjs from 'dayjs';
 import {
   AlertTriangle, ClipboardList, DoorOpen, IdCard, Radio, ScanLine,
 } from 'lucide-react';
 import { Badge, Button, Skeleton } from '@ui/index';
-import { PageHeader, StatCard } from '@components/data';
+import { PageHeader, Pagination, StatCard } from '@components/data';
 import { EmptyState, ErrorState } from '@components/feedback';
 import { passApi } from '@lib/api/services/gatepass.api';
 import { gateApi } from '@lib/api/services/campus.api';
@@ -34,10 +35,21 @@ const startOfToday = (): string => toServerDateTime(dayjs().startOf('day'));
 export default function AdminOverview() {
   const { campusId, profile } = useAuth();
 
+  /*
+   * The window ends at the END of today, not at "now".
+   *
+   * "now" was recomputed on every render, so it went into the query key and
+   * every render asked a slightly different question - and once this screen
+   * could page, clicking page 2 would have moved the window at the same time
+   * as the page, which is how rows appear to jump between pages.
+   *
+   * End-of-day is stable for the whole session AND still includes scans that
+   * happen while the screen is open, so it is the more correct bound anyway.
+   */
   const filter: EntryLogFilterRequest = {
     campusId: campusId ?? 0,
     from: startOfToday(),
-    to: toServerDateTime(dayjs()),
+    to: toServerDateTime(dayjs().endOf('day')),
   };
 
   const stats = useQuery({
@@ -64,10 +76,27 @@ export default function AdminOverview() {
     refetchInterval: 60_000,
   });
 
+  /*
+   * Eight a page, and pageable.
+   *
+   * This card used to ask for the first eight events and stop there, so a
+   * campus with a busy morning had no way to see the ninth. The endpoint has
+   * always paged - only the card refused to ask for page two.
+   *
+   * Eight rather than the register's ten: this sits beside "Guards on duty",
+   * and the two cards should end at roughly the same place.
+   */
+  const RECENT_PAGE_SIZE = 8;
+  const [recentPage, setRecentPage] = useState(0);
+  const recentRequest = { page: recentPage, size: RECENT_PAGE_SIZE };
+
   const recent = useQuery({
-    queryKey: guardKeys.entryLogSearch(filter, { page: 0, size: 8 }),
-    queryFn: () => entryLogApi.search(filter, { page: 0, size: 8 }),
+    queryKey: guardKeys.entryLogSearch(filter, recentRequest),
+    queryFn: () => entryLogApi.search(filter, recentRequest),
     enabled: campusId !== null,
+    // Holds the previous page while the next loads, so the card does not
+    // collapse to a skeleton and shove the page around on every click.
+    placeholderData: keepPreviousData,
   });
 
   if (stats.isError) {
@@ -159,7 +188,7 @@ export default function AdminOverview() {
             <div className="p-[var(--sp-4)]"><Skeleton className="h-12" /></div>
           ) : recent.data && recent.data.items.length > 0 ? (
             <ul className="divide-y divide-[var(--border)]">
-              {recent.data.items.slice(0, 8).map((log) => (
+              {recent.data.items.map((log) => (
                 <li key={log.id} className="flex items-center justify-between gap-[var(--sp-3)] px-[var(--sp-6)] py-[var(--sp-3)]">
                   <div className="min-w-0">
                     <p className="text-body-md truncate text-[var(--ink-900)]">
@@ -183,6 +212,9 @@ export default function AdminOverview() {
           ) : (
             <EmptyState heading="No entries today"
                         description="Scans at any gate appear here as they happen." />
+          )}
+          {recent.data && (
+            <Pagination page={recent.data} onPageChange={setRecentPage} />
           )}
         </section>
       </div>
