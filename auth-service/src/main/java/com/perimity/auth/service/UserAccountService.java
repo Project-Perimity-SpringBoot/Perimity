@@ -328,9 +328,9 @@ public class UserAccountService {
             sheetEmails.add(row.getEmail().trim().toLowerCase());
         }
 
-        Map<String, Long> known = new HashMap<>();
+        Map<String, User> known = new HashMap<>();
         for (User existing : userRepository.findByEmailIn(sheetEmails)) {
-            known.put(existing.getEmail(), existing.getId());
+            known.put(existing.getEmail(), existing);
         }
 
         Set<String> seenInThisBatch = new LinkedHashSet<>();
@@ -343,10 +343,63 @@ public class UserAccountService {
         for (InternalStudentBatchDto.Row row : rows) {
             String email = row.getEmail().trim().toLowerCase();
 
-            Long existingId = known.get(email);
-            if (existingId != null) {
+            User existing = known.get(email);
+            if (existing != null) {
+                /*
+                 * ==============================================================
+                 *  A REUSED ROW IS STILL SOMEBODY WHO NEEDS TELLING
+                 * ==============================================================
+                 * This branch used to record REUSED and move on, sending
+                 * nothing. It looked harmless because the account already
+                 * existed - but re-importing is the normal case, not the odd
+                 * one: students resubmit the form, faculty fix a column and
+                 * upload again. Those students ended up with a verified
+                 * profile, a gate pass, and no idea any of it had happened.
+                 * The batch reported success and the person it was for heard
+                 * nothing.
+                 *
+                 * So they get the same email as a new student. What is IN it
+                 * depends on one flag, and that distinction is the whole point
+                 * of this block.
+                 */
+                if (existing.isMustChangePassword()) {
+                    /*
+                     * They have never completed a first sign-in, so the only
+                     * password on this account is one an import generated and
+                     * emailed - possibly weeks ago, in a message they deleted.
+                     * Replacing it costs them nothing and is the only way to
+                     * get them a credential they actually hold.
+                     */
+                    existing.setPasswordHash(passwordEncoder.encode(row.getTemporaryPassword()));
+                    userRepository.save(existing);
+
+                    audit.record(AuditAction.PASSWORD_CHANGED, request.getUploadedBy(),
+                            Role.FACULTY, campusId, "user:" + existing.getId(),
+                            "Temporary password reissued by "
+                                    + (request.getSource() == null
+                                            ? "a bulk import" : request.getSource()));
+
+                    emailService.sendStudentWelcome(existing.getEmail(), existing.getName(),
+                            row.getTemporaryPassword(), studentLoginUrl, false);
+                } else {
+                    /*
+                     * They have set their own password, and it is a bcrypt hash
+                     * - unrecoverable by design, so there is nothing to send
+                     * them and nothing worth resetting.
+                     *
+                     * Overwriting it was considered and rejected. It would make
+                     * every re-import a silent mass password reset, locking out
+                     * every student already using the system on the day faculty
+                     * fixed a typo in one column. A person who has a working
+                     * password does not need a new one; they need to be told
+                     * their details were updated.
+                     */
+                    emailService.sendStudentWelcome(existing.getEmail(), existing.getName(),
+                            null, studentLoginUrl, true);
+                }
+
                 results.add(new IdentityBatchResponseDto.RowResult(
-                        row.getRowNumber(), email, "REUSED", existingId));
+                        row.getRowNumber(), email, "REUSED", existing.getId()));
                 continue;
             }
 
@@ -416,7 +469,8 @@ public class UserAccountService {
                         created.getEmail(),
                         created.getName(),
                         row.getTemporaryPassword(),
-                        studentLoginUrl);
+                        studentLoginUrl,
+                        false);
             }
         }
 

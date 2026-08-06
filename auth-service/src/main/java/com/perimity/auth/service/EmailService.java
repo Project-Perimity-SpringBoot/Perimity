@@ -167,16 +167,18 @@ public class EmailService {
      * trail. The dev-mode branch below is the one exception, and it exists only
      * because mailEnabled=false means nothing was sent to read.
      */
-    public void sendStudentWelcome(String toEmail, String name,
-                                   String temporaryPassword, String loginUrl) {
+    public void sendStudentWelcome(String toEmail, String name, String temporaryPassword,
+                                   String loginUrl, boolean returning) {
         if (!mailEnabled) {
             log.warn("MAIL DISABLED (dev mode) - welcome for {} with temporary password {}",
                     toEmail, temporaryPassword);
             return;
         }
 
-        String subject = "Your Perimity account is ready";
-        String html = welcomeTemplate(subject, name, toEmail, temporaryPassword, loginUrl);
+        String subject = returning
+                ? "Your campus details have been verified"
+                : "Your campus account and gate pass are ready";
+        String html = welcomeTemplate(subject, name, toEmail, temporaryPassword, loginUrl, returning);
 
         try {
             deliver(toEmail, subject, html);
@@ -196,36 +198,135 @@ public class EmailService {
         }
     }
 
+    /**
+     * The one email an imported student gets.
+     *
+     * ==================================================================
+     *  IT COVERS BOTH KINDS OF STUDENT, DELIBERATELY
+     * ==================================================================
+     * A brand-new account and a returning one differ in exactly one
+     * paragraph - whether there is a password to hand over. Everything else
+     * is identical: the details are verified, the pass is ready, here is
+     * where to sign in. Two templates would drift, and the day they drift is
+     * the day one of them stops mentioning the pass.
+     *
+     * The style matches the gate pass and the pass email on purpose. A
+     * student receives this, then a pass, then opens the app; three
+     * different-looking things would read like three different systems.
+     *
+     * Tables and inline styles for the same reason as everywhere else -
+     * Outlook renders through Word, and a <style> block does not survive
+     * Gmail. No institution name appears here; the campus is not known at
+     * this point in the code and inventing one is how a literal gets in.
+     */
     private String welcomeTemplate(String title, String name, String email,
-                                   String temporaryPassword, String loginUrl) {
-        return """
-                <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto">
-                  <h2 style="margin-bottom:4px">%s</h2>
-                  <p style="color:#444">
-                    Hello %s, your campus account has been created.
+                                   String temporaryPassword, String loginUrl,
+                                   boolean returning) {
+
+        String credentialBlock = returning
+                ? """
+                  <p style="margin:0 0 14px 0">
+                    Sign in with the password you already use. If you have
+                    forgotten it, choose <strong>Forgot password</strong> on the
+                    sign-in page - for your security nobody, including your
+                    college, can look it up.
                   </p>
-                  <table style="border-collapse:collapse;margin:16px 0">
-                    <tr><td style="padding:4px 12px 4px 0;color:#666">Email</td>
-                        <td style="padding:4px 0"><strong>%s</strong></td></tr>
-                    <tr><td style="padding:4px 12px 4px 0;color:#666">Temporary password</td>
-                        <td style="padding:4px 0">
-                          <code style="background:#f3f4f6;padding:3px 8px;border-radius:4px">%s</code>
-                        </td></tr>
+                  """
+                : """
+                  <table role="presentation" cellpadding="0" cellspacing="0"
+                         style="width:100%%;background:#EDE9FE;border-radius:12px;margin:4px 0 16px 0">
+                    <tr><td style="padding:16px 20px;font-family:%s;font-size:14px;color:#4C1D95">
+                      <div style="color:#6B7280;font-size:12px;text-transform:uppercase;
+                                  letter-spacing:.6px">Email</div>
+                      <div style="font-weight:700;padding-bottom:10px">%s</div>
+                      <div style="color:#6B7280;font-size:12px;text-transform:uppercase;
+                                  letter-spacing:.6px">Temporary password</div>
+                      <div style="font-family:Consolas,Menlo,monospace;font-weight:700;
+                                  font-size:16px;letter-spacing:1px">%s</div>
+                    </td></tr>
                   </table>
-                  <p><a href="%s" style="background:#2563eb;color:#fff;padding:10px 20px;
-                            border-radius:6px;text-decoration:none;display:inline-block">
-                            Sign in</a></p>
-                  <p style="color:#444">
-                    You will be asked to choose your own password the first time you
-                    sign in. After that, add your passport photo from your profile -
-                    your gate pass cannot be issued until it is there.
+                  <p style="margin:0 0 14px 0">
+                    You will be asked to choose your own password the first time
+                    you sign in. This temporary one stops working at that point.
                   </p>
-                  <p style="color:#666;font-size:13px">
-                    If you were not expecting this, please tell the person who runs
-                    your course rather than replying to this message.
-                  </p>
-                </div>
-                """.formatted(title, name, email, temporaryPassword, loginUrl);
+                  """.formatted(FONT, escape(email), escape(temporaryPassword));
+
+        return """
+                <!DOCTYPE html><html><head><meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width,initial-scale=1"></head>
+                <body style="margin:0;padding:0;background:#F5F3FF">
+                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0"
+                       style="background:#F5F3FF;padding:32px 12px"><tr><td align="center">
+                <table role="presentation" width="560" cellpadding="0" cellspacing="0"
+                       style="width:560px;max-width:100%%;background:#FFFFFF;
+                              border:1px solid #E2DBF8;border-radius:16px;overflow:hidden">
+
+                  <tr><td style="background-color:#4C1D95;
+                                 background-image:linear-gradient(90deg,#4C1D95 0%%,#6D28D9 100%%);
+                                 padding:28px 32px">
+                    <div style="font-family:%s;font-size:17px;font-weight:700;color:#FFFFFF;
+                                letter-spacing:.5px">%s</div>
+                    <div style="font-family:%s;font-size:13px;color:#DDD6FE;padding-top:4px">
+                      Smart Campus Access</div>
+                  </td></tr>
+
+                  <tr><td style="padding:32px 32px 8px 32px;font-family:%s;font-size:15px;
+                                 line-height:1.65;color:#1E1B4B">
+                    <p style="margin:0 0 14px 0">Hi %s,</p>
+                    %s
+                    <p style="margin:0 0 14px 0">
+                      The details you gave on the intake form have already been checked
+                      and added to your profile, so there is nothing for you to fill in.
+                    </p>
+                    <p style="margin:0 0 20px 0">
+                      Your gate pass is ready. Open it from your dashboard to show the QR
+                      code at the gate, or download it as a PDF to print.
+                    </p>
+                    <p style="margin:0 0 8px 0">
+                      <a href="%s" style="background:#6D28D9;color:#FFFFFF;padding:12px 24px;
+                            border-radius:8px;text-decoration:none;display:inline-block;
+                            font-weight:700;font-family:%s;font-size:14px">Sign in</a>
+                    </p>
+                  </td></tr>
+
+                  <tr><td style="padding:24px 32px 0 32px">
+                    <div style="border-top:1px solid #E2DBF8"></div></td></tr>
+
+                  <tr><td style="padding:16px 32px 28px 32px;font-family:%s;font-size:13px;
+                                 line-height:1.6;color:#6B7280">
+                    Your pass is issued to you alone - do not share the QR code, since
+                    anyone holding it can present it at a gate. If you were not expecting
+                    this email, tell the person who runs your course rather than replying
+                    to it.
+                  </td></tr>
+
+                  <tr><td style="background:#EDE9FE;padding:14px 32px;text-align:center;
+                                 font-family:%s;font-size:12px;color:#4C1D95">
+                    Perimity &middot; entry-only &middot; automated message, please do not reply
+                  </td></tr>
+
+                </table></td></tr></table></body></html>
+                """.formatted(FONT, escape(title), FONT, FONT,
+                              escape(name), credentialBlock, escape(loginUrl), FONT, FONT, FONT);
+    }
+
+    private static final String FONT =
+            "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+    /**
+     * Escapes the values that came from outside this service.
+     *
+     * name and email arrive from a spreadsheet a student filled in. A name
+     * containing "<" would otherwise put markup the student chose into an
+     * email the campus sent - and this template is not the place to discover
+     * that. The password is escaped too: it is generated from a safe alphabet
+     * today, and escaping it costs nothing if that ever changes.
+     */
+    private static String escape(String value) {
+        return value == null ? "" : value.replace("&", "&amp;")
+                                         .replace("<", "&lt;")
+                                         .replace(">", "&gt;")
+                                         .replace("\"", "&quot;");
     }
 
     private String resetTemplate(String title, String resetLink, int expiryMinutes) {

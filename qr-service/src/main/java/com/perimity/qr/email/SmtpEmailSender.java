@@ -73,16 +73,26 @@ public class SmtpEmailSender implements EmailSender {
             helper.setSubject(email.subject());
 
             /*
-             * Plain text, not HTML.
+             * Both, as multipart/alternative: the plain text first, the HTML
+             * second, and the client picks.
              *
-             * gatepass-service composes the greeting with real newlines
-             * ("Hi X,\n\nWelcome to..."). Sent as HTML those collapse into one
-             * run-on paragraph, so it would need converting to <br> tags and
-             * escaping - which puts presentation logic in the service that was
-             * specifically kept out of the wording business. Plain text renders
-             * his copy exactly as he wrote it.
+             * The plain part is gatepass-service's greeting UNCHANGED - the
+             * same string, the same newlines, nothing reflowed. That was the
+             * original reason this method sent text only, and it still holds:
+             * his copy is the message, and a text client, a screen reader and
+             * a notification preview all get it exactly as written.
+             *
+             * The HTML part is that same copy with markup around it, built by
+             * PassEmailHtml. Presentation lives here because rendering is what
+             * this service does; the wording still lives in the service that
+             * knows what kind of pass this is.
+             *
+             * Order matters. setText(plain, html) writes the parts in the
+             * order the RFC expects - richest last - and a client that
+             * understands both shows the HTML. Swapped, some clients show the
+             * raw markup instead.
              */
-            helper.setText(email.body(), false);
+            helper.setText(email.body(), PassEmailHtml.render(email.body()));
 
             helper.addAttachment(ATTACHMENT_NAME,
                     new ByteArrayResource(email.pdf()), PDF_CONTENT_TYPE);

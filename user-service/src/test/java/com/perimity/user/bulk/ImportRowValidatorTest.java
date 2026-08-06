@@ -3,10 +3,14 @@ package com.perimity.user.bulk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import com.perimity.user.client.AuthFeignClient;
 import com.perimity.user.entity.Department;
 import com.perimity.user.entity.StudentImportRow;
+import com.perimity.user.entity.StudentProfile;
 import com.perimity.user.entity.enums.Gender;
 import com.perimity.user.entity.enums.ImportRowOutcome;
 import com.perimity.user.repository.DepartmentRepository;
@@ -55,12 +59,13 @@ class ImportRowValidatorTest {
 
     @Mock private DepartmentRepository departmentRepository;
     @Mock private StudentProfileRepository studentRepository;
+    @Mock private AuthFeignClient authClient;
 
     private ImportRowValidator validator;
 
     @BeforeEach
     void setUp() {
-        validator = new ImportRowValidator(departmentRepository, studentRepository);
+        validator = new ImportRowValidator(departmentRepository, studentRepository, authClient);
 
         Department department = new Department();
         department.setId(9L);
@@ -73,6 +78,40 @@ class ImportRowValidatorTest {
                 .thenReturn(List.of(department));
         when(studentRepository.findByCampusIdAndRollNoIgnoreCase(anyLong(), anyString()))
                 .thenReturn(Optional.empty());
+
+        /*
+         * Nobody in the sheet has an account - the plain first-import case.
+         *
+         * An envelope with no data rather than a thrown FeignException.NotFound,
+         * which is what the real endpoint produces. Both land on the same line
+         * of the validator: the email is left unmapped. Constructing a real
+         * FeignException needs a Request and a RequestTemplate, and a test that
+         * spends five lines building one is testing Feign rather than this
+         * class.
+         */
+        doReturn(new AuthFeignClient.UserEnvelope(false, "no account", null))
+                .when(authClient).findByEmail(anyString());
+    }
+
+    /**
+     * The lookup answering that this email already belongs to an account.
+     *
+     * doReturn rather than when(...).thenReturn: setUp has already stubbed
+     * findByEmail for any argument, and the when() form would call the mock
+     * while stubbing it.
+     */
+    private void emailBelongsTo(String email, Long userId) {
+        doReturn(new AuthFeignClient.UserEnvelope(true, "ok",
+                new AuthFeignClient.UserView(userId, email, true)))
+                .when(authClient).findByEmail(email);
+    }
+
+    /** An existing profile on this campus already holding the roll number. */
+    private void rollNumberHeldBy(Long userId) {
+        StudentProfile holder = new StudentProfile();
+        holder.setUserId(userId);
+        when(studentRepository.findByCampusIdAndRollNoIgnoreCase(anyLong(), anyString()))
+                .thenReturn(Optional.of(holder));
     }
 
     /* ------------------------------------------------------------ helpers */
@@ -300,17 +339,52 @@ class ImportRowValidatorTest {
     }
 
     @Test
-    @DisplayName("a roll number already used on this campus is rejected")
-    void rejectsARollNumberTakenOnThisCampus() {
-        when(studentRepository.findByCampusIdAndRollNoIgnoreCase(anyLong(), anyString()))
-                .thenReturn(Optional.of(new com.perimity.user.entity.StudentProfile()));
+    @DisplayName("a roll number held by a DIFFERENT student is rejected")
+    void rejectsARollNumberTakenByAnotherStudentOnThisCampus() {
+        rollNumberHeldBy(500L);
+        emailBelongsTo("anjali@example.com", 501L);
 
         StudentImportRow row = validateOne(validValues());
 
         assertThat(row.getOutcome()).isEqualTo(ImportRowOutcome.REJECTED);
-        // The message admits it cannot tell a genuine collision from the same
-        // student resubmitting, rather than asserting the wrong one.
-        assertThat(row.getMessage()).contains("resubmitting");
+        assertThat(row.getMessage()).contains("by a different student");
+    }
+
+    @Test
+    @DisplayName("a student resubmitting the form keeps their own roll number")
+    void acceptsAStudentReusingTheirOwnRollNumber() {
+        /*
+         * The case this whole lookup exists for, and the one that used to be
+         * rejected. Students resubmit forms constantly - a first import,
+         * then a correction, then a photo they actually like.
+         *
+         * The roll number is taken and the taker is this very row.
+         */
+        rollNumberHeldBy(500L);
+        emailBelongsTo("anjali@example.com", 500L);
+
+        StudentImportRow row = validateOne(validValues());
+
+        assertThat(row.getOutcome()).isEqualTo(ImportRowOutcome.PENDING);
+        assertThat(row.getMessage()).isNull();
+    }
+
+    @Test
+    @DisplayName("a taken roll number is still rejected when the lookup is unavailable")
+    void rejectsATakenRollNumberWhenAuthServiceIsDown() {
+        /*
+         * Degrading to the old behaviour is deliberate. With no way to tell
+         * whose roll number it is, reporting the row beats importing it onto
+         * somebody else's record - and faculty gets rows to fix rather than an
+         * upload that will not start.
+         */
+        rollNumberHeldBy(500L);
+        doThrow(new IllegalStateException("down")).when(authClient).findByEmail(anyString());
+
+        StudentImportRow row = validateOne(validValues());
+
+        assertThat(row.getOutcome()).isEqualTo(ImportRowOutcome.REJECTED);
+        assertThat(row.getMessage()).contains("already used");
     }
 
     @Test
