@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle2 } from 'lucide-react';
-import { Button, Field, Input } from '@ui/index';
+import { Button, Field, PasswordInput } from '@ui/index';
 import { EmptyState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { resetPasswordSchema, type ResetPasswordValues } from '../schemas/auth.schemas';
@@ -67,9 +67,8 @@ export default function ResetPasswordPage() {
 
         <Field label="New password" required error={form.formState.errors.newPassword?.message}>
           {({ id, describedBy }) => (
-            <Input
+            <PasswordInput
               id={id}
-              type="password"
               autoComplete="new-password"
               autoFocus
               aria-describedby={describedBy}
@@ -83,9 +82,8 @@ export default function ResetPasswordPage() {
 
         <Field label="Confirm new password" required error={form.formState.errors.confirmPassword?.message}>
           {({ id, describedBy }) => (
-            <Input
+            <PasswordInput
               id={id}
-              type="password"
               autoComplete="new-password"
               aria-describedby={describedBy}
               invalid={!!form.formState.errors.confirmPassword}
