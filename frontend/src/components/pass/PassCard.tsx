@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, Download, QrCode, ShieldCheck } from 'lucide-react';
 import { Badge, Button } from '@ui/index';
+import { qrApi } from '@lib/api/services/qr.api';
+import { qrKeys } from '@lib/query/keys';
 import { flags } from '@lib/config';
 import { qrApi } from '@lib/api/services/qr.api';
 import { formatValidity } from '@lib/format/datetime';
@@ -38,6 +40,45 @@ export interface PassCardProps {
 export function PassCard({ pass, variant = 'compact', onDownload, className }: PassCardProps) {
   const ribbon = ribbonFor(pass);
   const detail = variant === 'detail';
+
+  /*
+   * THE REAL QR, NOT A GLYPH.
+   *
+   * This box used to draw a grey square with a QR icon in it — a stand-in from
+   * when nothing served the PNG. It cannot be scanned, and next to a genuine QR
+   * it reads as one that failed to load.
+   *
+   * Fetched here rather than passed in as a prop. The visitor pass page already
+   * runs this exact query under the same key, so React Query serves both from
+   * one request and one cache entry — no second network call, and no prop to
+   * thread through every page that renders a detail card. The student pass
+   * detail page, which has no QR panel at all, gets a real QR from this for the
+   * first time.
+   *
+   * Only for the detail variant: the dashboards render compact cards in lists,
+   * and fetching an image per row is not worth it for something they do not show.
+   */
+  const scannable = pass.scannable && pass.qrKey !== null;
+  const wantsQr = detail && scannable && flags.passDownload;
+
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
+  const qr = useQuery({
+    queryKey: qrKeys.byPass(pass.id),
+    queryFn: () => qrApi.image(pass.id),
+    enabled: wantsQr,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!qr.data) return undefined;
+    const url = URL.createObjectURL(qr.data.blob);
+    setQrSrc(url);
+    // Without this every re-render leaks a blob for the lifetime of the tab.
+    return () => {
+      URL.revokeObjectURL(url);
+      setQrSrc(null);
+    };
+  }, [qr.data]);
 
   return (
     <article

@@ -14,6 +14,10 @@ export async function fetchFile(
 ): Promise<DownloadedFile> {
   const response = await client.get<Blob>(url, {
     responseType: 'blob',
+    // createClient defaults to Accept: application/json. These endpoints declare
+    // produces = image/png and application/pdf, so Spring answers 406 before the
+    // handler runs. responseType only tells axios how to decode the reply.
+    headers: { Accept: '*/*' },
     ...(params ? { params } : {}),
   });
   return unwrapFile(response);
