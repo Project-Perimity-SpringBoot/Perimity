@@ -1,8 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
-import { Download } from 'lucide-react';
+import { Calendar, Download, ShieldCheck, Users, ArrowLeft } from 'lucide-react';
 import { Badge, Button, SkeletonText } from '@ui/index';
-import { PageHeader, DescriptionList } from '@components/data';
 import { EmptyState, ErrorState } from '@components/feedback';
 import { eventApi } from '@lib/api/services/gatepass.api';
 import { eventKeys } from '@lib/query/keys';
@@ -10,25 +9,6 @@ import { saveFile } from '@lib/api/download';
 import { formatValidity, formatDate } from '@lib/format/datetime';
 import { useToast } from '@hooks/useToast';
 
-/**
- * Phase 4 screen 10 — attendance for one event.
- *
- * ==========================================================================
- * REGISTERED IS NOT ATTENDED
- * ==========================================================================
- * This screen reports what gatepass-service knows: how many passes were issued
- * for the event and what state they are in. Who actually walked through a gate
- * is an entry log in guard-service, attributed by the scanner's Behavior 2, and
- * it is a different question with a different owner.
- *
- * The two are labelled apart rather than blended into one "attendance" number,
- * because an organiser reading "580" needs to know whether that is 580 people
- * who registered or 580 who turned up. Blending them would make the more
- * flattering reading the default.
- *
- * Statuses are neutral badges told apart by their word — green and red are the
- * guard verdict screens' alone.
- */
 export default function EventAttendancePage() {
   const { eventId } = useParams();
   const id = Number(eventId);
@@ -50,78 +30,115 @@ export default function EventAttendancePage() {
     return <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />;
   }
   if (summary.isPending || !summary.data) {
-    return <div className="surface-card p-[var(--sp-6)]"><SkeletonText lines={5} /></div>;
+    return <div className="rounded-2xl border border-slate-200 bg-white p-8"><SkeletonText lines={5} /></div>;
   }
 
   const data = summary.data;
   const byStatus = data.registeredByStatus ?? [];
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title={data.eventName}
-        description={formatValidity(data.validFrom, data.validTo)}
-        actions={
-          <div className="flex flex-wrap gap-[var(--sp-3)]">
-            <Button variant="secondary" asChild>
-              <Link to="/faculty/events">All events</Link>
-            </Button>
-            <Button onClick={() => csv.mutate()} loading={csv.isPending}>
-              <Download aria-hidden />Attendee list
-            </Button>
+    <div className="mx-auto max-w-7xl space-y-6 pb-16">
+      {/* Back button */}
+      <Button variant="ghost" size="sm" asChild className="gap-2 text-slate-600 hover:text-slate-900">
+        <Link to="/faculty/events">
+          <ArrowLeft className="size-4" /> Back to Events
+        </Link>
+      </Button>
+
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <Calendar className="size-3.5 text-indigo-300" /> Event Attendance Roster
+            </div>
+            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">{data.eventName}</h1>
+            <p className="text-sm text-indigo-200/90">
+              Validity Window: {formatValidity(data.validFrom, data.validTo)}
+            </p>
           </div>
-        }
-      />
 
-      {data.cancelled ? (
-        <div className="surface-card p-[var(--sp-6)]">
-          <p className="text-body-md text-[var(--ink-900)]">This event was cancelled.</p>
-          <p className="text-caption text-[var(--ink-500)]">
-            Every pass issued for it was revoked. The record is kept because the entry
-            logs recorded against it are still the attendance history.
-          </p>
+          <Button
+            size="lg"
+            onClick={() => csv.mutate()}
+            loading={csv.isPending}
+            className="gap-2 bg-indigo-600 font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-500"
+          >
+            <Download className="size-4" /> Export Attendee Roster (CSV)
+          </Button>
         </div>
-      ) : null}
-
-      <div className="surface-card p-[var(--sp-6)]">
-        <DescriptionList
-          columns={2}
-          items={[
-            { label: 'Passes issued', value: String(data.totalPasses) },
-            { label: 'Registered attendees', value: String(data.registeredCount) },
-            { label: 'Runs for', value: `${data.eventDays.length} ${data.eventDays.length === 1 ? 'day' : 'days'}` },
-            {
-              label: 'Days',
-              value: data.eventDays.map((day) => formatDate(day)).join(', '),
-            },
-          ]}
-        />
       </div>
 
-      <section aria-labelledby="by-status">
-        <h2 id="by-status" className="text-h3 mb-[var(--sp-3)] text-[var(--ink-900)]">
-          Passes by status
-        </h2>
+      {data.cancelled && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-900 space-y-1">
+          <p className="font-bold text-base">This event was cancelled</p>
+          <p className="text-xs text-rose-700">
+            Every pass issued for this event has been revoked. Historical entry logs are preserved for audit reporting.
+          </p>
+        </div>
+      )}
+
+      {/* Metrics Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex items-center justify-between">
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">Total Passes Issued</dt>
+            <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.totalPasses}</dd>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100">
+            <ShieldCheck className="size-5" />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex items-center justify-between">
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">Registered Attendees</dt>
+            <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.registeredCount}</dd>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <Users className="size-5" />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex items-center justify-between">
+          <div>
+            <dt className="text-xs font-semibold text-slate-500">Event Duration</dt>
+            <dd className="mt-1 text-2xl font-extrabold text-slate-900">
+              {data.eventDays.length} {data.eventDays.length === 1 ? 'Day' : 'Days'}
+            </dd>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-xl bg-slate-50 text-slate-700 border border-slate-200">
+            <Calendar className="size-5" />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex flex-col justify-center">
+          <dt className="text-xs font-semibold text-slate-500">Event Dates</dt>
+          <dd className="mt-1 text-xs font-bold text-slate-800 truncate">
+            {data.eventDays.map((day) => formatDate(day)).join(', ')}
+          </dd>
+        </div>
+      </div>
+
+      {/* Breakdown by status */}
+      <section className="space-y-4">
+        <h2 className="font-bold text-slate-900 text-lg">Pass Status Breakdown</h2>
 
         {byStatus.length === 0 ? (
           <EmptyState
             icon={Download}
             heading="No passes issued yet"
-            description="Upload an attendee sheet against this event to create them."
+            description="Upload an attendee sheet against this event to issue passes."
           />
         ) : (
-          <ul className="surface-card divide-y divide-[var(--border)]">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm divide-y divide-slate-100">
             {byStatus.map((row) => (
-              <li
-                key={row.status}
-                className="flex items-center justify-between gap-[var(--sp-4)] p-[var(--sp-4)]"
-              >
-                {/* Neutral badge. The word carries the meaning, not a colour. */}
-                <Badge>{row.status.charAt(0) + row.status.slice(1).toLowerCase()}</Badge>
-                <span className="text-body-md text-[var(--ink-900)]">{row.count}</span>
-              </li>
+              <div key={row.status} className="flex items-center justify-between p-4 px-6 hover:bg-slate-50/80 transition-colors">
+                <Badge tone="neutral">{row.status.charAt(0) + row.status.slice(1).toLowerCase()}</Badge>
+                <span className="font-mono font-bold text-sm text-slate-900">{row.count} Passes</span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>

@@ -3,12 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'react-router';
-import { AlertTriangle, ArrowLeft, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, UserPlus, Sparkles, Shield, UserCheck, Key, Building2 } from 'lucide-react';
 import {
   Button, Field, Input, NativeSelect, Textarea,
 } from '@ui/index';
 import { ErrorState, FormError } from '@components/feedback';
-import { PageHeader } from '@components/data';
 import { authApi } from '@lib/api/services/auth.api';
 import { departmentApi, studentApi } from '@lib/api/services/user.api';
 import { authKeys, departmentKeys, profileKeys } from '@lib/query/keys';
@@ -17,45 +16,12 @@ import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@hooks/useToast';
 import { addStudentSchema, type AddStudentValues } from '../schemas/faculty.schemas';
 
-/**
- * Add one student, by hand.
- *
- * ==========================================================================
- * WHY THIS SCREEN HAD TO EXIST
- * ==========================================================================
- * Faculty are the only role permitted to create a STUDENT account -
- * UserAdminController.CREATABLE says so, on the reasoning that a campus admin
- * does not know who is in which class. But the only student-creating UI was
- * bulk onboarding, so the single-student path the policy assumes had no screen
- * at all. A rule with no way to obey it is a rule nobody can follow.
- *
- * Bulk upload stays the right tool for a cohort. This is for the one student who
- * joined late, whose row failed validation, or whose details were wrong.
- *
- * ==========================================================================
- * A STUDENT IS TWO RECORDS, AND THE SECOND ONE CAN FAIL
- * ==========================================================================
- * The login account lives in auth-service; the identity profile - department,
- * roll number, government ID - lives in user-service. There is no transaction
- * across the two, and there cannot be one.
- *
- * So the interesting case is a partial success: account created, profile not.
- * That leaves a student who can sign in and has no department. The screen does
- * NOT pretend this is a clean failure - it says exactly what exists, gives the
- * user id, and tells the person what to do about it. Silently showing "could
- * not create student" after creating half of one is how a duplicate account
- * gets made on the retry.
- *
- * The order is deliberate: account first, because the profile needs the userId
- * the account create returns. The reverse is not possible.
- */
 export default function AddStudentPage() {
   const { identity } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
 
   const [formErrors, setFormErrors] = useState<string[]>([]);
-  /** Set only when the account was created but the profile was not. */
   const [orphanedUserId, setOrphanedUserId] = useState<number | null>(null);
 
   const departments = useQuery({
@@ -75,9 +41,6 @@ export default function AddStudentPage() {
 
   const create = useMutation({
     mutationFn: async (values: AddStudentValues) => {
-      // Step 1 - the login account. campusId comes from the token, never a
-      // field: a faculty member must not be able to enrol someone at another
-      // campus by typing a different number.
       const account = await authApi.createUser({
         email: values.email,
         name: values.name,
@@ -87,9 +50,6 @@ export default function AddStudentPage() {
         temporaryPassword: values.temporaryPassword,
       });
 
-      // Step 2 - the identity profile. If THIS throws, the account above still
-      // exists; the catch re-labels the error so the screen can say so rather
-      // than reporting a failure that only half happened.
       try {
         await studentApi.create({
           userId: account.id,
@@ -127,157 +87,212 @@ export default function AddStudentPage() {
   }
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <Button variant="link" asChild className="self-start">
-        <Link to="/faculty"><ArrowLeft aria-hidden />Back to overview</Link>
+    <div className="mx-auto max-w-4xl space-y-6 pb-16">
+      <Button variant="ghost" size="sm" asChild className="gap-2 text-slate-600 hover:text-slate-900">
+        <Link to="/faculty"><ArrowLeft className="size-4" /> Back to overview</Link>
       </Button>
 
-      <PageHeader
-        title="Add a student"
-        description="For one student. Use bulk onboarding for a whole cohort."
-        actions={
-          <Button variant="secondary" asChild>
-            <Link to="/faculty/onboarding">Bulk onboarding</Link>
-          </Button>
-        }
-      />
-
-      {/* The partial-success case. Loud, specific, and it names the id so the
-          account can be finished rather than duplicated. */}
-      {orphanedUserId !== null && (
-        <section
-          role="alert"
-          className="flex items-start gap-[var(--sp-3)] rounded-[var(--r-md)]
-                     border border-[var(--status-border)] bg-[var(--status-bg)] p-[var(--sp-4)]"
-        >
-          <AlertTriangle aria-hidden className="mt-[2px] size-5 shrink-0 text-[var(--ink-700)]" />
-          <div>
-            <h2 className="text-body-md text-[var(--ink-900)]">
-              The account was created, but the profile was not
-            </h2>
-            <p className="text-small mt-[var(--sp-1)] text-[var(--ink-700)]">
-              User <span className="text-mono">#{orphanedUserId}</span> can sign in but has no
-              department, roll number or government ID. Do <strong>not</strong> submit this form
-              again — that would create a second account on a different email or fail on a duplicate.
-              Ask a Campus Admin to complete the profile against that user id.
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <UserCheck className="size-3.5 text-indigo-300" /> Direct Enrollment
+            </div>
+            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Add Student Account</h1>
+            <p className="text-sm text-indigo-200/90 max-w-xl">
+              Register a single student account directly. For whole cohorts, use the bulk onboarding tool.
             </p>
           </div>
-        </section>
+
+          <Button variant="secondary" asChild className="bg-white/10 text-white border-white/10 hover:bg-white/20">
+            <Link to="/faculty/students/import">Bulk Onboarding</Link>
+          </Button>
+        </div>
+      </div>
+
+      {orphanedUserId !== null && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+          <AlertTriangle className="size-5 shrink-0 text-amber-600 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <h2 className="font-bold text-sm">Account created, profile pending</h2>
+            <p>
+              User <span className="font-mono font-bold">#{orphanedUserId}</span> account exists but has no department profile. Do not re-submit this form. Ask a Campus Admin to assign profile data against ID #{orphanedUserId}.
+            </p>
+          </div>
+        </div>
       )}
 
+      {/* Form Container */}
       <form
         noValidate
         onSubmit={form.handleSubmit((values) => create.mutate(values))}
-        className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]"
+        className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-8"
       >
         <FormError messages={formErrors} />
 
-        <div>
-          <h2 className="text-h3 text-[var(--ink-900)]">Sign-in details</h2>
-          <p className="text-caption text-[var(--ink-500)]">
-            Email is their identity across every service and cannot be changed later.
-          </p>
-        </div>
+        {/* Section 1: Sign-in details */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+            <Key className="size-5 text-indigo-600" />
+            <div>
+              <h2 className="font-bold text-slate-900 text-base">Account Credentials</h2>
+              <p className="text-xs text-slate-500">Student login identity across all campus microservices.</p>
+            </div>
+          </div>
 
-        <Field label="Full name" required error={form.formState.errors.name?.message}>
-          {({ id, describedBy }) => (
-            <Input id={id} aria-describedby={describedBy}
-                   invalid={Boolean(form.formState.errors.name)} {...form.register('name')} />
-          )}
-        </Field>
-
-        <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-          <Field label="Email" required error={form.formState.errors.email?.message}>
+          <Field label="Full Name" required error={form.formState.errors.name?.message}>
             {({ id, describedBy }) => (
-              <Input id={id} type="email" autoComplete="off" aria-describedby={describedBy}
-                     invalid={Boolean(form.formState.errors.email)} {...form.register('email')} />
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                placeholder="e.g. Ayaan Bhat"
+                invalid={Boolean(form.formState.errors.name)}
+                {...form.register('name')}
+                className="bg-white"
+              />
             )}
           </Field>
 
-          <Field label="Phone" error={form.formState.errors.phone?.message}>
-            {({ id, describedBy }) => (
-              <Input id={id} type="tel" placeholder="+919876543210" aria-describedby={describedBy}
-                     invalid={Boolean(form.formState.errors.phone)} {...form.register('phone')} />
-            )}
-          </Field>
-        </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Email Address" required error={form.formState.errors.email?.message}>
+              {({ id, describedBy }) => (
+                <Input
+                  id={id}
+                  type="email"
+                  autoComplete="off"
+                  placeholder="ayaan.bhat@student.edu"
+                  aria-describedby={describedBy}
+                  invalid={Boolean(form.formState.errors.email)}
+                  {...form.register('email')}
+                  className="bg-white"
+                />
+              )}
+            </Field>
 
-        <Field
-          label="Temporary password"
-          required
-          hint="At least 8 characters with an uppercase letter, a lowercase letter and a number. They must change it at first sign-in."
-          error={form.formState.errors.temporaryPassword?.message}
-        >
-          {({ id, describedBy }) => (
-            <Input id={id} type="text" autoComplete="off" aria-describedby={describedBy}
-                   invalid={Boolean(form.formState.errors.temporaryPassword)}
-                   {...form.register('temporaryPassword')} />
-          )}
-        </Field>
-
-        <div className="mt-[var(--sp-2)]">
-          <h2 className="text-h3 text-[var(--ink-900)]">Student details</h2>
-          <p className="text-caption text-[var(--ink-500)]">
-            All optional. They can be filled in later from the student&rsquo;s profile.
-          </p>
-        </div>
-
-        <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-          <Field label="Department" error={form.formState.errors.departmentId?.message}>
-            {({ id, describedBy }) => (
-              <NativeSelect id={id} aria-describedby={describedBy} {...form.register('departmentId')}>
-                <option value="">Not set</option>
-                {(departments.data ?? []).map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </NativeSelect>
-            )}
-          </Field>
+            <Field label="Phone Number" error={form.formState.errors.phone?.message}>
+              {({ id, describedBy }) => (
+                <Input
+                  id={id}
+                  type="tel"
+                  placeholder="+919876543210"
+                  aria-describedby={describedBy}
+                  invalid={Boolean(form.formState.errors.phone)}
+                  {...form.register('phone')}
+                  className="bg-white"
+                />
+              )}
+            </Field>
+          </div>
 
           <Field
-            label="Roll number"
-            hint="Whatever format this campus uses."
-            error={form.formState.errors.rollNo?.message}
+            label="Temporary Password"
+            required
+            hint="At least 8 characters (1 uppercase, 1 lowercase, 1 number). Student changes this at first sign-in."
+            error={form.formState.errors.temporaryPassword?.message}
           >
             {({ id, describedBy }) => (
-              <Input id={id} placeholder="2026/CS/0141" aria-describedby={describedBy}
-                     invalid={Boolean(form.formState.errors.rollNo)} {...form.register('rollNo')} />
+              <Input
+                id={id}
+                type="text"
+                autoComplete="off"
+                placeholder="TempPass123!"
+                aria-describedby={describedBy}
+                invalid={Boolean(form.formState.errors.temporaryPassword)}
+                {...form.register('temporaryPassword')}
+                className="bg-white font-mono"
+              />
             )}
           </Field>
         </div>
 
-        <Field
-          label="Government ID"
-          hint="12 digits. Stored securely and only ever shown masked."
-          error={form.formState.errors.govId?.message}
-        >
-          {({ id, describedBy }) => (
-            <Input id={id} inputMode="numeric" autoComplete="off" aria-describedby={describedBy}
-                   invalid={Boolean(form.formState.errors.govId)} {...form.register('govId')} />
-          )}
-        </Field>
+        {/* Section 2: Student Profile details */}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+            <Building2 className="size-5 text-indigo-600" />
+            <div>
+              <h2 className="font-bold text-slate-900 text-base">Academic Profile Data</h2>
+              <p className="text-xs text-slate-500">Campus details for gate pass verification.</p>
+            </div>
+          </div>
 
-        <Field label="Address" error={form.formState.errors.address?.message}>
-          {({ id, describedBy }) => (
-            <Textarea id={id} rows={3} aria-describedby={describedBy}
-                      invalid={Boolean(form.formState.errors.address)} {...form.register('address')} />
-          )}
-        </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Department" error={form.formState.errors.departmentId?.message}>
+              {({ id, describedBy }) => (
+                <NativeSelect id={id} aria-describedby={describedBy} {...form.register('departmentId')} className="bg-white">
+                  <option value="">Select Department</option>
+                  {(departments.data ?? []).map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </NativeSelect>
+              )}
+            </Field>
 
-        <div className="flex flex-wrap gap-[var(--sp-3)]">
-          <Button type="submit" loading={create.isPending}>
-            <UserPlus aria-hidden />Add student
+            <Field
+              label="Roll Number"
+              hint="Format used by your department."
+              error={form.formState.errors.rollNo?.message}
+            >
+              {({ id, describedBy }) => (
+                <Input
+                  id={id}
+                  placeholder="IT2026001"
+                  aria-describedby={describedBy}
+                  invalid={Boolean(form.formState.errors.rollNo)}
+                  {...form.register('rollNo')}
+                  className="bg-white"
+                />
+              )}
+            </Field>
+          </div>
+
+          <Field
+            label="Government ID / Aadhaar"
+            hint="12 digits. Stored securely and masked on public views."
+            error={form.formState.errors.govId?.message}
+          >
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="1234 5678 9012"
+                aria-describedby={describedBy}
+                invalid={Boolean(form.formState.errors.govId)}
+                {...form.register('govId')}
+                className="bg-white font-mono"
+              />
+            )}
+          </Field>
+
+          <Field label="Address" error={form.formState.errors.address?.message}>
+            {({ id, describedBy }) => (
+              <Textarea
+                id={id}
+                rows={3}
+                aria-describedby={describedBy}
+                placeholder="Full residence address..."
+                invalid={Boolean(form.formState.errors.address)}
+                {...form.register('address')}
+                className="bg-white"
+              />
+            )}
+          </Field>
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-6">
+          <Button
+            type="submit"
+            loading={create.isPending}
+            className="gap-2 bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20 px-6 hover:bg-indigo-700"
+          >
+            <UserPlus className="size-4" /> Create Student Account
           </Button>
-          <Button type="button" variant="secondary" onClick={() => form.reset()}>
-            Clear
+          <Button type="button" variant="ghost" onClick={() => form.reset()}>
+            Reset Form
           </Button>
         </div>
       </form>
-
-      <p className="text-caption text-[var(--ink-500)]">
-        Creating a student makes two records — the sign-in account and the student profile.
-        The campus is taken from your own account and is not a field on this form.
-      </p>
     </div>
   );
 }

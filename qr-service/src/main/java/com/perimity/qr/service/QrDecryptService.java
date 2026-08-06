@@ -275,7 +275,7 @@ public class QrDecryptService {
             return null;
         }
         String clean = token.trim();
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile("^(?i)(?:S|EV|PM|PASS|PASS-)?-?0*([0-9]{1,18})$");
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("^(?i)(?:GP|S|EV|PM|PASS|[A-Za-z]{1,5})?-?0*([0-9]{1,18})$");
         java.util.regex.Matcher m = p.matcher(clean);
         if (m.matches()) {
             try {
