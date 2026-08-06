@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { CalendarDays, Download, QrCode, ShieldCheck } from 'lucide-react';
 import { Badge, Button } from '@ui/index';
 import { flags } from '@lib/config';
+import { qrApi } from '@lib/api/services/qr.api';
 import { formatValidity } from '@lib/format/datetime';
 import { displayPassCode } from '@lib/format/passCode';
 import { cn } from '@lib/utils/cn';
@@ -82,10 +84,8 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
 
       {detail && (
         <div className="flex flex-col items-center gap-[var(--sp-2)] border-t border-[var(--border)] p-[var(--sp-6)]">
-          {pass.scannable && pass.qrKey ? (
-            <div className="flex size-40 items-center justify-center rounded-[var(--r-md)] bg-[var(--surface-sunken)]">
-              <QrCode className="size-16 text-[var(--ink-400)]" aria-hidden />
-            </div>
+          {pass.scannable ? (
+            <PassQrImage passId={pass.id} />
           ) : (
             <p className="text-small text-center text-[var(--ink-500)]">
               {pass.status === 'PENDING'
@@ -94,8 +94,6 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
             </p>
           )}
 
-          {/* Nothing in qr-service serves the PNG or the PDF yet, so the action
-              is hidden behind a flag rather than shipped as a broken button. */}
           {flags.passDownload && onDownload && (
             <Button variant="secondary" onClick={onDownload}>
               <Download aria-hidden />
@@ -105,5 +103,46 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
         </div>
       )}
     </article>
+  );
+}
+
+function PassQrImage({ passId }: { passId: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const file = await qrApi.image(passId);
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(file.blob);
+        setSrc(objectUrl);
+        setFailed(false);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [passId]);
+
+  if (failed || !src) {
+    return (
+      <div className="flex size-44 items-center justify-center rounded-[var(--r-md)] bg-[var(--surface-sunken)]">
+        <QrCode className="size-16 text-[var(--ink-400)]" aria-hidden />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex size-44 items-center justify-center rounded-[var(--r-md)] bg-white p-2 border border-[var(--border)] shadow-sm">
+      <img src={src} alt="Pass QR Code" className="size-40 object-contain" />
+    </div>
   );
 }
