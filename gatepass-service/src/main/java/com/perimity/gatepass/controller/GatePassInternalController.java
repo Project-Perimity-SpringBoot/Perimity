@@ -84,4 +84,35 @@ public class GatePassInternalController {
                 .map(id -> Map.<String, Object>of("running", true, "eventId", id))
                 .orElse(Map.of("running", false)));
     }
+
+    @PostMapping("/issue")
+    @Operation(summary = "Internal service call to issue a pass (e.g. bulk student onboarding).")
+    public ApiResponse<GatePassResponse> issueInternal(
+            @RequestBody InternalIssueRequest request) {
+
+        com.perimity.gatepass.dto.request.GatePassCreateDto dto =
+                com.perimity.gatepass.dto.request.GatePassCreateDto.builder()
+                        .holderUserId(request.holderUserId())
+                        .holderName(request.holderName())
+                        .visitorRequestId(request.visitorRequestId())
+                        .passType(request.passType() != null ? com.perimity.gatepass.entity.enums.PassType.valueOf(request.passType()) : com.perimity.gatepass.entity.enums.PassType.DAILY)
+                        .eventId(request.eventId())
+                        .validFrom(request.validFrom() != null ? request.validFrom() : java.time.LocalDate.now())
+                        .validTo(request.validTo())
+                        .build();
+        dto.setCampusId(request.campusId());
+
+        return ApiResponse.ok("Pass issued", service.issue(dto));
+    }
+
+    public record InternalIssueRequest(
+            Long holderUserId,
+            String holderName,
+            Long campusId,
+            Long visitorRequestId,
+            String passType,
+            Long eventId,
+            java.time.LocalDate validFrom,
+            java.time.LocalDate validTo
+    ) {}
 }

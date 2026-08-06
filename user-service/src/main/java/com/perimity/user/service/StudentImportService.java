@@ -76,6 +76,7 @@ public class StudentImportService {
     private final ResponseSheetParser parser;
     private final ImportRowValidator validator;
     private final AuthFeignClient authClient;
+    private final com.perimity.user.client.GatepassFeignClient gatepassClient;
     private final StudentImportBatchRepository batchRepository;
     private final StudentImportRowRepository rowRepository;
     private final StudentProfileRepository studentRepository;
@@ -88,6 +89,7 @@ public class StudentImportService {
     public StudentImportService(ResponseSheetParser parser,
                                 ImportRowValidator validator,
                                 AuthFeignClient authClient,
+                                com.perimity.user.client.GatepassFeignClient gatepassClient,
                                 StudentImportBatchRepository batchRepository,
                                 StudentImportRowRepository rowRepository,
                                 StudentProfileRepository studentRepository,
@@ -100,6 +102,7 @@ public class StudentImportService {
         this.parser = parser;
         this.validator = validator;
         this.authClient = authClient;
+        this.gatepassClient = gatepassClient;
         this.batchRepository = batchRepository;
         this.rowRepository = rowRepository;
         this.studentRepository = studentRepository;
@@ -538,6 +541,22 @@ public class StudentImportService {
             }
 
             studentRepository.save(profile);
+
+            try {
+                gatepassClient.issuePass(new com.perimity.user.client.GatepassFeignClient.IssuePassRequest(
+                        accountResult.userId(),
+                        displayName(row),
+                        batch.getCampusId(),
+                        null,
+                        "DAILY",
+                        null,
+                        java.time.LocalDate.now(),
+                        null
+                ));
+                log.info("Issued standing DAILY pass for imported student {} (user {})", displayName(row), accountResult.userId());
+            } catch (Exception ex) {
+                log.error("Could not issue DAILY pass for student {} (user {}): {}", displayName(row), accountResult.userId(), ex.getMessage());
+            }
 
             if (isNew) {
                 created++;

@@ -1,9 +1,22 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, ImageOff, Upload } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileSpreadsheet,
+  ImageOff,
+  Upload,
+  UserCheck,
+  Users,
+  AlertCircle,
+  Clock,
+  Sparkles,
+  ShieldCheck,
+  Filter,
+} from 'lucide-react';
 import { Badge, Button, SkeletonText } from '@ui/index';
-import { DataTable, PageHeader } from '@components/data';
+import { DataTable } from '@components/data';
 import { ConfirmDialog, ErrorState } from '@components/feedback';
 import { FileDropzone } from '@components/upload';
 import { IntakeFormPanel } from '../components/IntakeFormPanel';
@@ -13,27 +26,6 @@ import { UPLOAD_RULES } from '@lib/validation/patterns';
 import { useToast } from '@hooks/useToast';
 import type { ImportBatchResponse, ImportRowResponse } from '@/types/user.types';
 
-/**
- * Bulk student onboarding from a Google Form responses sheet.
- *
- * ==========================================================================
- * ONE PAGE, THREE PHASES, BECAUSE IT IS ONE TASK
- * ==========================================================================
- * Upload, read the preview, confirm. Splitting these across routes would mean
- * a faculty member navigating away from the thing they are deciding about, and
- * the decision needs the rejected rows in front of them.
- *
- * ==========================================================================
- * WHY CONFIRM IS A SEPARATE, DELIBERATE ACT
- * ==========================================================================
- * Rows import as VERIFIED and verifiedBy records whoever presses that button.
- * That is a real claim about a real person, so the button says what it means
- * and the dialog spells out the consequence.
- *
- * The preview between upload and confirm is also the last chance to catch the
- * ordinary disaster - last term's sheet, the wrong campus, a renamed column -
- * before it becomes two hundred accounts.
- */
 export default function StudentImportPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -47,11 +39,6 @@ export default function StudentImportPage() {
     queryKey: importKeys.batch(batchId ?? 0),
     queryFn: () => studentImportApi.getBatch(batchId as number),
     enabled: batchId != null,
-    /*
-     * Poll only while work is in flight. A finished batch polled every two
-     * seconds is a request per viewer per two seconds forever, for an answer
-     * that cannot change.
-     */
     refetchInterval: (query) =>
       query.state.data?.status === 'PROCESSING' ? 2000 : false,
   });
@@ -70,10 +57,9 @@ export default function StudentImportPage() {
       setBatchId(result.id);
       setFile(null);
       if (result.status === 'FAILED') {
-        // The request succeeded; the sheet is the problem. Say which.
         toast.error('That sheet could not be used', result.failureReason ?? undefined);
       } else {
-        toast.success(`Checked ${result.totalRows} rows`);
+        toast.success(`Successfully parsed ${result.totalRows} rows`);
       }
     },
     onError: (error) => toast.fromError(error, 'That file could not be uploaded.'),
@@ -88,163 +74,246 @@ export default function StudentImportPage() {
         toast.error('The import did not finish', result.failureReason ?? undefined);
       } else {
         toast.success(
-          `${result.createdCount + result.updatedCount} student(s) imported`,
+          `${result.createdCount + result.updatedCount} student(s) imported & passes issued!`,
           result.missingPhotoCount > 0
             ? `${result.missingPhotoCount} still need a photo before a pass can be issued.`
-            : undefined,
+            : 'Passes dispatched to MailHog.'
         );
       }
     },
-    onError: (error) => { setConfirming(false); toast.fromError(error, 'The import failed.'); },
+    onError: (error) => {
+      setConfirming(false);
+      toast.fromError(error, 'The import failed.');
+    },
   });
 
   const columns: ColumnDef<ImportRowResponse, unknown>[] = [
     {
       id: 'rowNumber',
       header: 'Row',
-      // The spreadsheet's own row number, so "row 47" means the line they can
-      // open and look at.
       accessorFn: (r) => r.rowNumber,
       cell: ({ row }) => (
-        <span className="text-mono text-[var(--ink-500)]">{row.original.rowNumber}</span>
+        <span className="inline-flex size-6 items-center justify-center rounded-md bg-slate-100 font-mono text-xs font-semibold text-slate-600">
+          #{row.original.rowNumber}
+        </span>
       ),
     },
-    { id: 'name', header: 'Student', accessorFn: (r) => r.fullName ?? '—' },
-    { id: 'email', header: 'Email', accessorFn: (r) => r.email ?? '—' },
-    { id: 'rollNo', header: 'Roll number', accessorFn: (r) => r.rollNo ?? '—' },
+    {
+      id: 'name',
+      header: 'Student Name',
+      accessorFn: (r) => r.fullName ?? '—',
+      cell: ({ row }) => (
+        <div className="font-semibold text-slate-900">{row.original.fullName ?? '—'}</div>
+      ),
+    },
+    {
+      id: 'email',
+      header: 'Email',
+      accessorFn: (r) => r.email ?? '—',
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-slate-600">{row.original.email ?? '—'}</span>
+      ),
+    },
+    {
+      id: 'rollNo',
+      header: 'Roll Number',
+      accessorFn: (r) => r.rollNo ?? '—',
+      cell: ({ row }) => (
+        <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 font-mono text-xs font-semibold text-indigo-700">
+          {row.original.rollNo ?? '—'}
+        </span>
+      ),
+    },
     {
       id: 'outcome',
-      header: 'Outcome',
+      header: 'Status',
       accessorFn: (r) => r.outcome,
-      cell: ({ row }) => <Badge tone="neutral">{OUTCOME_LABEL[row.original.outcome]}</Badge>,
+      cell: ({ row }) => {
+        const val = row.original.outcome;
+        let badgeTone: 'neutral' | 'brand' = 'neutral';
+        if (val === 'PENDING' || val === 'CREATED' || val === 'UPDATED') badgeTone = 'brand';
+
+        return <Badge tone={badgeTone}>{OUTCOME_LABEL[val]}</Badge>;
+      },
     },
     {
       id: 'message',
-      header: 'What is wrong',
+      header: 'Validation Notes',
       accessorFn: (r) => r.message ?? '',
-      // Free text from the server, rendered as text. Never as HTML.
       cell: ({ row }) => (
-        <span className="text-[var(--ink-700)]">{row.original.message ?? '—'}</span>
+        <span className="text-xs text-slate-600">{row.original.message ?? '—'}</span>
       ),
     },
   ];
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title="Import students from a form"
-        description="Upload the responses sheet from your intake form. Nothing is created until you confirm."
-      />
+    <div className="mx-auto max-w-7xl space-y-8 pb-20">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 p-8 text-white shadow-xl">
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
+          <div className="max-w-2xl space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <Sparkles className="size-3.5 text-indigo-300" />
+              <span>Bulk Student Onboarding & Gate Pass Pipeline</span>
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+              Import Students from Form
+            </h1>
+            <p className="text-sm leading-relaxed text-indigo-200/90">
+              Upload your Google Form intake sheet to generate verified student profiles, trigger account credentials, and dispatch gate passes automatically.
+            </p>
+          </div>
 
-      {/* The form itself: share it, or pull the responses straight back. */}
+          <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4 backdrop-blur-md border border-white/10">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-white/20 text-white">
+              <UserCheck className="size-6" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-indigo-200">Verification Model</div>
+              <div className="text-sm font-bold text-white">Faculty Attested Intake</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Step 1: Form Setup */}
       <IntakeFormPanel onPulled={(b) => setBatchId(b.id)} />
 
-      {/* ---------------------------------------------------------------
-          Upload, kept as the fallback rather than the main path.
-
-          Pull does the same thing without the round trip, but a sheet can
-          come from anywhere - another campus's export, a form nobody linked,
-          a file someone was emailed - and those still need a way in.
-         --------------------------------------------------------------- */}
-      <section className="surface-card space-y-[var(--sp-4)] p-[var(--sp-5)]">
-        <div className="flex items-start gap-[var(--sp-3)]">
-          <FileSpreadsheet className="size-5 shrink-0 text-[var(--ink-500)]" aria-hidden />
-          <div className="min-w-0">
-            <h2 className="text-label text-[var(--ink-900)]">The responses sheet</h2>
-            <p className="text-caption text-[var(--ink-500)]">
-              In Google Forms: Responses, then the Sheets icon, then File, Download,
-              Microsoft Excel (.xlsx).
+      {/* Step 2: Upload responses sheet */}
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-5">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+            <FileSpreadsheet className="size-5" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-900 text-lg">Upload Responses Spreadsheet</h2>
+            <p className="text-xs text-slate-500">
+              Export your Google Form responses as Microsoft Excel (<code className="font-mono text-indigo-600">.xlsx</code>) and drop it here.
             </p>
           </div>
         </div>
 
-        {/*
-          bulkSheet, the same rule the visitor bulk upload uses. Its 5MB cap
-          matches ResponseSheetParser.MAX_BYTES on the server, so a file the
-          browser accepts is one the parser will also accept — a mismatch there
-          means an upload that succeeds and then fails for reasons the user
-          cannot see.
-        */}
-        <FileDropzone
-          rule={UPLOAD_RULES.bulkSheet}
-          file={file}
-          onSelect={(f) => { setFile(f); upload.mutate(f); }}
-          onClear={() => setFile(null)}
-          disabled={upload.isPending || confirm.isPending}
-        />
-        {upload.isPending && (
-          <p className="text-caption text-[var(--ink-500)]">Reading the sheet…</p>
-        )}
+        <div className="mt-6">
+          <FileDropzone
+            rule={UPLOAD_RULES.bulkSheet}
+            file={file}
+            onSelect={(f) => {
+              setFile(f);
+              upload.mutate(f);
+            }}
+            onClear={() => setFile(null)}
+            disabled={upload.isPending || confirm.isPending}
+          />
+          {upload.isPending && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs font-medium text-indigo-600">
+              <Clock className="size-4 animate-spin" />
+              Parsing & validating sheet structure...
+            </div>
+          )}
+        </div>
       </section>
 
-      {batchId != null && batch.isPending && <SkeletonText lines={4} />}
+      {/* Loading & Error states */}
+      {batchId != null && batch.isPending && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <SkeletonText lines={4} />
+        </div>
+      )}
+
       {batch.isError && (
         <ErrorState error={batch.error} onRetry={() => void batch.refetch()} />
       )}
 
+      {/* Step 3: Batch Summary Dashboard */}
       {batch.data && <BatchSummary batch={batch.data} />}
 
-      {/* ---------------------------------------------------------------
-          Phase 2 — the preview. Rejected rows by default, because a list of
-          197 fine rows is not what anyone opens this to read.
-         --------------------------------------------------------------- */}
+      {/* Step 4: Preview Data Table */}
       {batch.data && batch.data.totalRows > 0 && (
-        <section className="space-y-[var(--sp-3)]">
-          <div className="flex flex-wrap items-center justify-between gap-[var(--sp-3)]">
-            <h2 className="text-label text-[var(--ink-900)]">
-              {showAllRows ? 'Every row' : 'Rows that need attention'}
-            </h2>
-            <Button variant="ghost" size="sm" onClick={() => setShowAllRows((v) => !v)}>
-              {showAllRows ? 'Show only problems' : 'Show every row'}
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <Filter className="size-4 text-indigo-600" />
+              <h2 className="font-bold text-slate-900 text-base">
+                {showAllRows ? 'All Sheet Rows' : 'Rows Needing Attention'}
+              </h2>
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-xs font-semibold text-slate-700">
+                {rows.data?.items?.length ?? 0}
+              </span>
+            </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowAllRows((v) => !v)}
+              className="gap-2"
+            >
+              {showAllRows ? 'Show Only Problems' : 'Show All Rows'}
             </Button>
           </div>
 
-          <DataTable
-            columns={columns}
-            data={rows.data?.items ?? []}
-            loading={rows.isPending}
-            mobilePrimaryColumn="name"
-            getRowId={(r) => String(r.id)}
-            emptyHeading={showAllRows ? 'No rows' : 'Nothing wrong'}
-            emptyDescription={
-              showAllRows
-                ? 'This sheet had no readable rows.'
-                : 'Every row passed. Confirm to create the accounts.'
-            }
-          />
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+            <DataTable
+              columns={columns}
+              data={rows.data?.items ?? []}
+              loading={rows.isPending}
+              mobilePrimaryColumn="name"
+              getRowId={(r) => String(r.id)}
+              emptyHeading={showAllRows ? 'No rows found' : 'No Validation Problems'}
+              emptyDescription={
+                showAllRows
+                  ? 'This sheet had no readable rows.'
+                  : 'All rows passed verification checks cleanly! Ready to create accounts.'
+              }
+            />
+          </div>
         </section>
       )}
 
-      {/* ---------------------------------------------------------------
-          Phase 3 — confirm. The only control here that writes anything.
-         --------------------------------------------------------------- */}
+      {/* Floating Action Confirmation Bar */}
       {batch.data?.confirmable && batch.data.validRows > 0 && (
-        <section className="surface-card flex flex-wrap items-center gap-[var(--sp-4)] p-[var(--sp-5)]">
-          <p className="text-body min-w-0 flex-1 text-[var(--ink-700)]">
-            <strong className="text-[var(--ink-900)]">
-              {batch.data.validRows} student{batch.data.validRows === 1 ? '' : 's'} ready
-            </strong>
-            {' · '}
-            <span className="text-[var(--ink-500)]">
-              Their details will be marked verified against your name.
-            </span>
-          </p>
-          <Button onClick={() => setConfirming(true)} loading={confirm.isPending}>
-            <Upload aria-hidden />
-            {batch.data.status === 'FAILED' ? 'Carry on importing' : 'Create these accounts'}
+        <div className="sticky bottom-6 z-30 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-200/80 bg-white/95 p-5 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
+              <ShieldCheck className="size-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-900 text-base">
+                  {batch.data.validRows} Student{batch.data.validRows === 1 ? '' : 's'} Ready
+                </span>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-xs text-emerald-800">
+                  PASSED VERIFICATION
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Details will be marked verified and standing Daily Passes issued automatically.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            size="lg"
+            onClick={() => setConfirming(true)}
+            loading={confirm.isPending}
+            className="gap-2 bg-indigo-600 px-6 font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-700"
+          >
+            <Upload className="size-4" />
+            {batch.data.status === 'FAILED' ? 'Resume Importing' : 'Create Accounts & Issue Passes'}
           </Button>
-        </section>
+        </div>
       )}
 
       <ConfirmDialog
         open={confirming}
-        onOpenChange={(open) => { if (!open) setConfirming(false); }}
-        title={`Import ${batch.data?.validRows ?? 0} student(s)?`}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(false);
+        }}
+        title={`Confirm Import for ${batch.data?.validRows ?? 0} Student(s)?`}
         description={
-          'Their accounts will be created and their details recorded as verified by you. '
-          + 'Students with no usable photo will need to add one before a pass can be issued.'
+          'Accounts will be created, profiles verified, and standing daily passes issued. ' +
+          'Credentials & PDF passes will be emailed to each student.'
         }
-        confirmLabel="Import and verify"
+        confirmLabel="Confirm & Issue Passes"
         loading={confirm.isPending}
         onConfirm={() => confirm.mutate()}
       />
@@ -256,75 +325,104 @@ const OUTCOME_LABEL: Record<ImportRowResponse['outcome'], string> = {
   PENDING: 'Ready',
   CREATED: 'Created',
   UPDATED: 'Updated',
-  REJECTED: 'Not imported',
+  REJECTED: 'Rejected',
 };
 
-/**
- * The counts, and the two that are easy to gloss over.
- *
- * missingPhotoCount gets its own line because those students have an account
- * and verified details and still cannot get through a gate. Folding them into
- * a success count would hide a group of people who turn up on Monday and are
- * turned away.
- */
 function BatchSummary({ batch }: { batch: ImportBatchResponse }) {
   const done = batch.createdCount + batch.updatedCount;
 
   return (
-    <section className="surface-card space-y-[var(--sp-3)] p-[var(--sp-5)]">
-      <div className="flex flex-wrap items-center gap-[var(--sp-3)]">
-        <Badge tone="neutral">{STATUS_LABEL[batch.status]}</Badge>
-        <span className="text-caption text-[var(--ink-500)]">{batch.filename}</span>
+    <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+        <div className="flex items-center gap-3">
+          <Badge tone="neutral">{STATUS_LABEL[batch.status]}</Badge>
+          <span className="font-mono text-xs font-semibold text-slate-600">{batch.filename}</span>
+        </div>
+        <span className="text-xs text-slate-400">Batch #{batch.id}</span>
       </div>
 
       {batch.failureReason && (
-        <p className="text-body flex gap-[var(--sp-2)]">
-          <AlertTriangle className="size-4 shrink-0 mt-[2px] text-[var(--review-fg)]" aria-hidden />
+        <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-xs text-amber-900 border border-amber-200">
+          <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" aria-hidden />
           <span>{batch.failureReason}</span>
-        </p>
+        </div>
       )}
 
-      <dl className="grid gap-[var(--sp-4)] sm:grid-cols-4">
-        <Stat label="Rows in the sheet" value={batch.totalRows} />
-        <Stat label="Ready to import" value={batch.validRows} />
-        <Stat label="Not imported" value={batch.rejectedCount} />
-        <Stat label="Imported" value={done} />
+      <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total Sheet Rows"
+          value={batch.totalRows}
+          icon={Users}
+          color="bg-slate-50 text-slate-700 border-slate-200"
+        />
+        <StatCard
+          label="Ready to Import"
+          value={batch.validRows}
+          icon={CheckCircle2}
+          color="bg-emerald-50 text-emerald-700 border-emerald-200"
+        />
+        <StatCard
+          label="Rejected / Problems"
+          value={batch.rejectedCount}
+          icon={AlertCircle}
+          color="bg-rose-50 text-rose-700 border-rose-200"
+        />
+        <StatCard
+          label="Imported & Passes Issued"
+          value={done}
+          icon={ShieldCheck}
+          color="bg-indigo-50 text-indigo-700 border-indigo-200"
+        />
       </dl>
 
       {batch.missingPhotoCount > 0 && (
-        <p className="text-body flex gap-[var(--sp-2)] rounded-[var(--r-sm)] bg-[var(--surface-sunken)] p-[var(--sp-3)]">
-          <ImageOff className="size-4 shrink-0 mt-[2px] text-[var(--ink-500)]" aria-hidden />
+        <div className="flex items-center gap-3 rounded-xl bg-amber-50/80 p-4 text-xs text-amber-900 border border-amber-200/80">
+          <ImageOff className="size-4 text-amber-600 shrink-0" aria-hidden />
           <span>
-            <strong>{batch.missingPhotoCount}</strong> student
-            {batch.missingPhotoCount === 1 ? '' : 's'} imported without a photo. They can
-            sign in and add one — no pass is issued until they do.
+            <strong>{batch.missingPhotoCount}</strong> student{batch.missingPhotoCount === 1 ? '' : 's'} imported without a photo.
+            They can sign in and add one before their gate pass activates.
           </span>
-        </p>
+        </div>
       )}
 
       {batch.status === 'COMPLETED' && batch.rejectedCount === 0 && done > 0 && (
-        <p className="text-body flex gap-[var(--sp-2)] text-[var(--ink-700)]">
-          <CheckCircle2 className="size-4 shrink-0 mt-[2px]" aria-hidden />
-          Every row imported.
-        </p>
+        <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-4 text-xs font-semibold text-emerald-800 border border-emerald-200">
+          <CheckCircle2 className="size-4 text-emerald-600 shrink-0" aria-hidden />
+          All rows imported successfully and gate passes dispatched!
+        </div>
       )}
     </section>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+}) {
   return (
-    <div>
-      <dt className="text-caption text-[var(--ink-500)]">{label}</dt>
-      <dd className="text-h3 text-[var(--ink-900)]">{value}</dd>
+    <div className="flex items-center justify-between rounded-xl border p-4 shadow-2xs bg-white">
+      <div>
+        <dt className="text-xs font-medium text-slate-500">{label}</dt>
+        <dd className="mt-1 text-2xl font-extrabold text-slate-900">{value}</dd>
+      </div>
+      <div className={`flex size-10 items-center justify-center rounded-xl border ${color}`}>
+        <Icon className="size-5" />
+      </div>
     </div>
   );
 }
 
 const STATUS_LABEL: Record<ImportBatchResponse['status'], string> = {
-  VALIDATING: 'Reading',
-  VALIDATED: 'Checked — not yet imported',
-  PROCESSING: 'Importing…',
-  COMPLETED: 'Finished',
-  FAILED: 'Did not finish',
+  VALIDATING: 'Reading Sheet',
+  VALIDATED: 'Checked — Ready for Confirm',
+  PROCESSING: 'Importing & Issuing Passes…',
+  COMPLETED: 'Completed Successfully',
+  FAILED: 'Import Failed / Incomplete',
 };

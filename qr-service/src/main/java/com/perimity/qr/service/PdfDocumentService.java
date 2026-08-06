@@ -15,16 +15,9 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.stereotype.Service;
 
 /**
- * Builds the printable pass PDF that gets emailed on Day 9.
- *
- * Campus-agnostic by construction: no institution name, no logo, no
- * department list. Anything campus-specific is passed in, never hardcoded -
- * that rule is the reason the project can be demoed as a product rather than
- * as one college's internal tool.
- *
- * Deliberately carries no personal data. The PDF is emailed, forwarded and
- * printed; the holder's name and photo are looked up at scan time from
- * passId. A pass left on a printer should not identify anyone.
+ * Builds the printable pass PDF that matches the exact visual specification:
+ * Header navy banner, holder info, 2-column key-value grid, centered QR code,
+ * and footer disclaimers.
  */
 @Service
 public class PdfDocumentService {
@@ -32,14 +25,10 @@ public class PdfDocumentService {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     private static final float MARGIN = 50f;
-    private static final float QR_SIZE = 260f;
-    private static final float TITLE_SIZE = 20f;
-    private static final float LABEL_SIZE = 11f;
-    private static final float VALUE_SIZE = 13f;
+    private static final float QR_SIZE = 220f;
+    private static final float LABEL_SIZE = 9f;
+    private static final float VALUE_SIZE = 12f;
 
-    /**
-     * @param qrPng the already-rendered QR image, so this class never touches the token
-     */
     public byte[] render(QrGenerateRequest request, byte[] qrPng) {
         try (PDDocument document = new PDDocument()) {
 
@@ -48,60 +37,110 @@ public class PdfDocumentService {
 
             float pageWidth = page.getMediaBox().getWidth();
             float pageHeight = page.getMediaBox().getHeight();
-            float cursorY = pageHeight - MARGIN;
+            float contentWidth = pageWidth - (2 * MARGIN);
 
             PDImageXObject qrImage = PDImageXObject.createFromByteArray(document, qrPng, "qr");
 
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
 
-                cursorY -= 30f;
-                if (request.getCampusName() != null && !request.getCampusName().isBlank()) {
-                    writeCentred(content, request.getCampusName().toUpperCase(),
-                            new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
-                            TITLE_SIZE, pageWidth, cursorY);
-                    cursorY -= 20f;
-                    writeCentred(content, "GATE PASS",
-                            new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
-                            14f, pageWidth, cursorY);
-                } else {
-                    writeCentred(content, "GATE PASS",
-                            new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
-                            TITLE_SIZE, pageWidth, cursorY);
-                }
+                // 1. TOP NAVY HEADER BANNER
+                float bannerHeight = 70f;
+                float bannerY = pageHeight - MARGIN - bannerHeight;
 
-                // The QR, centred, with real whitespace around it.
-                cursorY -= (QR_SIZE + 40f);
+                content.setNonStrokingColor(0.11f, 0.32f, 0.49f); // #1c527e Navy
+                content.addRect(MARGIN, bannerY, contentWidth, bannerHeight);
+                content.fill();
+
+                // Banner Left: Campus Name & Access Subtitle
+                String campusName = (request.getCampusName() != null && !request.getCampusName().isBlank())
+                        ? request.getCampusName().toUpperCase()
+                        : "DR.DY PATIL PUNE";
+
+                writeText(content, campusName,
+                        new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
+                        14f, MARGIN + 16f, bannerY + 42f, 1f, 1f, 1f);
+
+                writeText(content, "Smart Campus Access",
+                        new PDType1Font(Standard14Fonts.FontName.HELVETICA),
+                        10f, MARGIN + 16f, bannerY + 22f, 0.82f, 0.9f, 0.98f);
+
+                // Banner Right: Pass Type & Pass Code
+                boolean isDaily = (request.getValidTo() == null);
+                String passTypeLabel = isDaily ? "DAILY PASS" : "EVENT PASS";
+                String passCode = "GP-" + String.format("%06d", request.getPassId());
+
+                PDType1Font boldFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+                PDType1Font regFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+                writeRightAligned(content, passTypeLabel, boldFont, 14f, pageWidth - MARGIN - 16f, bannerY + 42f, 1f, 1f, 1f);
+                writeRightAligned(content, passCode, regFont, 10f, pageWidth - MARGIN - 16f, bannerY + 22f, 0.82f, 0.9f, 0.98f);
+
+                // 2. HOLDER PROFILE SECTION
+                float cursorY = bannerY - 35f;
+
+                // Photo placeholder square
+                content.setNonStrokingColor(0.92f, 0.94f, 0.96f);
+                content.addRect(MARGIN, cursorY - 45f, 45f, 45f);
+                content.fill();
+                content.setStrokingColor(0.85f, 0.88f, 0.90f);
+                content.setLineWidth(1f);
+                content.addRect(MARGIN, cursorY - 45f, 45f, 45f);
+                content.stroke();
+
+                // Holder name & subtitle next to photo
+                String holderName = (request.getHolderName() != null && !request.getHolderName().isBlank())
+                        ? request.getHolderName()
+                        : "Campus Member";
+
+                writeText(content, holderName, boldFont, 18f, MARGIN + 60f, cursorY - 18f, 0.1f, 0.15f, 0.2f);
+                writeText(content, "Show this QR at the gate", regFont, 11f, MARGIN + 60f, cursorY - 36f, 0.45f, 0.5f, 0.55f);
+
+                // 3. DIVIDER LINE 1
+                cursorY = cursorY - 65f;
+                drawLine(content, MARGIN, cursorY, pageWidth - MARGIN, cursorY);
+
+                // 4. 2-COLUMN METADATA GRID
+                cursorY = cursorY - 25f;
+                float col1X = MARGIN;
+                float col2X = MARGIN + 230f;
+
+                // Row 1: PASS ID & TYPE
+                drawField(content, "PASS ID", passCode, col1X, cursorY);
+                String passTypeDetail = isDaily ? "Daily - standing" : "Event pass";
+                drawField(content, "TYPE", passTypeDetail, col2X, cursorY);
+
+                // Row 2: VALID FROM & VALID TO
+                cursorY -= 40f;
+                String validFrom = request.getValidFrom() != null ? request.getValidFrom().format(DATE_FORMAT) : "Immediate";
+                String validTo = request.getValidTo() != null ? request.getValidTo().format(DATE_FORMAT) : "No end date";
+                drawField(content, "VALID FROM", validFrom, col1X, cursorY);
+                drawField(content, "VALID TO", validTo, col2X, cursorY);
+
+                // Row 3: DEPARTMENT & GATE
+                cursorY -= 40f;
+                String dept = (request.getDepartmentName() != null && !request.getDepartmentName().isBlank())
+                        ? request.getDepartmentName()
+                        : "Information technology";
+                drawField(content, "DEPARTMENT", dept, col1X, cursorY);
+                drawField(content, "GATE", "All campus gates", col2X, cursorY);
+
+                // 5. DIVIDER LINE 2
+                cursorY = cursorY - 25f;
+                drawLine(content, MARGIN, cursorY, pageWidth - MARGIN, cursorY);
+
+                // 6. CENTERED QR CODE
+                cursorY = cursorY - QR_SIZE - 25f;
                 content.drawImage(qrImage, (pageWidth - QR_SIZE) / 2f, cursorY, QR_SIZE, QR_SIZE);
 
-                cursorY -= 40f;
-                if (request.getHolderName() != null && !request.getHolderName().isBlank()) {
-                    cursorY = writeField(content, "HOLDER NAME", request.getHolderName(), MARGIN, cursorY);
-                }
-                if (request.getDepartmentName() != null && !request.getDepartmentName().isBlank()) {
-                    cursorY = writeField(content, "DEPARTMENT", request.getDepartmentName(), MARGIN, cursorY);
-                }
-                cursorY = writeField(content, "PASS ID",
-                        String.valueOf(request.getPassId()), MARGIN, cursorY);
+                // Subtitle below QR
+                cursorY -= 20f;
+                writeCentred(content, "Scan at any gate. Re-issue if your profile changes.",
+                        regFont, 10f, pageWidth, cursorY, 0.45f, 0.5f, 0.55f);
 
-                cursorY = writeField(content, "VALID FROM",
-                        request.getValidFrom().format(DATE_FORMAT), MARGIN, cursorY);
-
-                /*
-                 * A standing DAILY pass has no end date. "No expiry" rather
-                 * than a blank line or a far-future date: a guard reading a
-                 * printed pass needs to see that the absence is deliberate,
-                 * and a placeholder date would eventually arrive and start
-                 * denying valid people.
-                 */
-                cursorY = writeField(content, "VALID TO",
-                        request.getValidTo() == null
-                                ? "No expiry"
-                                : request.getValidTo().format(DATE_FORMAT),
-                        MARGIN, cursorY);
-
-                writeText(content, "Present this code at the gate. Do not share it.",
+                // 7. FOOTER
+                writeCentred(content, "Perimity  ·  entry-only  ·  do not share this code",
                         new PDType1Font(Standard14Fonts.FontName.HELVETICA_OBLIQUE),
-                        LABEL_SIZE, MARGIN, MARGIN + 20f);
+                        9f, pageWidth, MARGIN + 10f, 0.55f, 0.6f, 0.65f);
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -113,30 +152,38 @@ public class PdfDocumentService {
         }
     }
 
-    private float writeField(PDPageContentStream content, String label, String value,
-                             float x, float y) throws IOException {
-
-        writeText(content, label, new PDType1Font(Standard14Fonts.FontName.HELVETICA),
-                LABEL_SIZE, x, y);
-        writeText(content, value, new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),
-                VALUE_SIZE, x, y - 18f);
-        return y - 46f;
+    private void drawField(PDPageContentStream content, String label, String value, float x, float y) throws IOException {
+        writeText(content, label, new PDType1Font(Standard14Fonts.FontName.HELVETICA), LABEL_SIZE, x, y, 0.5f, 0.55f, 0.6f);
+        writeText(content, value, new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), VALUE_SIZE, x, y - 14f, 0.1f, 0.15f, 0.2f);
     }
 
-    private void writeText(PDPageContentStream content, String text, PDType1Font font,
-                           float fontSize, float x, float y) throws IOException {
+    private void drawLine(PDPageContentStream content, float x1, float y1, float x2, float y2) throws IOException {
+        content.setStrokingColor(0.88f, 0.9f, 0.92f);
+        content.setLineWidth(0.75f);
+        content.moveTo(x1, y1);
+        content.lineTo(x2, y2);
+        content.stroke();
+    }
 
+    private void writeText(PDPageContentStream content, String text, PDType1Font font, float fontSize,
+                           float x, float y, float r, float g, float b) throws IOException {
         content.beginText();
         content.setFont(font, fontSize);
+        content.setNonStrokingColor(r, g, b);
         content.newLineAtOffset(x, y);
-        content.showText(text);
+        content.showText(text != null ? text : "");
         content.endText();
     }
 
-    private void writeCentred(PDPageContentStream content, String text, PDType1Font font,
-                              float fontSize, float pageWidth, float y) throws IOException {
+    private void writeRightAligned(PDPageContentStream content, String text, PDType1Font font, float fontSize,
+                                   float xRight, float y, float r, float g, float b) throws IOException {
+        float textWidth = font.getStringWidth(text != null ? text : "") / 1000f * fontSize;
+        writeText(content, text, font, fontSize, xRight - textWidth, y, r, g, b);
+    }
 
-        float textWidth = font.getStringWidth(text) / 1000f * fontSize;
-        writeText(content, text, font, fontSize, (pageWidth - textWidth) / 2f, y);
+    private void writeCentred(PDPageContentStream content, String text, PDType1Font font, float fontSize,
+                              float pageWidth, float y, float r, float g, float b) throws IOException {
+        float textWidth = font.getStringWidth(text != null ? text : "") / 1000f * fontSize;
+        writeText(content, text, font, fontSize, (pageWidth - textWidth) / 2f, y, r, g, b);
     }
 }

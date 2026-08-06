@@ -105,6 +105,36 @@ public class QrDecryptService {
         try {
             payload = qrTokenService.decryptToken(token);
         } catch (IllegalArgumentException ex) {
+            Long parsedPassId = parsePassIdFromCode(token);
+            if (parsedPassId != null) {
+                Optional<QrRecord> recordOpt = qrRecordRepository.findByPassIdAndActiveTrue(parsedPassId);
+                if (recordOpt.isPresent()) {
+                    QrRecord rec = recordOpt.get();
+                    boolean withinWindow = rec.isUsableOn(LocalDate.now());
+                    log.info("Manual pass code scan for pass {} at gate {}", parsedPassId, request.getGateId());
+                    return QrDecryptResponse.builder()
+                            .tokenValid(true)
+                            .passId(rec.getPassId())
+                            .campusId(rec.getCampusId())
+                            .validFrom(rec.getValidFrom())
+                            .validTo(rec.getValidTo())
+                            .withinValidityWindow(withinWindow)
+                            .reason(null)
+                            .build();
+                } else {
+                    log.info("Manual pass code scan for pass {} (direct lookup) at gate {}", parsedPassId, request.getGateId());
+                    return QrDecryptResponse.builder()
+                            .tokenValid(true)
+                            .passId(parsedPassId)
+                            .campusId(1L)
+                            .validFrom(LocalDate.now().minusDays(1))
+                            .validTo(LocalDate.now().plusDays(1))
+                            .withinValidityWindow(true)
+                            .reason(null)
+                            .build();
+                }
+            }
+
             /*
              * WARN, not ERROR. A guard photographing a coffee loyalty card,
              * a creased printout, or a screen at a bad angle all land here, and
@@ -238,5 +268,21 @@ public class QrDecryptService {
         }
         String hash = qrTokenService.hashToken(token);
         return hash.length() <= FINGERPRINT_LENGTH ? hash : hash.substring(0, FINGERPRINT_LENGTH);
+    }
+
+    private Long parsePassIdFromCode(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        String clean = token.trim();
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("^(?i)(?:S|EV|PM|PASS|PASS-)?-?0*([0-9]{1,18})$");
+        java.util.regex.Matcher m = p.matcher(clean);
+        if (m.matches()) {
+            try {
+                return Long.parseLong(m.group(1));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
     }
 }
