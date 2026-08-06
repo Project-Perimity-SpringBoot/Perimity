@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
-import { CheckCircle2, FileSpreadsheet, RefreshCw, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, FileSpreadsheet, RefreshCw, TriangleAlert, Sparkles, ArrowLeft } from 'lucide-react';
 import { Button, Progress, SkeletonText } from '@ui/index';
-import { PageHeader } from '@components/data';
 import { ErrorState } from '@components/feedback';
 import { bulkApi } from '@lib/api/services/gatepass.api';
 import { bulkKeys } from '@lib/query/keys';
@@ -10,28 +9,8 @@ import { formatDateTime } from '@lib/format/datetime';
 import { useToast } from '@hooks/useToast';
 import type { BulkUploadBatchResponse } from '@/types/gatepass.types';
 
-/** Still working. Anything else has stopped, one way or the other. */
 const RUNNING: ReadonlySet<string> = new Set(['VALIDATING', 'PROCESSING']);
 
-/**
- * Phase 4 screens 8 and 9 — generation progress, and done.
- *
- * ==========================================================================
- * THIS SCREEN HAS ITS OWN URL BECAUSE THE USER IS TOLD TO LEAVE IT
- * ==========================================================================
- * Generation is asynchronous and can take minutes for 580 passes. Telling
- * somebody to sit and watch a bar is a lie about how long it takes, so the
- * screen says plainly that they can close the page — which only works if the
- * page can be found again. Hence /faculty/onboarding/batches/:batchId, plus the
- * active-batches panel on the dashboard as the way back for anyone who did not
- * keep the URL.
- *
- * ==========================================================================
- * POLLING STOPS WHEN THE WORK DOES
- * ==========================================================================
- * refetchInterval returns false once the batch reaches COMPLETED or FAILED. A
- * screen left open overnight on a finished batch should not still be asking.
- */
 export default function BatchProgressPage() {
   const { batchId } = useParams();
   const id = Number(batchId);
@@ -46,11 +25,6 @@ export default function BatchProgressPage() {
       query.state.data && RUNNING.has(query.state.data.status) ? 3000 : false,
   });
 
-  /**
-   * Re-queues only the rows that failed. Not a re-upload: the identities that
-   * succeeded already exist, and running the sheet again would either duplicate
-   * them or fail on every one.
-   */
   const retry = useMutation({
     mutationFn: () => bulkApi.retry(id),
     onSuccess: (result) => {
@@ -70,138 +44,139 @@ export default function BatchProgressPage() {
     return <ErrorState error={batch.error} onRetry={() => void batch.refetch()} />;
   }
   if (batch.isPending || !batch.data) {
-    return <div className="surface-card p-[var(--sp-6)]"><SkeletonText lines={5} /></div>;
+    return <div className="rounded-3xl border border-slate-200 bg-white p-8"><SkeletonText lines={5} /></div>;
   }
 
   const data = batch.data;
   const running = RUNNING.has(data.status);
   const failed = data.status === 'FAILED';
   const done = data.status === 'COMPLETED';
-
-  /* Passes that will never arrive: valid rows the generator could not finish.
-     Distinct from invalidRows, which never entered the queue at all. */
   const stalled = Math.max(0, data.validRows - data.processedRows);
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title={data.originalFilename}
-        description={`Uploaded ${formatDateTime(data.createdAt)}`}
-        actions={
-          <Button variant="secondary" asChild>
-            <Link to="/faculty/onboarding">New batch</Link>
+    <div className="mx-auto max-w-4xl space-y-6 pb-16">
+      <Button variant="ghost" size="sm" asChild className="gap-2 text-slate-600 hover:text-slate-900">
+        <Link to="/faculty/onboarding"><ArrowLeft className="size-4" /> Back to Bulk Onboarding</Link>
+      </Button>
+
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <Sparkles className="size-3.5 text-indigo-300" /> Batch Job Tracker
+            </div>
+            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">{data.originalFilename}</h1>
+            <p className="text-sm text-indigo-200/90">
+              Batch #{data.id} · Uploaded {formatDateTime(data.createdAt)}
+            </p>
+          </div>
+
+          <Button variant="secondary" asChild className="bg-white/10 text-white border-white/10 hover:bg-white/20">
+            <Link to="/faculty/onboarding">New Batch</Link>
           </Button>
-        }
-      />
+        </div>
+      </div>
 
-      <div className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
-        <Progress
-          value={data.percentComplete}
-          label={`${data.processedRows} of ${data.validRows} generated`}
-        />
+      {/* Main Status & Progress Container */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-6">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
+            <span>Pass Generation Progress</span>
+            <span className="font-mono text-indigo-600">{data.percentComplete}%</span>
+          </div>
+          <Progress
+            value={data.percentComplete}
+            label={`${data.processedRows} of ${data.validRows} passes generated`}
+          />
+        </div>
 
-        {running ? (
-          <div className="flex flex-col gap-[var(--sp-2)]">
-            <p className="text-body text-[var(--ink-900)]">
-              Passes are being created and emailed.
-            </p>
-            {/* The sentence this whole screen's URL exists to make true. */}
-            <p className="text-caption text-[var(--ink-500)]">
-              You can close this page. The work carries on without it, and this batch
-              stays on your dashboard until it finishes.
+        {running && (
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5 text-indigo-900 space-y-1">
+            <p className="font-bold text-sm">Passes are actively being created & emailed</p>
+            <p className="text-xs text-indigo-700">
+              You can safely navigate away from this page. Processing continues in the background.
             </p>
           </div>
-        ) : null}
+        )}
 
-        {done ? (
-          <div className="flex items-start gap-[var(--sp-3)]">
-            <CheckCircle2 className="mt-[2px] size-5 shrink-0 text-[var(--ink-700)]" aria-hidden />
-            <div>
-              <p className="text-body-md text-[var(--ink-900)]">
-                All {data.processedRows} passes created and emailed.
+        {done && (
+          <div className="flex items-start gap-3.5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+            <CheckCircle2 className="size-5 shrink-0 text-emerald-600 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-bold text-sm">
+                Completed: All {data.processedRows} passes created & emailed successfully!
               </p>
-              <p className="text-caption text-[var(--ink-500)]">
+              <p className="text-emerald-700">
                 Finished {data.completedAt ? formatDateTime(data.completedAt) : 'just now'}.
-                {data.invalidRows > 0
-                  ? ` ${data.invalidRows} ${data.invalidRows === 1 ? 'row was' : 'rows were'} skipped for errors and nobody in them was contacted.`
-                  : null}
+                {data.invalidRows > 0 && ` ${data.invalidRows} rows with errors were skipped.`}
               </p>
             </div>
           </div>
-        ) : null}
+        )}
 
-        {failed ? (
-          <div className="flex items-start gap-[var(--sp-3)]">
-            <TriangleAlert className="mt-[2px] size-5 shrink-0 text-[var(--ink-700)]" aria-hidden />
-            <div className="flex flex-col gap-[var(--sp-1)]">
-              <p className="text-body-md text-[var(--ink-900)]">
-                {data.processedRows > 0
-                  ? `Stopped after ${data.processedRows} of ${data.validRows}.`
-                  : 'This batch could not be started.'}
+        {failed && (
+          <div className="flex items-start gap-3.5 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-900">
+            <TriangleAlert className="size-5 shrink-0 text-rose-600 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-bold text-sm">
+                {data.processedRows > 0 ? `Stopped after generating ${data.processedRows} of ${data.validRows} passes.` : 'Batch processing encountered an issue.'}
               </p>
-              <p className="text-caption text-[var(--ink-500)]">
-                {/* Partial failure is the normal failure here: the first 312
-                    people have a working pass and the last 268 have nothing.
-                    Saying "failed" without that split would be wrong in both
-                    directions. */}
-                {data.processedRows > 0
-                  ? `Those ${data.processedRows} passes are valid and their holders have been emailed. The remaining ${stalled} have not been created.`
-                  : 'Nothing was created, so nobody has been emailed.'}
+              <p className="text-rose-700">
+                {data.processedRows > 0 ? `${data.processedRows} passes were generated & emailed. ${stalled} remain uncreated.` : 'No passes were generated.'}
               </p>
-              {data.failureMessage ? (
-                <p className="text-caption mt-[var(--sp-1)] text-[var(--ink-700)]">
-                  {data.failureMessage}
-                </p>
-              ) : null}
+              {data.failureMessage && <p className="font-mono text-[11px] text-rose-800 mt-1">{data.failureMessage}</p>}
             </div>
           </div>
-        ) : null}
+        )}
 
-        <div className="flex flex-wrap gap-[var(--sp-3)]">
-          {failed && stalled > 0 ? (
-            <Button onClick={() => retry.mutate()} loading={retry.isPending}>
-              <RefreshCw aria-hidden />Retry the {stalled} that did not finish
+        <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-100">
+          {failed && stalled > 0 && (
+            <Button
+              onClick={() => retry.mutate()}
+              loading={retry.isPending}
+              className="gap-2 bg-indigo-600 font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700"
+            >
+              <RefreshCw className="size-4" /> Retry Failed ({stalled})
             </Button>
-          ) : null}
-          {data.invalidRows > 0 ? (
+          )}
+          {data.invalidRows > 0 && (
             <Button
               variant="secondary"
               onClick={() => errorReport.mutate()}
               loading={errorReport.isPending}
+              className="gap-2"
             >
-              <FileSpreadsheet aria-hidden />Error report
+              <FileSpreadsheet className="size-4 text-indigo-600" /> Export Error Report
             </Button>
-          ) : null}
-          {done && data.eventId ? (
+          )}
+          {done && data.eventId && (
             <Button variant="secondary" asChild>
-              <Link to={`/faculty/events/${data.eventId}/attendance`}>Go to the event</Link>
+              <Link to={`/faculty/events/${data.eventId}/attendance`}>View Event Attendance</Link>
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
 
-      <BatchFacts batch={data} />
-    </div>
-  );
-}
-
-/** total = valid + invalid, stated in one place so it cannot drift. */
-function BatchFacts({ batch }: { batch: BulkUploadBatchResponse }) {
-  return (
-    <dl className="surface-card grid grid-cols-2 gap-[var(--sp-4)] p-[var(--sp-6)] sm:grid-cols-4">
-      <Fact label="Rows in sheet" value={batch.totalRows} />
-      <Fact label="Valid" value={batch.validRows} />
-      <Fact label="With errors" value={batch.invalidRows} />
-      <Fact label="Generated" value={batch.processedRows} />
-    </dl>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <dt className="text-label text-[var(--ink-500)]">{label}</dt>
-      <dd className="text-h3 text-[var(--ink-900)]">{value}</dd>
+      {/* Batch Stats grid */}
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
+          <dt className="text-xs font-semibold text-slate-500">Rows in Sheet</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.totalRows}</dd>
+        </div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
+          <dt className="text-xs font-semibold text-emerald-600">Valid Rows</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.validRows}</dd>
+        </div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
+          <dt className="text-xs font-semibold text-amber-600">Rows With Errors</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.invalidRows}</dd>
+        </div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
+          <dt className="text-xs font-semibold text-indigo-600">Generated Passes</dt>
+          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.processedRows}</dd>
+        </div>
+      </dl>
     </div>
   );
 }
