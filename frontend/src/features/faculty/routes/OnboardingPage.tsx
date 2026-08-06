@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { Download, FileSpreadsheet, Sparkles, CheckCircle2, AlertCircle, FileCheck, Layers } from 'lucide-react';
 import { Button, Field, NativeSelect, Progress } from '@ui/index';
-import { PageHeader } from '@components/data';
 import { FormError } from '@components/feedback';
 import { FileDropzone } from '@components/upload';
 import { bulkApi, eventApi } from '@lib/api/services/gatepass.api';
@@ -15,28 +14,6 @@ import { useAuth } from '@hooks/useAuth';
 import type { PassType } from '@/types/enums';
 import type { BulkValidationSummaryResponse } from '@/types/gatepass.types';
 
-/**
- * Phase 4 screens 5, 6 and 7 — upload, validating, summary.
- *
- * ==========================================================================
- * THREE STEPS, ONE SCREEN, ON PURPOSE
- * ==========================================================================
- * They are one continuous decision the user does not leave: choose a file,
- * wait ~2 seconds, look at what it found, confirm. Splitting them across routes
- * would put a back button in the middle of a wizard whose middle step holds a
- * server-side batch id that a fresh page load cannot recover.
- *
- * Step 4 is a different matter and lives at its own URL — see
- * BatchProgressPage. That one is asynchronous, minutes long, and the user is
- * told they may close the page, so it MUST be reachable by URL.
- *
- * ==========================================================================
- * VALIDATE CREATES NOTHING
- * ==========================================================================
- * /bulk/validate returns counts and row errors. No identity, no pass, no email.
- * That is what makes the summary honest: the user is looking at what WOULD
- * happen, and nothing has happened yet. Confirm is the only step that writes.
- */
 export default function OnboardingPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -49,7 +26,6 @@ export default function OnboardingPage() {
   const [summary, setSummary] = useState<BulkValidationSummaryResponse | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
-  /** Only EVENT batches need an event. Not fetched at all for DAILY. */
   const events = useQuery({
     queryKey: eventKeys.list({ page: 0, size: 50 }),
     queryFn: () => eventApi.list({ page: 0, size: 50 }),
@@ -70,7 +46,6 @@ export default function OnboardingPage() {
   const confirm = useMutation({
     mutationFn: () =>
       bulkApi.confirm(summary?.batchId as number, {
-        // @AssertTrue server-side: it must literally be true.
         confirmed: true,
         confirmedBy: identity?.userId as number,
       }),
@@ -105,24 +80,25 @@ export default function OnboardingPage() {
     validate.mutate();
   };
 
-  /* ── Step 2. Synchronous, ~2s, and the user waits. Indeterminate because the
-        server reports nothing until it has read the whole sheet — a percentage
-        invented on the client would be a lie that happens to look reassuring. */
   if (validate.isPending) {
     return (
-      <div className="flex flex-col gap-[var(--sp-6)]">
-        <PageHeader title="Checking your sheet" />
-        <div className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
-          <Progress value={0} indeterminate label="Reading rows and checking each address…" />
-          <p className="text-caption text-[var(--ink-500)]">
-            Nothing has been created yet. This only reads the file.
-          </p>
+      <div className="mx-auto max-w-4xl space-y-6 pb-16">
+        <div className="rounded-3xl border border-indigo-100 bg-white p-8 shadow-sm space-y-6 text-center">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 animate-pulse border border-indigo-100">
+            <FileSpreadsheet className="size-8" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="font-extrabold text-slate-900 text-xl">Validating Excel Batch Sheet</h2>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              Checking row formats, duplicate records, and department validity. No passes created yet.
+            </p>
+          </div>
+          <Progress value={0} indeterminate label="Reading rows and verifying addresses…" />
         </div>
       </div>
     );
   }
 
-  /* ── Step 3. The summary. ── */
   if (summary) return (
     <SummaryStep
       summary={summary}
@@ -135,23 +111,36 @@ export default function OnboardingPage() {
     />
   );
 
-  /* ── Step 1. Upload. ── */
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title="Bulk onboarding"
-        description="Create many passes from one sheet. Nothing is created until you confirm."
-        actions={
-          <Button variant="secondary" onClick={() => template.mutate()} loading={template.isPending}>
-            <Download aria-hidden />Template
-          </Button>
-        }
-      />
+    <div className="mx-auto max-w-4xl space-y-6 pb-16">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <Sparkles className="size-3.5 text-indigo-300" /> Batch Pass Issuance
+            </div>
+            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Bulk Pass Onboarding</h1>
+            <p className="text-sm text-indigo-200/90 max-w-xl">
+              Upload an Excel sheet to generate and issue multiple gate passes simultaneously.
+            </p>
+          </div>
 
-      <div className="surface-card flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+          <Button
+            variant="secondary"
+            onClick={() => template.mutate()}
+            loading={template.isPending}
+            className="gap-2 bg-white/10 text-white border-white/10 hover:bg-white/20"
+          >
+            <Download className="size-4" /> Download Excel Template
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-6">
         <FormError messages={formErrors} />
 
-        <Field label="What are you creating" required>
+        <Field label="Pass Category" required>
           {({ id }) => (
             <NativeSelect
               id={id}
@@ -160,18 +149,19 @@ export default function OnboardingPage() {
                 setPassType(event.target.value as PassType);
                 setEventId('');
               }}
+              className="bg-white font-medium"
             >
-              <option value="DAILY">Students — a standing daily pass each</option>
-              <option value="EVENT">Event visitors — passes for one programme</option>
+              <option value="DAILY">Student Cohort — standing campus daily passes</option>
+              <option value="EVENT">Event Visitors — passes bound to a specific event</option>
             </NativeSelect>
           )}
         </Field>
 
-        {passType === 'EVENT' ? (
+        {passType === 'EVENT' && (
           <Field
-            label="Which event"
+            label="Target Campus Event"
             required
-            hint="The event's own dates apply to every attendee in the sheet. The sheet carries no dates."
+            hint="The selected event's validity dates will automatically apply to every attendee."
           >
             {({ id }) => (
               <NativeSelect
@@ -179,8 +169,9 @@ export default function OnboardingPage() {
                 value={eventId}
                 disabled={events.isPending}
                 onChange={(event) => setEventId(event.target.value)}
+                className="bg-white font-medium"
               >
-                <option value="">Choose an event…</option>
+                <option value="">Select an active event…</option>
                 {(events.data?.items ?? [])
                   .filter((event) => !event.cancelled)
                   .map((event) => (
@@ -189,7 +180,7 @@ export default function OnboardingPage() {
               </NativeSelect>
             )}
           </Field>
-        ) : null}
+        )}
 
         <FileDropzone
           rule={UPLOAD_RULES.bulkSheet}
@@ -198,32 +189,25 @@ export default function OnboardingPage() {
           onClear={() => setFile(null)}
         />
 
-        <p className="text-caption text-[var(--ink-500)]">
-          Required columns: {BULK_COLUMNS.required.join(', ')}. Optional:{' '}
-          {BULK_COLUMNS.optional.join(', ')}. Column order does not matter and up to{' '}
-          {BULK_COLUMNS.maxRows} rows are accepted.
+        <p className="text-xs text-slate-500">
+          Required columns: <span className="font-mono text-slate-700">{BULK_COLUMNS.required.join(', ')}</span>.
+          Optional: <span className="font-mono text-slate-700">{BULK_COLUMNS.optional.join(', ')}</span>. Up to {BULK_COLUMNS.maxRows} rows per file.
         </p>
 
-        <div className="flex justify-end">
-          <Button onClick={startValidate} disabled={!file}>Check the sheet</Button>
+        <div className="flex justify-end pt-2 border-t border-slate-100">
+          <Button
+            onClick={startValidate}
+            disabled={!file}
+            className="bg-indigo-600 font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 px-6"
+          >
+            Validate & Preview Sheet
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * Step 3.
- *
- * ==========================================================================
- * THE ARITHMETIC MUST RECONCILE, VISIBLY
- * ==========================================================================
- * total = valid + invalid, and the number of passes that will be created is
- * `valid` — never `total`. Somebody uploads 600 rows, sees "600 passes will be
- * created", and tells 600 people to turn up; 20 of them have no pass. So the
- * three numbers are shown together and the sentence underneath states the one
- * that matters.
- */
 function SummaryStep({
   summary, passType, onBack, onConfirm, confirming, onErrorReport, fetchingReport,
 }: {
@@ -238,82 +222,74 @@ function SummaryStep({
   const { totalRows, validRows, invalidRows, errors, awaitingConfirmation } = summary;
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title="What the sheet contains"
-        description="Nothing has been created yet. Check the numbers, then confirm."
-      />
+    <div className="mx-auto max-w-4xl space-y-6 pb-16">
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-6">
+        <div>
+          <h2 className="font-extrabold text-slate-900 text-2xl">Sheet Validation Results</h2>
+          <p className="text-xs text-slate-500">Verify sheet counts before confirming batch pass creation.</p>
+        </div>
 
-      <div className="surface-card p-[var(--sp-6)]">
-        <dl className="grid grid-cols-3 gap-[var(--sp-4)]">
-          <Figure label="Rows read" value={totalRows} />
-          <Figure label="Valid" value={validRows} />
-          <Figure label="With errors" value={invalidRows} />
-        </dl>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
+            <dt className="text-xs font-semibold text-slate-500">Total Rows Read</dt>
+            <dd className="mt-1 text-3xl font-extrabold text-slate-900">{totalRows}</dd>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+            <dt className="text-xs font-semibold text-emerald-700">Valid Rows</dt>
+            <dd className="mt-1 text-3xl font-extrabold text-emerald-800">{validRows}</dd>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center">
+            <dt className="text-xs font-semibold text-amber-700">Rows With Errors</dt>
+            <dd className="mt-1 text-3xl font-extrabold text-amber-800">{invalidRows}</dd>
+          </div>
+        </div>
 
-        <p className="text-body mt-[var(--sp-4)] text-[var(--ink-700)]">
+        <p className="text-sm leading-relaxed text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
           {validRows === 0 ? (
-            <>No row in this sheet can be used. Fix the errors and upload it again.</>
+            <span className="font-bold text-rose-700">No rows in this sheet could be parsed cleanly. Please correct errors and re-upload.</span>
           ) : (
             <>
-              <strong className="text-[var(--ink-900)]">{validRows}</strong>{' '}
-              {passType === 'EVENT' ? 'event passes' : 'daily passes'} will be created and emailed.
-              {invalidRows > 0 ? (
-                <> The other {invalidRows} {invalidRows === 1 ? 'row is' : 'rows are'} skipped
-                  entirely — nobody in them is told anything.</>
-              ) : null}
+              <strong className="font-bold text-slate-900">{validRows}</strong> {passType === 'EVENT' ? 'event passes' : 'daily passes'} will be generated and issued.
+              {invalidRows > 0 && (
+                <span className="text-slate-500"> The remaining {invalidRows} rows with errors will be skipped.</span>
+              )}
             </>
           )}
         </p>
       </div>
 
-      {errors.length > 0 ? (
-        <section aria-labelledby="row-errors" className="surface-card overflow-hidden">
-          <div className="flex items-baseline justify-between gap-[var(--sp-4)] p-[var(--sp-4)]">
-            <h2 id="row-errors" className="text-h3 text-[var(--ink-900)]">Rows with errors</h2>
-            <Button variant="secondary" onClick={onErrorReport} loading={fetchingReport}>
-              <FileSpreadsheet aria-hidden />Full report
+      {errors.length > 0 && (
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-base">Row Errors Found</h3>
+            <Button variant="secondary" size="sm" onClick={onErrorReport} loading={fetchingReport} className="gap-2">
+              <FileSpreadsheet className="size-4 text-indigo-600" /> Export Full Error Report
             </Button>
           </div>
-          <ul className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
-            {errors.slice(0, 20).map((row) => (
-              <li
-                key={`${row.rowNumber}-${row.email ?? ''}`}
-                className="flex flex-wrap items-baseline gap-x-[var(--sp-4)] gap-y-[var(--sp-1)] p-[var(--sp-4)]"
-              >
-                <span className="text-caption font-mono text-[var(--ink-500)]">
-                  Row {row.rowNumber}
-                </span>
-                <span className="text-body min-w-0 flex-1 truncate text-[var(--ink-900)]">
-                  {row.email ?? '—'}
-                </span>
-                <span className="text-caption text-[var(--ink-700)]">{row.reason}</span>
-              </li>
-            ))}
-          </ul>
-          {errors.length > 20 ? (
-            <p className="text-caption border-t border-[var(--border)] p-[var(--sp-4)] text-[var(--ink-500)]">
-              Showing the first 20 of {errors.length}. Download the report for the rest.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
 
-      <div className="flex flex-wrap justify-end gap-[var(--sp-3)]">
-        <Button variant="secondary" onClick={onBack}>Choose another sheet</Button>
-        <Button onClick={onConfirm} loading={confirming} disabled={!awaitingConfirmation}>
-          Create {validRows} {validRows === 1 ? 'pass' : 'passes'}
+          <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80 bg-slate-50/50">
+            {errors.slice(0, 20).map((row) => (
+              <div key={`${row.rowNumber}-${row.email ?? ''}`} className="flex items-center justify-between p-3 px-4 text-xs">
+                <span className="font-mono font-bold text-slate-500">Row {row.rowNumber}</span>
+                <span className="font-medium text-slate-900 truncate max-w-[200px]">{row.email ?? '—'}</span>
+                <span className="text-amber-700 font-semibold">{row.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={onBack}>Upload Another Sheet</Button>
+        <Button
+          onClick={onConfirm}
+          loading={confirming}
+          disabled={!awaitingConfirmation}
+          className="bg-indigo-600 font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 px-6"
+        >
+          Confirm & Issue {validRows} Passes
         </Button>
       </div>
-    </div>
-  );
-}
-
-function Figure({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <dt className="text-label text-[var(--ink-500)]">{label}</dt>
-      <dd className="text-h2 text-[var(--ink-900)]">{value}</dd>
     </div>
   );
 }

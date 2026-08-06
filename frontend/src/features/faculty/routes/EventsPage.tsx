@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import type { ColumnDef } from '@tanstack/react-table';
+import { CalendarRange, Plus, Sparkles, Users } from 'lucide-react';
 import {
   Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle, Field, Input, Textarea,
 } from '@ui/index';
-import { DataTable, PageHeader } from '@components/data';
+import { DataTable } from '@components/data';
 import { ErrorState, FormError } from '@components/feedback';
 import { eventApi } from '@lib/api/services/gatepass.api';
 import { eventKeys } from '@lib/query/keys';
@@ -19,33 +20,11 @@ import { useUrlPagination } from '@hooks/useUrlPagination';
 import type { EventResponse } from '@/types/gatepass.types';
 import { eventSchema, type EventValues } from '../schemas/faculty.schemas';
 
-/**
- * Phase 4 screen 10 — events, and creating one.
- *
- * ==========================================================================
- * THE EVENT OWNS THE DATE RANGE
- * ==========================================================================
- * These two dates become the validity of every pass in an event visitor batch.
- * 580 attendees, one range, set once here. The bulk sheet has no date columns
- * and must never gain any — per-row dates would be 580 chances to issue a pass
- * that outlives the programme it was for.
- *
- * ==========================================================================
- * CANCEL, NEVER DELETE
- * ==========================================================================
- * eventApi.cancel revokes every pass issued for the event and leaves the row.
- * A deleted event would orphan the entry logs recorded against it, and those
- * logs are the attendance record somebody will ask for afterwards.
- *
- * Statuses render as neutral badges told apart by their word. Green and red
- * belong to the guard's verdict screens and appear nowhere else.
- */
 export default function EventsPage() {
   const navigate = useNavigate();
   const { request: pageRequest, setPage } = useUrlPagination(20);
   const [creating, setCreating] = useState(false);
 
-  // No `sort` — Spring Data emits two ORDER BY clauses and the query fails.
   const events = useQuery({
     queryKey: eventKeys.list(pageRequest),
     queryFn: () => eventApi.list(pageRequest),
@@ -54,44 +33,58 @@ export default function EventsPage() {
   const columns: ColumnDef<EventResponse, unknown>[] = [
     {
       id: 'name',
-      header: 'Event',
+      header: 'Event Name & Details',
       accessorKey: 'name',
-      /* span, not div/p. DataTable renders mobilePrimaryColumn inside a <p> in
-         its stacked sub-640px form, and a <div> or <p> there is invalid HTML —
-         the browser re-parents the nodes and the card layout breaks. Only React's
-         console warning says so; the build and the types are perfectly happy. */
       cell: (info) => (
-        <span className="block min-w-0">
-          <span className="text-body-md block truncate text-[var(--ink-900)]">
-            {info.row.original.name}
+        <span className="flex items-center gap-3 min-w-0">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 font-bold text-xs text-indigo-700 border border-indigo-100">
+            <CalendarRange className="size-4 text-indigo-600" />
           </span>
-          {info.row.original.description ? (
-            <span className="text-caption block truncate text-[var(--ink-500)]">
-              {info.row.original.description}
+          <span className="block min-w-0">
+            <span className="block truncate font-bold text-slate-900 text-sm">
+              {info.row.original.name}
             </span>
-          ) : null}
+            {info.row.original.description && (
+              <span className="block truncate text-xs text-slate-500 max-w-[40ch]">
+                {info.row.original.description}
+              </span>
+            )}
+          </span>
         </span>
       ),
     },
     {
       id: 'validFrom',
-      header: 'Dates',
+      header: 'Event Duration',
       accessorKey: 'validFrom',
-      cell: (info) => formatValidity(info.row.original.validFrom, info.row.original.validTo),
+      cell: (info) => (
+        <span className="font-semibold text-xs text-slate-700">
+          {formatValidity(info.row.original.validFrom, info.row.original.validTo)}
+        </span>
+      ),
     },
     {
       id: 'issuedPassCount',
-      header: 'Registered',
+      header: 'Attendees',
       accessorKey: 'issuedPassCount',
-      cell: (info) => info.row.original.issuedPassCount,
+      cell: (info) => (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-mono text-xs font-bold text-slate-700 border border-slate-200/60">
+          <Users className="size-3 text-slate-500" />
+          {info.row.original.issuedPassCount} registered
+        </span>
+      ),
     },
     {
       id: 'state',
-      header: 'State',
+      header: 'Status',
       cell: (info) => {
         const event = info.row.original;
-        if (event.cancelled) return <Badge>Cancelled</Badge>;
-        return <Badge>{event.runningToday ? 'Running today' : 'Scheduled'}</Badge>;
+        if (event.cancelled) return <Badge tone="neutral">Cancelled</Badge>;
+        return (
+          <Badge tone={event.runningToday ? 'brand' : 'neutral'}>
+            {event.runningToday ? 'Running Today' : 'Scheduled'}
+          </Badge>
+        );
       },
     },
   ];
@@ -101,14 +94,32 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-[var(--sp-6)]">
-      <PageHeader
-        title="Events"
-        description="An event's dates become the validity of every attendee pass issued for it."
-        actions={<Button onClick={() => setCreating(true)}>Create event</Button>}
-      />
+    <div className="mx-auto max-w-7xl space-y-6 pb-16">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
+              <Sparkles className="size-3.5 text-indigo-300" /> Event & Attendance Management
+            </div>
+            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Campus Events</h1>
+            <p className="text-sm text-indigo-200/90 max-w-2xl">
+              Create campus events and manage attendee rosters. Event dates dictate the validity window for all issued attendee passes.
+            </p>
+          </div>
 
-      <div className="surface-card overflow-hidden">
+          <Button
+            size="lg"
+            onClick={() => setCreating(true)}
+            className="gap-2 bg-indigo-600 font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-500"
+          >
+            <Plus className="size-4" /> Create New Event
+          </Button>
+        </div>
+      </div>
+
+      {/* Events Table */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <DataTable
           columns={columns}
           data={events.data?.items ?? []}
@@ -117,11 +128,9 @@ export default function EventsPage() {
           onPageChange={setPage}
           mobilePrimaryColumn="name"
           getRowId={(row) => String(row.id)}
-          /* The row IS the link to attendance — the same affordance the admin
-             queue uses for its rows, rather than a second column of buttons. */
           onRowClick={(row) => navigate(`/faculty/events/${row.id}/attendance`)}
-          emptyHeading="No events yet"
-          emptyDescription="Create one, then upload an attendee sheet against it."
+          emptyHeading="No events created yet"
+          emptyDescription="Create an event to start issuing event visitor passes and managing attendance."
         />
       </div>
 
@@ -151,11 +160,9 @@ function CreateEventDialog({
     mutationFn: (values: EventValues) =>
       eventApi.create({
         name: values.name,
-        // Empty string would store a blank description rather than none.
         description: values.description ? values.description : null,
         validFrom: values.validFrom,
         validTo: values.validTo,
-        // createdBy and campusId are @JsonIgnore server-side. Not sent.
       }),
     onSuccess: (event) => {
       void queryClient.invalidateQueries({ queryKey: eventKeys.all });
@@ -174,23 +181,23 @@ function CreateEventDialog({
       <DialogContent>
         <form noValidate onSubmit={handleSubmit((values) => create.mutate(values))}>
           <DialogHeader>
-            <DialogTitle>Create an event</DialogTitle>
+            <DialogTitle>Create New Campus Event</DialogTitle>
             <DialogDescription>
-              These dates apply to every attendee pass issued for this event.
+              Set event dates. These dates will automatically bound the validity of all attendee passes.
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="flex flex-col gap-[var(--sp-4)]">
+          <DialogBody className="flex flex-col gap-4">
             <FormError messages={formErrors} />
 
-            <Field label="Name" required error={errors.name?.message}>
+            <Field label="Event Name" required error={errors.name?.message}>
               {({ id, describedBy }) => (
                 <Input
                   id={id}
                   aria-describedby={describedBy}
                   invalid={Boolean(errors.name)}
                   maxLength={LIMITS.eventName.max}
-                  placeholder="e.g. Annual Tech Symposium"
+                  placeholder="e.g. Annual Technical Symposium 2026"
                   {...register('name')}
                 />
               )}
@@ -204,13 +211,14 @@ function CreateEventDialog({
                   aria-describedby={describedBy}
                   invalid={Boolean(errors.description)}
                   maxLength={LIMITS.eventDescription.max}
+                  placeholder="Brief summary of the event activities and venue..."
                   {...register('description')}
                 />
               )}
             </Field>
 
-            <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
-              <Field label="First day" required error={errors.validFrom?.message}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Start Date" required error={errors.validFrom?.message}>
                 {({ id, describedBy }) => (
                   <Input
                     id={id}
@@ -222,7 +230,7 @@ function CreateEventDialog({
                 )}
               </Field>
 
-              <Field label="Last day" required error={errors.validTo?.message}>
+              <Field label="End Date" required error={errors.validTo?.message}>
                 {({ id, describedBy }) => (
                   <Input
                     id={id}
@@ -240,7 +248,9 @@ function CreateEventDialog({
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={create.isPending}>Create event</Button>
+            <Button type="submit" loading={create.isPending} className="bg-indigo-600 text-white">
+              Create Event
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

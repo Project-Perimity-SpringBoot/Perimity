@@ -10,6 +10,8 @@ import { cn } from '@lib/utils/cn';
 import type { GatePassResponse } from '@/types/gatepass.types';
 import { PassStatusBadge } from './StatusBadge';
 
+import { displayPassCode } from '@lib/format/passCode';
+
 export interface PassCardProps {
   pass: GatePassResponse;
   variant?: 'compact' | 'detail';
@@ -20,7 +22,7 @@ export interface PassCardProps {
 export function PassCard({ pass, variant = 'compact', onDownload, className }: PassCardProps) {
   const toast = useToast();
   const detail = variant === 'detail';
-  const passCode = `GP-${String(pass.id).padStart(6, '0')}`;
+  const passCode = displayPassCode(pass);
   const passTypeLabel = pass.passType === 'EVENT' ? 'EVENT PASS' : 'DAILY PASS';
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
