@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Button } from '@ui/index';
 import { FormError, OtpInput } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
-import { ApiError } from '@lib/api/errors';
+import { ApiError, NetworkError, ServerError } from '@lib/api/errors';
 import { OTP_RULES } from '@lib/validation/patterns';
 import { config } from '@lib/config';
 import { useAuth } from '@hooks/useAuth';
@@ -49,11 +49,18 @@ export default function VerifyCodePage() {
       navigate(completeSignIn(auth), { replace: true });
     },
     onError: (error) => {
-      setAttemptsUsed((n) => {
-        const next = n + 1;
-        if (storageKey) sessionStorage.setItem(storageKey, String(next));
-        return next;
-      });
+      const isConnectionOrServerError =
+        error instanceof NetworkError ||
+        error instanceof ServerError ||
+        (error instanceof ApiError && (error.status === 0 || error.status >= 500));
+
+      if (!isConnectionOrServerError) {
+        setAttemptsUsed((n) => {
+          const next = n + 1;
+          if (storageKey) sessionStorage.setItem(storageKey, String(next));
+          return next;
+        });
+      }
       setCode('');
       setFormErrors([error instanceof ApiError ? error.message : 'That code is not correct.']);
     },
@@ -67,6 +74,9 @@ export default function VerifyCodePage() {
       setAttemptsUsed(0);
       if (storageKey) sessionStorage.removeItem(storageKey);
       setFormErrors([]);
+    },
+    onError: (error) => {
+      setFormErrors([error instanceof ApiError ? error.message : 'Failed to resend code.']);
     },
   });
 
