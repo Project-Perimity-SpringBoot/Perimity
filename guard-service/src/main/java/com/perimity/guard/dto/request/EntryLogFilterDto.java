@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.perimity.guard.document.enums.ScanResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -58,6 +59,20 @@ public class EntryLogFilterDto {
 
     @Schema(description = "ALLOWED or DENIED. Omit for both.", nullable = true)
     private ScanResult scanResult;
+
+    /**
+     * Free text matched against the person's name and the gate's name.
+     *
+     * Server-side on purpose. The screen used to filter whatever rows it had
+     * already loaded, which quietly turned "search the register" into "search
+     * this page" - and the smaller the page, the more it lied. Capped because a
+     * search box is an unauthenticated-shaped input even behind a login, and a
+     * long term is a slow query, not a useful one.
+     */
+    @Size(max = 80, message = "A search term may not be longer than 80 characters")
+    @Schema(description = "Matches the holder or gate name. Omit for all.",
+            example = "Anita", nullable = true)
+    private String query;
 
     @JsonIgnore
     @Schema(hidden = true)

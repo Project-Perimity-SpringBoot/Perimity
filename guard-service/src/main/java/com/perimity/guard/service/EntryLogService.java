@@ -51,20 +51,70 @@ public class EntryLogService {
     private static final DateTimeFormatter SCAN_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final EntryLogRepository repository;
+    private final org.springframework.data.mongodb.core.MongoTemplate mongo;
 
-    public EntryLogService(EntryLogRepository repository) {
+    public EntryLogService(EntryLogRepository repository,
+                           org.springframework.data.mongodb.core.MongoTemplate mongo) {
+        this.mongo = mongo;
         this.repository = repository;
     }
 
-    /** The searchable register. The 90-day cap is enforced by the filter DTO. */
+    /**
+     * The searchable register. The 90-day cap is enforced by the filter DTO.
+     *
+     * Built as one query rather than a choice between two derived methods. The
+     * pair it replaced disagreed: the unfiltered branch honoured from/to, and
+     * the scanResult branch did not - so narrowing to DENIED quietly widened
+     * the search to all of history. A campus admin looking at one week of
+     * refusals was reading every refusal ever recorded, and the result grew
+     * without bound as the register filled up.
+     *
+     * The date range now applies to every search, and the optional criteria are
+     * added only when they were asked for.
+     */
     public PageResponse<EntryLogResponse> search(Long campusId, EntryLogFilterDto filter,
                                                  Pageable pageable) {
-        Page<EntryLog> page = filter.getScanResult() == null
-                ? repository.findByCampusIdAndScannedAtBetweenOrderByScannedAtDesc(
-                        campusId, filter.getFrom(), filter.getTo(), pageable)
-                : repository.findByCampusIdAndScanResultOrderByScannedAtDesc(
-                        campusId, filter.getScanResult(), pageable);
+        org.springframework.data.mongodb.core.query.Criteria criteria =
+                org.springframework.data.mongodb.core.query.Criteria.where("campusId").is(campusId)
+                        .and("scannedAt").gte(filter.getFrom()).lte(filter.getTo());
 
+        if (filter.getScanResult() != null) {
+            criteria = criteria.and("scanResult").is(filter.getScanResult());
+        }
+
+        /*
+         * Name-or-gate search runs HERE, not in the browser.
+         *
+         * It used to filter the rows the page had already loaded, which was
+         * survivable while a page held 50 of them and wrong as soon as it held
+         * 10: typing a visitor's name searched ten rows and reported "no
+         * results" for someone who was in the register all along.
+         *
+         * Quoted so a term like "Gate 2." is matched literally - an unescaped
+         * regex from a search box is a query the user did not intend to write.
+         */
+        String term = filter.getQuery() == null ? "" : filter.getQuery().trim();
+        if (!term.isEmpty()) {
+            String quoted = java.util.regex.Pattern.quote(term);
+            criteria = criteria.andOperator(new org.springframework.data.mongodb.core.query.Criteria()
+                    .orOperator(
+                            org.springframework.data.mongodb.core.query.Criteria
+                                    .where("holderName").regex(quoted, "i"),
+                            org.springframework.data.mongodb.core.query.Criteria
+                                    .where("gateName").regex(quoted, "i")));
+        }
+
+        org.springframework.data.mongodb.core.query.Query query =
+                new org.springframework.data.mongodb.core.query.Query(criteria)
+                        .with(pageable.getSortOr(org.springframework.data.domain.Sort
+                                .by(org.springframework.data.domain.Sort.Direction.DESC, "scannedAt")));
+
+        long total = mongo.count(
+                org.springframework.data.mongodb.core.query.Query.of(query).limit(-1).skip(-1),
+                EntryLog.class);
+        List<EntryLog> rows = mongo.find(query.with(pageable), EntryLog.class);
+
+        Page<EntryLog> page = new org.springframework.data.domain.PageImpl<>(rows, pageable, total);
         return PageResponse.from(page, EntryLogResponse::from);
     }
 
