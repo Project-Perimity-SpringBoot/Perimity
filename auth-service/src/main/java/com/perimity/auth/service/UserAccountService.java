@@ -597,6 +597,22 @@ public class UserAccountService {
     }
 
     @Transactional(readOnly = true)
+    /**
+     * The same listing, limited to the roles the caller may see.
+     *
+     * A single role, when given, has already been checked against this set by
+     * the controller - so it narrows the set rather than escaping it.
+     */
+    public PageResponse<UserResponse> byCampus(Long campusId, Role role,
+                                               java.util.Set<Role> visible, Pageable pageable) {
+        if (role != null) {
+            return byCampus(campusId, role, pageable);
+        }
+        return PageResponse.from(
+                userRepository.findByCampusIdAndRoleInOrderByNameAsc(campusId, visible, pageable),
+                UserResponse::from);
+    }
+
     public PageResponse<UserResponse> byCampus(Long campusId, Role role, Pageable pageable) {
         if (campusId == null) {
             return PageResponse.from(

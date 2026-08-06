@@ -136,6 +136,22 @@ export const CREATABLE_ROLES: Readonly<Record<Role, readonly Role[]>> = {
 export const creatableRolesFor = (actor: Role | null | undefined): readonly Role[] =>
   actor ? CREATABLE_ROLES[actor] : [];
 
+/**
+ * Which roles this person may SEE in the account list.
+ *
+ * Identical to CREATABLE_ROLES on purpose: you see what you may create. A
+ * campus admin creating a faculty account they could not then find would be
+ * the obvious way to get this wrong.
+ *
+ * Mirrors VISIBLE in UserAdminController, which ENFORCES it - ?role= is one
+ * curl away from any browser, so this list only shapes the menu. The server
+ * refuses a role that is not on it.
+ */
+export const VISIBLE_ROLES: Readonly<Record<Role, readonly Role[]>> = CREATABLE_ROLES;
+
+export const visibleRolesFor = (actor: Role | null | undefined): readonly Role[] =>
+  actor ? VISIBLE_ROLES[actor] : [];
+
 /** PassStatus.isScannable() */
 export const isScannable = (s: PassStatus): boolean => s === 'ACTIVE';
 

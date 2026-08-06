@@ -25,6 +25,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findByCampusIdOrderByNameAsc(Long campusId, Pageable pageable);
 
+    /**
+     * Accounts on a campus limited to a set of roles.
+     *
+     * Needed because visibility is now per-actor: a Campus Admin sees FACULTY
+     * and GUARD, not everyone on the campus. Filtering in Java after loading
+     * the page would silently return short pages - the database has to do it.
+     */
+    Page<User> findByCampusIdAndRoleInOrderByNameAsc(
+            Long campusId, java.util.Collection<Role> roles, Pageable pageable);
+
     List<User> findByRole(Role role);
 
     Page<User> findByRoleOrderByNameAsc(Role role, Pageable pageable);
