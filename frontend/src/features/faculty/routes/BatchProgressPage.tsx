@@ -7,7 +7,6 @@ import { bulkApi } from '@lib/api/services/gatepass.api';
 import { bulkKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
 import { useToast } from '@hooks/useToast';
-import type { BulkUploadBatchResponse } from '@/types/gatepass.types';
 
 const RUNNING: ReadonlySet<string> = new Set(['VALIDATING', 'PROCESSING']);
 

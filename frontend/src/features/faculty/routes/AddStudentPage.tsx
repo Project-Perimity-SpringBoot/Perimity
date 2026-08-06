@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'react-router';
-import { AlertTriangle, ArrowLeft, UserPlus, Sparkles, Shield, UserCheck, Key, Building2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, UserPlus, UserCheck, Key, Building2 } from 'lucide-react';
 import {
   Button, Field, Input, NativeSelect, Textarea,
 } from '@ui/index';

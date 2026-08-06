@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, ClipboardCheck, Clock, UserCheck, Sparkles } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Clock, Sparkles } from 'lucide-react';
 import { Avatar, Button } from '@ui/index';
 import { DataTable } from '@components/data';
 import { ErrorState } from '@components/feedback';

@@ -4,8 +4,6 @@ import { Link } from 'react-router';
 import {
   CalendarRange,
   ClipboardCheck,
-  UserCheck,
-  Users,
   Sparkles,
   ArrowRight,
   Plus,

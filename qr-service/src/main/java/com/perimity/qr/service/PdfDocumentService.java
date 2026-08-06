@@ -54,7 +54,7 @@ public class PdfDocumentService {
                 // Banner Left: Campus Name & Access Subtitle
                 String campusName = (request.getCampusName() != null && !request.getCampusName().isBlank())
                         ? request.getCampusName().toUpperCase()
-                        : "DR.DY PATIL PUNE";
+                        : "GATE PASS";
 
                 writeText(content, campusName,
                         new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD),

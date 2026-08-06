@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { Download, FileSpreadsheet, Sparkles, CheckCircle2, AlertCircle, FileCheck, Layers } from 'lucide-react';
+import { Download, FileSpreadsheet, Sparkles } from 'lucide-react';
 import { Button, Field, NativeSelect, Progress } from '@ui/index';
 import { FormError } from '@components/feedback';
 import { FileDropzone } from '@components/upload';

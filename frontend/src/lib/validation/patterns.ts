@@ -63,7 +63,7 @@ export const RX = {
   DISPLAY_NAME: /^[\p{L}\p{N}][\p{L}\p{N} .,'&()/-]{1,149}$/u,
   CONFIG_KEY: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
   IDENTIFIER_CODE: /^[A-Za-z0-9][A-Za-z0-9/-]{0,31}$/,
-  DEPARTMENT_CODE: /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,31}$/,
+  DEPARTMENT_CODE: /^[A-Z0-9]{4}$/,
 
   /**
    * gatepass TITLE is 3–180; user-service TITLE is 1–150. They genuinely differ.
@@ -98,7 +98,7 @@ export const LIMITS = {
   campusCode: { min: 2, max: 32 },
   address: { max: 250 },
   departmentName: { max: 150 },
-  departmentCode: { max: 32 },
+  departmentCode: { min: 4, max: 4 },
   identifierCode: { max: 32 },
   /** One part of a name — matches the 60-char columns on student_profiles. */
   personNamePart: { max: 60 },

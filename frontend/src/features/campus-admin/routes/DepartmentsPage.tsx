@@ -144,10 +144,21 @@ export default function DepartmentsPage() {
               </Field>
 
               <Field label="Code" required error={errors.code?.message}
-                     hint={editing ? 'Permanent.' : 'Short and permanent, e.g. CSE.'}>
+                     hint={editing ? 'Permanent.' : 'Exactly 4 uppercase characters, e.g. MATH, CS01.'}>
                 {({ id, describedBy }) => (
-                  <Input id={id} aria-describedby={describedBy} disabled={editing !== null}
-                         invalid={Boolean(errors.code)} {...register('code')} />
+                  <Input
+                    id={id}
+                    aria-describedby={describedBy}
+                    disabled={editing !== null}
+                    placeholder="MATH"
+                    maxLength={4}
+                    invalid={Boolean(errors.code)}
+                    {...register('code', {
+                      onChange: (e) => {
+                        e.target.value = e.target.value.toUpperCase();
+                      },
+                    })}
+                  />
                 )}
               </Field>
 
