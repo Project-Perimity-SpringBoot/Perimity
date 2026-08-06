@@ -45,12 +45,13 @@ class EntryLogServiceTest {
     private static final LocalDateTime TO = LocalDateTime.now();
 
     @Mock private EntryLogRepository repository;
+    @Mock private org.springframework.data.mongodb.core.MongoTemplate mongo;
 
     private EntryLogService service;
 
     @BeforeEach
     void setUp() {
-        service = new EntryLogService(repository);
+        service = new EntryLogService(repository, mongo);
     }
 
     @Test

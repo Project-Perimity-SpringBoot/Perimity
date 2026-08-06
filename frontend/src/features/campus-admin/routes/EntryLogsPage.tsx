@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import dayjs from 'dayjs';
@@ -30,7 +30,22 @@ const isScanResult = (value: string): value is ScanResult =>
  */
 export default function EntryLogsPage() {
   const { campusId } = useAuth();
-  const { request: pageRequest, params, setPage, setFilter } = useUrlPagination(50);
+  /*
+   * 10 rows a page.
+   *
+   * The pager hides itself while there is only one page, so at the old size of
+   * 50 the table just grew as entries accumulated and no controls ever
+   * appeared - it read as missing pagination rather than as one long page. At
+   * 10 the second page shows up as soon as there is one, and the screen stops
+   * growing after that.
+   *
+   * Paging is by click. Nothing loads more on scroll, so the table stays the
+   * same height however many entries the campus collects.
+   *
+   * The server default stays 50 for callers that do not ask - this is a
+   * screen-level choice, sent as ?size=.
+   */
+  const { request: pageRequest, params, setPage, setFilter } = useUrlPagination(10);
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search, 300);
 
@@ -47,6 +62,7 @@ export default function EntryLogsPage() {
     from: toServerDateTime(dayjs(from).startOf('day')),
     to: toServerDateTime(dayjs(to).endOf('day')),
     ...(isScanResult(resultParam) ? { scanResult: resultParam } : {}),
+    ...(debounced.trim() ? { query: debounced.trim() } : {}),
   };
 
   const enabled = campusId !== null && rangeValid;
@@ -63,16 +79,23 @@ export default function EntryLogsPage() {
     enabled,
   });
 
-  const visible = useMemo(() => {
-    const items = logs.data?.items ?? [];
-    const term = debounced.trim().toLowerCase();
-    if (!term) return items;
-    return items.filter(
-      (log) =>
-        (log.holderName ?? '').toLowerCase().includes(term) ||
-        log.gateName.toLowerCase().includes(term),
-    );
-  }, [logs.data, debounced]);
+  /*
+   * The server already applied the search, so this is just what came back.
+   *
+   * The filter that used to live here ran over the loaded page only, which was
+   * a quiet lie: it reported "no results" for people who were in the register
+   * but not on the page you happened to be looking at.
+   */
+  const visible = logs.data?.items ?? [];
+
+  /*
+   * A new term starts at page one. Without this, searching while on page 3
+   * asks for the third page of a result set that may only have one, and the
+   * table comes back empty for a term that does match.
+   */
+  useEffect(() => {
+    setPage(0);
+  }, [debounced]);
 
   const columns: ColumnDef<EntryLogResponse, unknown>[] = [
     {
@@ -128,7 +151,7 @@ export default function EntryLogsPage() {
       <SearchFilterBar
         value={search}
         onChange={setSearch}
-        placeholder="Search person or gate on this page"
+        placeholder="Search person or gate"
         resultCount={visible.length}
         filters={
           <>

@@ -124,6 +124,8 @@ export interface EntryLogFilterRequest {
   to: string;
   /** Range may not exceed 90 days. */
   scanResult?: ScanResult | null;
+  /** Matches holder or gate name, server-side, across the whole range. */
+  query?: string | null;
 }
 
 export interface EventAttendanceQuery {
