@@ -13,7 +13,7 @@ import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { authKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
-import { ROLES, creatableRolesFor, type Role } from '@/types/enums';
+import { ROLES, creatableRolesFor, visibleRolesFor, type Role } from '@/types/enums';
 import type { UserResponse } from '@/types/auth.types';
 import { ROLE_LABEL } from '@/layouts/navigation';
 import { useApiFormErrors } from '@hooks/useApiForm';
@@ -245,7 +245,10 @@ export default function UsersPage() {
             onChange={(event) => setFilter('role', event.target.value || null)}
           >
             <option value="">All roles</option>
-            {ROLES.map((role) => (
+            {/* Only the roles this person may list. A campus admin offered
+                "Faculty" and "Super Admin" alike would get a 403 from the
+                server on half of them - see VISIBLE in UserAdminController. */}
+            {visibleRolesFor(identity?.role).map((role) => (
               <option key={role} value={role}>{ROLE_LABEL[role]}</option>
             ))}
           </NativeSelect>
