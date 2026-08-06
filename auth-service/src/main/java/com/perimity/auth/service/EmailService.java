@@ -219,6 +219,82 @@ public class EmailService {
      * Gmail. No institution name appears here; the campus is not known at
      * this point in the code and inventing one is how a literal gets in.
      */
+    /**
+     * Sign-in details for a guest created by an event roster upload.
+     *
+     * ==================================================================
+     *  THE SAME EMAIL AS sendStudentWelcome, MINUS THE PASSWORD
+     * ==================================================================
+     * A student created by a bulk import needs a temporary password because a
+     * student signs in with one. A guest does not: resolveOrCreateInternalIdentity
+     * gives them passwordHash = null and they sign in with a one-time code sent
+     * to this same address, every time.
+     *
+     * That difference is worth its own template rather than a null password in
+     * the existing one. An email with an empty "Temporary password" row reads
+     * like a broken send, and a guest who goes looking for a password they were
+     * never given will end up on the reset-password page for an account that
+     * has no password to reset.
+     *
+     * Nothing secret is in here, which is exactly the point: the only way into
+     * the account is a code delivered to the mailbox this was sent to.
+     */
+    public void sendVisitorWelcome(String toEmail, String name, String eventName,
+                                   String codeLoginUrl) {
+        if (!mailEnabled) {
+            log.warn("MAIL DISABLED (dev mode) - visitor sign-in email for {} would be sent", toEmail);
+            return;
+        }
+
+        String subject = "Your Perimity sign-in details";
+        String html = visitorWelcomeTemplate(subject, name, toEmail, eventName, codeLoginUrl);
+
+        try {
+            deliver(toEmail, subject, html);
+            log.info("Visitor sign-in email dispatched to {}", toEmail);
+        } catch (MessagingException | UnsupportedEncodingException | MailException ex) {
+            /*
+             * Swallowed, like sendStudentWelcome. The identity and the pass are
+             * already created and correct; only the notification failed. One
+             * bounced mailbox must not fail a 600-row roster.
+             */
+            log.error("Could not send visitor sign-in email to {}: {}", toEmail, ex.getMessage());
+        }
+    }
+
+    private String visitorWelcomeTemplate(String title, String name, String email,
+                                          String eventName, String codeLoginUrl) {
+        String reason = eventName == null || eventName.isBlank()
+                ? "An account has been created for you at this campus."
+                : "You have been added to <strong>" + escape(eventName) + "</strong>.";
+
+        return """
+                <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto">
+                  <h2 style="margin-bottom:4px">%s</h2>
+                  <p style="color:#444">
+                    Hello %s. %s Your gate pass arrives in a separate email.
+                  </p>
+                  <table style="border-collapse:collapse;margin:16px 0">
+                    <tr><td style="padding:4px 12px 4px 0;color:#666">Email</td>
+                        <td style="padding:4px 0"><strong>%s</strong></td></tr>
+                    <tr><td style="padding:4px 12px 4px 0;color:#666">Password</td>
+                        <td style="padding:4px 0;color:#444">Not needed - you sign in with a code</td></tr>
+                  </table>
+                  <p><a href="%s" style="background:#2563eb;color:#fff;padding:10px 20px;
+                            border-radius:6px;text-decoration:none;display:inline-block">
+                            Sign in with an email code</a></p>
+                  <p style="color:#444">
+                    Enter this address and we will send you a one-time code. There is no
+                    password to remember, and nothing to set up before the day.
+                  </p>
+                  <p style="color:#666;font-size:13px">
+                    If you were not expecting this, please tell the organiser of the event
+                    rather than replying to this message.
+                  </p>
+                </div>
+                """.formatted(title, escape(name), reason, escape(email), codeLoginUrl);
+    }
+
     private String welcomeTemplate(String title, String name, String email,
                                    String temporaryPassword, String loginUrl,
                                    boolean returning) {

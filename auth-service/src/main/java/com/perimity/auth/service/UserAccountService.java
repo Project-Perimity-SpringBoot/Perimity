@@ -70,6 +70,7 @@ public class UserAccountService {
     private final String resetUrlBase;
     /** Where an imported student is told to sign in. */
     private final String studentLoginUrl;
+    private final String visitorLoginUrl;
 
     public UserAccountService(UserRepository userRepository,
                               PasswordResetRepository resetRepository,
@@ -83,7 +84,11 @@ public class UserAccountService {
                               @Value("${perimity.ratelimit.reset.per-email-per-day}") int resetPerEmailPerDay,
                               @Value("${perimity.frontend.reset-password-url}") String resetUrlBase,
                               @Value("${perimity.frontend.login-url:http://localhost:5173/login}")
-                              String studentLoginUrl) {
+                              String studentLoginUrl,
+                              // The code page, not the password page. A visitor
+                              // has no password, so /login would strand them.
+                              @Value("${perimity.frontend.visitor-login-url:http://localhost:5173/login/code}")
+                              String visitorLoginUrl) {
         this.userRepository = userRepository;
         this.resetRepository = resetRepository;
         this.blocklistRepository = blocklistRepository;
@@ -96,6 +101,7 @@ public class UserAccountService {
         this.resetPerEmailPerDay = resetPerEmailPerDay;
         this.resetUrlBase = resetUrlBase;
         this.studentLoginUrl = studentLoginUrl;
+        this.visitorLoginUrl = visitorLoginUrl;
     }
 
     // --------------------------------------------------------- accounts
@@ -258,6 +264,26 @@ public class UserAccountService {
         audit.recordAnonymous(AuditAction.ACCOUNT_CREATED, "user:" + user.getId(),
                 "Created via internal service call"
                         + (dto.getSource() == null ? "" : ", source " + dto.getSource()));
+
+        /*
+         * ==================================================================
+         *  ONLY ON CREATE, NEVER ON REUSE
+         * ==================================================================
+         * This sits after the insert and inside the if-absent branch on
+         * purpose. An event roster that repeats fifty people who are already
+         * members must not mail those fifty a "your account has been created"
+         * notice about an account they have had for two years - the existing
+         * branch above returns before reaching here.
+         *
+         * There is no password in this email because this account has none.
+         * The pass itself is mailed separately by qr-service once the QR is
+         * generated, which is why the body says so rather than leaving the
+         * person waiting for an attachment that is coming from elsewhere.
+         *
+         * EmailService swallows its own failures, so a bad address costs this
+         * one notification and not the identity, the pass or the batch.
+         */
+        emailService.sendVisitorWelcome(user.getEmail(), user.getName(), null, visitorLoginUrl);
 
         return new IdentityResolution(UserResponse.from(user), true);
     }

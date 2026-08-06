@@ -189,10 +189,30 @@ export default function OnboardingPage() {
           onClear={() => setFile(null)}
         />
 
-        <p className="text-xs text-slate-500">
-          Required columns: <span className="font-mono text-slate-700">{BULK_COLUMNS.required.join(', ')}</span>.
-          Optional: <span className="font-mono text-slate-700">{BULK_COLUMNS.optional.join(', ')}</span>. Up to {BULK_COLUMNS.maxRows} rows per file.
-        </p>
+        <div className="space-y-2 text-xs text-slate-500">
+          <p>
+            Required columns: <span className="font-mono text-slate-700">{BULK_COLUMNS.required.join(', ')}</span>.
+            Optional: <span className="font-mono text-slate-700">{BULK_COLUMNS.optional.join(', ')}</span>.
+            Columns are found by header name, so a Google Form responses sheet can be
+            uploaded as exported. Up to {BULK_COLUMNS.maxRows} rows per file.
+          </p>
+
+          {/*
+            Shown only for EVENT because it describes something that only
+            happens there: the sheet is a mixed list, and the person uploading
+            it does not know which rows are already members. Saying so here is
+            the difference between "why did half of them get a second pass"
+            and knowing that is the intended outcome.
+          */}
+          {passType === 'EVENT' && (
+            <p>
+              Attendees are matched to existing accounts by email. Someone who already
+              has an account keeps it and gains the event pass alongside their current
+              one; anyone new gets a visitor account that signs in with an emailed code,
+              no password. Both receive their pass and their sign-in details by email.
+            </p>
+          )}
+        </div>
 
         <div className="flex justify-end pt-2 border-t border-slate-100">
           <Button

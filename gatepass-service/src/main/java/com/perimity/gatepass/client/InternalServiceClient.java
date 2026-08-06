@@ -199,8 +199,8 @@ public class InternalServiceClient {
      * source lands in auth's audit_logs, so months later it is possible to ask
      * "where did this identity come from" and get "gatepass-bulk-batch-88".
      */
-    public Optional<Long> resolveOrCreateIdentity(String email, String name, String phone,
-                                                  Long campusId, String source) {
+    public Optional<UserView> resolveOrCreateIdentity(String email, String name, String phone,
+                                                      Long campusId, String source) {
         try {
             UserEnvelope body = auth.post()
                     .uri("/api/internal/auth/users")
@@ -214,7 +214,9 @@ public class InternalServiceClient {
                     .retrieve()
                     .body(UserEnvelope.class);
 
-            return Optional.ofNullable(body).map(UserEnvelope::data).map(UserView::id);
+            // The whole view, not just the id: the caller needs role to decide
+            // whether this row is an existing member or a new visitor.
+            return Optional.ofNullable(body).map(UserEnvelope::data);
 
         } catch (RestClientException ex) {
             // Unlike the reads, this one being empty means the row cannot be
@@ -337,7 +339,13 @@ public class InternalServiceClient {
 
     public static record EmailEnvelope(boolean success, EmailView data) { }
 
-    public record UserView(Long id, String email, String name, Long campusId) { }
+    /**
+     * role is carried because the bulk engine has to tell an attendee who is
+     * already a member of the campus from one who has just been minted as a
+     * visitor - see BulkUploadService.createPassForRow. Jackson ignores the
+     * other fields auth-service returns.
+     */
+    public record UserView(Long id, String email, String name, Long campusId, String role) { }
 
     public record UserEnvelope(boolean success, UserView data) { }
 

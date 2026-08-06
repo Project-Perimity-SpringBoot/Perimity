@@ -4,10 +4,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
@@ -43,11 +46,44 @@ public class SheetParser {
 
     private static final Logger log = LoggerFactory.getLogger(SheetParser.class);
 
+    /**
+     * Shortest alias length that may be matched as a PREFIX rather than
+     * exactly. Eight is the length of "fullname" - long enough that a header
+     * beginning with one of these aliases is not plausibly a different
+     * question, and short enough to catch every column Google renames.
+     */
+    private static final int PREFIX_MIN_LENGTH = 8;
+
     /** The four columns the Event & Bulk design document specifies. */
     static final String COL_NAME = "name";
     static final String COL_EMAIL = "email";
     static final String COL_PHONE = "phone";
     static final String COL_PURPOSE = "purpose";
+
+    /*
+     * ======================================================================
+     *  THE REST OF A GOOGLE FORM RESPONSES SHEET - ALL OPTIONAL
+     * ======================================================================
+     * The student intake form in user-service asks for these, and faculty
+     * running an event reuse that same form rather than building a new one.
+     * Recognising the columns means the details survive the upload instead of
+     * being silently dropped; leaving every one of them OPTIONAL means a bare
+     * name-and-email RSVP sheet still uploads.
+     *
+     * These names deliberately match FormColumn in user-service. They are two
+     * copies because the services share no module and must be deployable
+     * independently - not because the vocabularies are meant to drift. If a
+     * header alias is added there, add it here too.
+     */
+    static final String COL_FIRST_NAME = "first name";
+    static final String COL_MIDDLE_NAME = "middle name";
+    static final String COL_LAST_NAME = "last name";
+    static final String COL_DOB = "date of birth";
+    static final String COL_GENDER = "gender";
+    static final String COL_ADDRESS = "address";
+    static final String COL_ROLL_NO = "roll number";
+    static final String COL_DEPARTMENT = "department";
+    static final String COL_PHOTO = "passport photo";
 
     /**
      * Alternative spellings accepted for each column. Cheap to add to, and the
@@ -75,7 +111,43 @@ public class SheetParser {
 
             Map.entry("purpose", COL_PURPOSE),
             Map.entry("reason", COL_PURPOSE),
-            Map.entry("purposeofvisit", COL_PURPOSE)
+            Map.entry("purposeofvisit", COL_PURPOSE),
+
+            Map.entry("firstname", COL_FIRST_NAME),
+            Map.entry("givenname", COL_FIRST_NAME),
+
+            Map.entry("middlename", COL_MIDDLE_NAME),
+
+            Map.entry("lastname", COL_LAST_NAME),
+            Map.entry("surname", COL_LAST_NAME),
+            Map.entry("familyname", COL_LAST_NAME),
+
+            Map.entry("dateofbirth", COL_DOB),
+            Map.entry("dob", COL_DOB),
+            Map.entry("birthdate", COL_DOB),
+
+            Map.entry("gender", COL_GENDER),
+            Map.entry("sex", COL_GENDER),
+
+            Map.entry("address", COL_ADDRESS),
+            Map.entry("residentialaddress", COL_ADDRESS),
+            Map.entry("homeaddress", COL_ADDRESS),
+
+            Map.entry("rollnumber", COL_ROLL_NO),
+            Map.entry("rollno", COL_ROLL_NO),
+            Map.entry("roll", COL_ROLL_NO),
+            Map.entry("enrollmentnumber", COL_ROLL_NO),
+
+            Map.entry("department", COL_DEPARTMENT),
+            Map.entry("branch", COL_DEPARTMENT),
+            Map.entry("course", COL_DEPARTMENT),
+            Map.entry("programme", COL_DEPARTMENT),
+            Map.entry("program", COL_DEPARTMENT),
+
+            Map.entry("passportphoto", COL_PHOTO),
+            Map.entry("photo", COL_PHOTO),
+            Map.entry("photograph", COL_PHOTO),
+            Map.entry("passportsizephoto", COL_PHOTO)
     );
 
     /**
@@ -135,7 +207,17 @@ public class SheetParser {
                         text(row, columns.get(COL_NAME)),
                         text(row, columns.get(COL_EMAIL)),
                         text(row, columns.get(COL_PHONE)),
-                        text(row, columns.get(COL_PURPOSE)));
+                        text(row, columns.get(COL_PURPOSE)),
+                        new ParsedRow.Details(
+                                text(row, columns.get(COL_FIRST_NAME)),
+                                text(row, columns.get(COL_MIDDLE_NAME)),
+                                text(row, columns.get(COL_LAST_NAME)),
+                                text(row, columns.get(COL_DOB)),
+                                text(row, columns.get(COL_GENDER)),
+                                text(row, columns.get(COL_ADDRESS)),
+                                text(row, columns.get(COL_ROLL_NO)),
+                                text(row, columns.get(COL_DEPARTMENT)),
+                                text(row, columns.get(COL_PHOTO))));
 
                 // Excel routinely reports thousands of trailing rows that only
                 // ever held formatting. Counting them would report "5000 rows,
@@ -178,29 +260,73 @@ public class SheetParser {
 
     // ------------------------------------------------------------- headers
 
+    /**
+     * Header text -> column index, in two passes.
+     *
+     * ======================================================================
+     *  WHY AN EXACT PASS BEFORE A PREFIX PASS
+     * ======================================================================
+     * Google Forms appends its own suffix to a file-upload question, so the
+     * photo column arrives as "Passport photo (File responses)". Exact
+     * matching alone misses it and the photo link is silently dropped.
+     *
+     * Prefix matching alone is worse: "Name of your organisation" starts with
+     * "name" and would claim the NAME column, putting a company in the field
+     * that becomes the name printed on the pass. So EVERY header is offered an
+     * exact match first, across the whole row, and only the leftovers are
+     * offered a prefix match. A sheet carrying both "Full Name" and "Name of
+     * your organisation" therefore resolves the real one no matter which
+     * column comes first in the file.
+     *
+     * The prefix pass is additionally restricted to aliases of at least
+     * PREFIX_MIN_LENGTH characters. "passportphoto" is long enough that a
+     * header starting with it means the photo; "name", "roll" and "photo" are
+     * not, and are left to exact matching only.
+     */
     private Map<String, Integer> mapHeaders(Row header) {
         Map<String, Integer> found = new HashMap<>();
+        Map<Integer, String> unmatched = new LinkedHashMap<>();
 
         for (int c = header.getFirstCellNum(); c < header.getLastCellNum(); c++) {
             String raw = text(header, c);
             if (raw == null || raw.isBlank()) {
                 continue;
             }
-            String canonical = HEADER_ALIASES.get(normalise(raw));
-            // putIfAbsent: if a sheet somehow has two "email" columns, the
-            // first one wins rather than the last silently overwriting it.
+            String normalised = normalise(raw);
+            String canonical = HEADER_ALIASES.get(normalised);
             if (canonical != null) {
+                // putIfAbsent: if a sheet somehow has two "email" columns, the
+                // first one wins rather than the last silently overwriting it.
                 found.putIfAbsent(canonical, c);
+            } else {
+                unmatched.put(c, normalised);
             }
         }
+
+        for (Map.Entry<Integer, String> entry : unmatched.entrySet()) {
+            prefixMatch(entry.getValue())
+                    .ifPresent(canonical -> found.putIfAbsent(canonical, entry.getKey()));
+        }
         return found;
+    }
+
+    /** Longest alias wins, so "phonenumber" beats "phone" on the same header. */
+    private Optional<String> prefixMatch(String normalisedHeader) {
+        return HEADER_ALIASES.entrySet().stream()
+                .filter(e -> e.getKey().length() >= PREFIX_MIN_LENGTH)
+                .filter(e -> normalisedHeader.startsWith(e.getKey()))
+                .max(Comparator.comparingInt(e -> e.getKey().length()))
+                .map(Map.Entry::getValue);
     }
 
     private void requireColumn(Map<String, Integer> columns, String name) {
         if (!columns.containsKey(name)) {
             throw new UnreadableSheetException(
-                    "The sheet is missing a \"" + name + "\" column. Required columns are "
-                            + "name and email; phone and purpose are optional. Download the "
+                    "The sheet is missing a \"" + name + "\" column. The only required "
+                            + "columns are name and email. Phone, purpose, first/middle/last "
+                            + "name, date of birth, gender, address, roll number, department "
+                            + "and passport photo are all read if present and ignored if not, "
+                            + "so a Google Form export can be uploaded unchanged. Download the "
                             + "template if you are unsure of the format.");
         }
     }

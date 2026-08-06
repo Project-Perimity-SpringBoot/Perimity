@@ -12,25 +12,38 @@ import com.perimity.gatepass.dto.response.PageResponse;
 import com.perimity.gatepass.entity.BulkUploadBatch;
 import com.perimity.gatepass.entity.Event;
 import com.perimity.gatepass.entity.GatePass;
+import com.perimity.gatepass.entity.VisitorRequest;
 import com.perimity.gatepass.entity.enums.BatchStatus;
+import com.perimity.gatepass.entity.enums.Gender;
 import com.perimity.gatepass.entity.enums.PassStatus;
 import com.perimity.gatepass.entity.enums.PassType;
+import com.perimity.gatepass.entity.enums.PurposeType;
+import com.perimity.gatepass.entity.enums.RequestStatus;
+import com.perimity.gatepass.entity.enums.VisitorType;
 import com.perimity.gatepass.exception.ResourceNotFoundException;
 import com.perimity.gatepass.messaging.QrJobPublisher;
 import com.perimity.gatepass.repository.BulkUploadBatchRepository;
 import com.perimity.gatepass.repository.EventRepository;
 import com.perimity.gatepass.repository.GatePassRepository;
+import com.perimity.gatepass.repository.VisitorRequestRepository;
 import com.perimity.gatepass.storage.StorageKeys;
 import com.perimity.gatepass.storage.StorageService;
+import com.perimity.gatepass.validation.ValidationPatterns;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -98,6 +111,27 @@ public class BulkUploadService {
      */
     private static final byte[] ZIP_MAGIC = {'P', 'K', 0x03, 0x04};
 
+    /**
+     * The phone rule VisitorRequest ITSELF enforces - deliberately not the one
+     * BulkValidationService uses.
+     *
+     * ======================================================================
+     *  THESE TWO RULES DO NOT AGREE, AND THAT IS NOT A BUG TO FIX HERE
+     * ======================================================================
+     * A sheet row is checked against ValidationPatterns.PHONE, which is
+     * campus-agnostic: an optional +, then 7 to 15 digits. VisitorRequest
+     * carries PHONE_IN, which is India-only: exactly ten digits starting 6-9.
+     * So "78757386666" is a perfectly valid row AND an invalid visitor record.
+     *
+     * Loosening the entity would weaken a rule the manual visitor form relies
+     * on. Tightening the sheet would reject attendees for having a foreign
+     * number, in a product that is supposed to be campus-agnostic. So neither
+     * moves: the number is left off the visitor record when it does not fit,
+     * and it survives on the identity in auth-service either way, which is
+     * where anyone would look for it.
+     */
+    private static final Pattern VISITOR_RECORD_PHONE = Pattern.compile(ValidationPatterns.PHONE_IN);
+
     private final BulkUploadBatchRepository batchRepository;
     private final GatePassRepository passRepository;
     private final EventRepository eventRepository;
@@ -107,6 +141,8 @@ public class BulkUploadService {
     private final ErrorReportWriter errorReportWriter;
     private final InternalServiceClient internal;
     private final QrJobPublisher qrJobPublisher;
+    private final VisitorRequestRepository visitorRequestRepository;
+    private final Validator beanValidator;
     private final long maxSheetBytes;
     private final int presignMinutes;
 
@@ -119,6 +155,11 @@ public class BulkUploadService {
                              ErrorReportWriter errorReportWriter,
                              InternalServiceClient internal,
                              QrJobPublisher qrJobPublisher,
+                             VisitorRequestRepository visitorRequestRepository,
+                             // NOT named "validator": that field is already taken by
+                             // BulkValidationService, which checks sheet ROWS. This one
+                             // checks a built ENTITY against its own annotations.
+                             Validator beanValidator,
                              @Value("${perimity.storage.max-sheet-mb}") long maxSheetMb,
                              @Value("${perimity.storage.presign-minutes}") int presignMinutes) {
         this.batchRepository = batchRepository;
@@ -130,6 +171,8 @@ public class BulkUploadService {
         this.errorReportWriter = errorReportWriter;
         this.internal = internal;
         this.qrJobPublisher = qrJobPublisher;
+        this.visitorRequestRepository = visitorRequestRepository;
+        this.beanValidator = beanValidator;
         this.maxSheetBytes = maxSheetMb * 1024 * 1024;
         this.presignMinutes = presignMinutes;
     }
@@ -341,7 +384,7 @@ public class BulkUploadService {
      */
     private GatePass createPassForRow(ParsedRow row, BulkUploadBatch batch, Event event) {
 
-        Long holderUserId = internal.resolveOrCreateIdentity(
+        InternalServiceClient.UserView holder = internal.resolveOrCreateIdentity(
                         row.emailKey(),
                         row.name(),
                         row.phone(),
@@ -352,13 +395,38 @@ public class BulkUploadService {
 
         boolean forEvent = batch.getPassType() == PassType.EVENT;
 
+        /*
+         * ==================================================================
+         *  MEMBER OR GUEST - DECIDED BY THE ROLE AUTH-SERVICE HANDED BACK
+         * ==================================================================
+         * An attendee whose email already belongs to a STUDENT (or any other
+         * campus role) is a member attending an event. They keep the account,
+         * the profile and the standing pass they already have, and this batch
+         * adds ONE MORE pass to their dashboard - the event one. Nothing about
+         * their identity is touched, because a spreadsheet typed by whoever ran
+         * the form is not a better source of truth than their own profile.
+         *
+         * An attendee auth-service had never seen is now a VISITOR: a
+         * lightweight identity with no password, who signs in with a one-time
+         * code. They have no profile anywhere, so the details the form did
+         * collect are recorded here as a visitor request - already APPROVED,
+         * because faculty uploading the roster IS the approval. Without it the
+         * guard scanning them at the gate has a pass with a name on it and
+         * nothing else.
+         */
+        Long visitorRequestId = null;
+        if (forEvent && isGuest(holder.role())) {
+            visitorRequestId = recordGuestDetails(row, batch, event, holder);
+        }
+
         GatePass pass = GatePass.builder()
-                .holderUserId(holderUserId)
+                .holderUserId(holder.id())
                 .holderName(row.name().trim())
                 .campusId(batch.getCampusId())
                 .passType(batch.getPassType())
                 .eventId(batch.getEventId())
                 .batchId(batch.getId())
+                .visitorRequestId(visitorRequestId)
                 // Event batch: the event's own window applies to every row, not
                 // a per-row date. Student batch: starts today and never ends,
                 // which is what validTo = null means on a DAILY pass.
@@ -368,6 +436,200 @@ public class BulkUploadService {
                 .build();
 
         return passRepository.save(pass);
+    }
+
+    /**
+     * Null-safe, and treats an unrecognised role as a member rather than a
+     * guest.
+     *
+     * Getting this backwards in the safe direction matters: mistaking a member
+     * for a guest writes a visitor record for somebody who already has a
+     * profile, which is confusing but harmless. Mistaking a guest for a member
+     * loses their details entirely, and there is nowhere else to recover them
+     * from.
+     */
+    private boolean isGuest(String role) {
+        return "VISITOR".equalsIgnoreCase(role);
+    }
+
+    /**
+     * Writes the guest's form answers as an APPROVED visitor request.
+     *
+     * IDEMPOTENT BY EMAIL AND EVENT. Confirming a batch is retryable, and the
+     * faculty may upload a corrected sheet for the same event that repeats most
+     * of the same people. Neither may leave the same guest holding two
+     * identical visitor records, so an existing one for this email at this
+     * event is reused.
+     *
+     * Only the fields a visitor record actually has are carried across. Roll
+     * number, department and address have no column here - they belong to a
+     * student profile, which a guest does not have - so they stay in the stored
+     * sheet rather than being written somewhere they do not fit. The photo link
+     * is a Google Drive URL, not an image; fetching those bytes needs the Drive
+     * service account that only user-service holds, so photoKey stays null and
+     * the guard falls back to the name on the pass.
+     */
+    private Long recordGuestDetails(ParsedRow row, BulkUploadBatch batch, Event event,
+                                    InternalServiceClient.UserView holder) {
+
+        VisitorRequest existing = visitorRequestRepository
+                .findByVisitorEmailOrderByCreatedAtDesc(row.emailKey())
+                .stream()
+                .filter(r -> event.getId().equals(r.getEventId()))
+                .findFirst()
+                .orElse(null);
+
+        if (existing != null) {
+            return existing.getId();
+        }
+
+        ParsedRow.Details details = row.details();
+
+        VisitorRequest request = VisitorRequest.builder()
+                .campusId(batch.getCampusId())
+                .visitorName(row.name().trim())
+                .visitorEmail(row.emailKey())
+                // Both of these drop a value the entity would reject rather
+                // than passing it through and letting Hibernate throw. See
+                // VISITOR_RECORD_PHONE and pastDateOnly.
+                .visitorPhone(phoneTheRecordAccepts(row.phone()))
+                .purpose(row.purpose() != null ? row.purpose() : "Attending " + event.getName())
+                .purposeType(PurposeType.EVENT)
+                .visitorType(VisitorType.GUEST)
+                .gender(details == null ? null : parseGender(details.gender()))
+                .dateOfBirth(details == null ? null : pastDateOnly(parseDate(details.dateOfBirth())))
+                .eventId(event.getId())
+                .hostUserId(batch.getUploadedBy())
+                .visitFrom(event.getValidFrom())
+                .visitTo(event.getValidTo())
+                .visitorUserId(holder.id())
+                // Faculty uploading the roster is the approval. Leaving these
+                // PENDING would put every attendee of a 600-person event into
+                // somebody's review queue for no decision anyone intends to make.
+                .status(RequestStatus.APPROVED)
+                .reviewedBy(batch.getUploadedBy())
+                .reviewedAt(LocalDateTime.now())
+                // NOT otp-verified. They have not proved they hold the mailbox
+                // yet; they do that the first time they sign in.
+                .otpVerified(false)
+                .build();
+
+        /*
+         * ==================================================================
+         *  CHECKED HERE SO THAT HIBERNATE NEVER GETS THE CHANCE TO THROW
+         * ==================================================================
+         * confirm() is one transaction around the whole batch, and the per-row
+         * try/catch around this call CANNOT save it: a constraint violation
+         * inside a transaction marks it rollback-only, the catch swallows the
+         * exception, the loop cheerfully carries on, and then the commit fails
+         * with UnexpectedRollbackException. Every pass in the batch is lost,
+         * including the rows that were fine. That is exactly what happened the
+         * first time this ran - one eleven-digit phone number cost the whole
+         * upload.
+         *
+         * So the entity is validated in plain Java BEFORE it is handed to the
+         * repository. The two sanitisers above deal with the mismatches that
+         * are known; this catches the ones that are not, and it does it without
+         * ever touching the session.
+         *
+         * An invalid record is dropped, not fatal. The pass is the thing the
+         * attendee needs; the form answers are a bonus, and losing them is a
+         * log line rather than a person turned away at the gate.
+         */
+        Set<ConstraintViolation<VisitorRequest>> violations = beanValidator.validate(request);
+        if (!violations.isEmpty()) {
+            String detail = violations.stream()
+                    .map(v -> v.getPropertyPath() + " " + v.getMessage())
+                    .sorted()
+                    .reduce((a, b) -> a + "; " + b)
+                    .orElse("");
+            log.warn("Row {} ({}): visitor details not recorded - {}. The event pass is still issued.",
+                    row.rowNumber(), row.emailKey(), detail);
+            return null;
+        }
+
+        return visitorRequestRepository.save(request).getId();
+    }
+
+    /**
+     * The phone number, but only if the visitor record will accept it.
+     *
+     * Returning null loses nothing that matters: auth-service already holds
+     * this person's phone against their identity, under the campus-agnostic
+     * rule, which is the copy anyone actually looks up.
+     */
+    private String phoneTheRecordAccepts(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        String trimmed = phone.trim();
+        if (VISITOR_RECORD_PHONE.matcher(trimmed).matches()) {
+            return trimmed;
+        }
+        log.debug("Phone \"{}\" does not fit the visitor record's format; left blank", trimmed);
+        return null;
+    }
+
+    /**
+     * A date of birth, but only if it is actually in the past.
+     *
+     * dateOfBirth is @Past, and a Google Form with a free date field collects
+     * next month's date more often than anyone expects - somebody picks the
+     * default and moves on. That is a typo in a nice-to-have field, not a
+     * reason to withhold a pass, so it is dropped quietly.
+     */
+    private LocalDate pastDateOnly(LocalDate date) {
+        if (date == null || date.isBefore(LocalDate.now())) {
+            return date;
+        }
+        log.debug("Date of birth {} is not in the past; left blank", date);
+        return null;
+    }
+
+    /**
+     * "Male", "female", "F", "Prefer not to say" -> the enum, or null.
+     *
+     * A free-text answer that does not map is NOT an error. Gender is recorded
+     * if the form asked for it in a way we can read, and left blank otherwise;
+     * rejecting a row over it would keep somebody out of an event because their
+     * form offered an option this enum does not have.
+     */
+    private Gender parseGender(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim().toLowerCase(Locale.ROOT);
+        if (value.startsWith("m")) {
+            return Gender.MALE;
+        }
+        if (value.startsWith("f") || value.startsWith("w")) {
+            return Gender.FEMALE;
+        }
+        if (value.startsWith("o") || value.startsWith("t") || value.startsWith("n")) {
+            return Gender.OTHER;
+        }
+        return null;
+    }
+
+    /**
+     * A date cell, or null.
+     *
+     * SheetParser already renders a date-formatted cell as an ISO date, which
+     * is the case this handles. A date typed as free text in some local format
+     * is deliberately NOT guessed at: 03/04/2005 is two different dates on two
+     * different continents, and a campus-agnostic product does not get to pick
+     * one. Unparseable means blank, never a wrong date of birth.
+     */
+    private LocalDate parseDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(raw.trim());
+        } catch (DateTimeParseException e) {
+            log.debug("Date of birth \"{}\" is not an ISO date; left blank", raw);
+            return null;
+        }
     }
 
     /**

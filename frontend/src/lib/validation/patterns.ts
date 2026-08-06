@@ -152,10 +152,33 @@ export const OTP_RULES = {
   resendCooldownSeconds: 60,
 } as const;
 
-/** Bulk sheet columns, matched by header name. Position is irrelevant. */
+/**
+ * Bulk sheet columns, matched by header name. Position is irrelevant.
+ *
+ * The optional list is long because faculty running an event reuse the Google
+ * Form they already have - usually the student intake form. Every column it
+ * asks for is read if present and ignored if not, so the responses sheet can
+ * be uploaded exactly as Forms exported it. Only name and email are required.
+ *
+ * Kept in step with SheetParser.HEADER_ALIASES in gatepass-service. This copy
+ * exists to tell the faculty member what to upload, not to validate anything -
+ * the server does that and its answer is the one that counts.
+ */
 export const BULK_COLUMNS = {
   required: ['name', 'email'] as const,
-  optional: ['phone', 'purpose'] as const,
+  optional: [
+    'phone',
+    'purpose',
+    'first name',
+    'middle name',
+    'last name',
+    'date of birth',
+    'gender',
+    'address',
+    'roll number',
+    'department',
+    'passport photo',
+  ] as const,
   aliases: {
     name: ['name', 'fullName', 'attendeeName', 'visitorName', 'studentName'],
     email: ['email', 'emailAddress', 'emailId'],
