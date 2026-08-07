@@ -26,34 +26,42 @@ curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-comp
 chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
 ln -sf $DOCKER_CONFIG/cli-plugins/docker-compose /usr/bin/docker-compose
 
-# 5. Create 4 GB Swap file to ensure t3.small (2GB RAM) never OOMs
-if [ ! -f /swapfile ]; then
-    echo "Creating 4 GB Swap space..."
-    dd if=/dev/zero of=/swapfile bs=1M count=4096
-    chmod 600 /swapfile
-    mkswap /swapfile
-    swapon /swapfile
-    echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
-    echo "Swap space enabled successfully."
-fi
-
-# 6. Create application directory
+# 5. Create application directory
 mkdir -p /opt/perimity
 cd /opt/perimity
 
+# 6. Fetch docker-compose.prod.yml from GitHub
+curl -sSL https://raw.githubusercontent.com/Project-Perimity-SpringBoot/Perimity/main/docker-compose.prod.yml -o /opt/perimity/docker-compose.prod.yml
+
 # 7. Login to AWS ECR using Instance IAM Role
 AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region || echo "us-east-1")
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text || echo "")
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text || echo "682975283868")
 
 if [ -n "$AWS_ACCOUNT_ID" ]; then
     echo "Logging into AWS ECR ($AWS_ACCOUNT_ID in $AWS_REGION)..."
     aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 fi
 
-# 8. Start production Docker Compose stack
-if [ -f /opt/perimity/docker-compose.yml ]; then
+# 8. Create default .env if not present
+if [ ! -f /opt/perimity/.env ]; then
+cat << 'EOF' > /opt/perimity/.env
+POSTGRES_USER=perimity
+POSTGRES_PASSWORD=perimity_prod_pass
+JWT_SECRET=change_me_to_a_long_random_string_at_least_32_chars
+INTERNAL_API_KEY=change_me_internal_key
+QR_AES_KEY=4qX9L+vW8z+A7k3m9N2p5Q8r1T4v7X0z3B6e9H2k5M8=
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_FROM_NAME=Perimity
+EOF
+fi
+
+# 9. Start production Docker Compose stack
+if [ -f /opt/perimity/docker-compose.prod.yml ]; then
     echo "Launching Perimity services..."
-    docker-compose -f /opt/perimity/docker-compose.yml up -d --remove-orphans
+    AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID AWS_REGION=$AWS_REGION docker-compose -f /opt/perimity/docker-compose.prod.yml up -d --remove-orphans
 fi
 
 echo "=========================================="
