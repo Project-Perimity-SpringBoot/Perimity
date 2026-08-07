@@ -12,10 +12,28 @@ python-pptx cannot write animations, so the deck is assembled first and the
 OOXML timing tree is injected afterwards - see animate() at the bottom.
 """
 
+import os
 import re
 import shutil
 import zipfile
 from pathlib import Path
+
+# ==========================================================================
+#  THE INSTITUTION NAME IS NOT IN THIS FILE
+# ==========================================================================
+# The same rule the product follows: no institution is written into source.
+# The branding guard-rail in CI greps the whole repo for it and fails the
+# build, and it was right to - a deck script sitting in the repo is source
+# like anything else.
+#
+# Pass it in when you build the deck:
+#
+#     PITCH_INSTITUTION="Your Institute" python3 build_pitch.py
+#
+# Left unset, the title slide reads "[Institution]" so it is obvious the
+# value was never supplied rather than quietly shipping a placeholder that
+# looks deliberate.
+INSTITUTION = os.environ.get("PITCH_INSTITUTION", "[Institution]")
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -222,7 +240,7 @@ names = card(s, 0.95, 5.95, 8.1, 1.05, INK_LIFT, radius=0.1)
 t4 = text(s, 1.35, 6.16, 7.4, 0.7,
           [("Sanjay Verma  ·  Palash Shende  ·  Omkar Velonde  ·  Mukul Sharma  ·  Tushar Shinde",
             12.5, True, WHITE, BODY),
-           ("Team lead: Sanjay Verma      C-DAC  ·  Final Evaluation, August 2026",
+           ("Team lead: Sanjay Verma      %s  ·  Final Evaluation, August 2026" % INSTITUTION,
             11, False, MUTED_DARK, BODY)],
           space=6)
 
