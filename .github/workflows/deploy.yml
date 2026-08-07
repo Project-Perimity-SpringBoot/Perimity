@@ -38,6 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         service:
+          - discovery-server
           - auth-service
           - user-service
           - gatepass-service
