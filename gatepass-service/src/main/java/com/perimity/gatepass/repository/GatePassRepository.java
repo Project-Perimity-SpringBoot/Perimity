@@ -23,6 +23,38 @@ public interface GatePassRepository extends JpaRepository<GatePass, Long> {
 
     Optional<GatePass> findByVisitorRequestId(Long visitorRequestId);
 
+    /**
+     * The standing DAILY pass a student already holds, if any.
+     *
+     * ======================================================================
+     *  WHAT MAKES A PASS "STANDING"
+     * ======================================================================
+     * DAILY, with no eventId and no visitorRequestId. Those two nulls are what
+     * separate a student's everyday pass from an event pass and from a
+     * visitor's pass, both of which are DAILY-typed in places and must never be
+     * mistaken for one - returning a visitor's pass to a student because both
+     * are DAILY would be the worst possible kind of match.
+     *
+     * REVOKED and EXPIRED are not in the caller's status list, deliberately: a
+     * student whose pass was revoked or has run out is a student who should get
+     * a new one, not a student who already has one.
+     */
+    Optional<GatePass> findFirstByHolderUserIdAndPassTypeAndEventIdIsNullAndVisitorRequestIdIsNullAndStatusInOrderByCreatedAtDesc(
+            Long holderUserId, PassType passType, List<PassStatus> statuses);
+
+    /**
+     * The live standing pass for a holder - PENDING (QR still generating),
+     * ACTIVE, or PAUSED (held for re-approval, still theirs).
+     *
+     * A default method so the status list lives in one place. Callers passing
+     * their own would eventually disagree about whether PAUSED counts.
+     */
+    default Optional<GatePass> findLiveStandingDailyPass(Long holderUserId) {
+        return findFirstByHolderUserIdAndPassTypeAndEventIdIsNullAndVisitorRequestIdIsNullAndStatusInOrderByCreatedAtDesc(
+                holderUserId, PassType.DAILY,
+                List.of(PassStatus.PENDING, PassStatus.ACTIVE, PassStatus.PAUSED));
+    }
+
     /** Every pass issued for one event - used when an event is cancelled. */
     List<GatePass> findByEventId(Long eventId);
 

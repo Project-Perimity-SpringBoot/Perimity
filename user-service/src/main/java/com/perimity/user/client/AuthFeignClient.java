@@ -3,6 +3,7 @@ package com.perimity.user.client;
 import java.util.List;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -77,6 +78,22 @@ public interface AuthFeignClient {
     UserEnvelope findByEmail(@RequestParam("email") String email);
 
     /**
+     * The account behind an id, for the name a pass has to carry.
+     *
+     * A student's pass shows auth-service's User.name - the authoritative name,
+     * the one an entry log records. StudentProfile's first/last name are
+     * self-declared detail that a freshly created profile does not have yet, so
+     * building the holder name from them would put an empty string on the pass
+     * of every student added through the Add Student screen.
+     *
+     * The endpoint is named /email because gatepass-service added it wanting an
+     * address. It answers with the whole UserResponse, so it serves here too
+     * rather than justifying a second endpoint that returns the same row.
+     */
+    @GetMapping("/api/internal/auth/users/{userId}/email")
+    UserEnvelope findById(@PathVariable("userId") Long userId);
+
+    /**
      * Only the fields this service actually uses.
      *
      * auth-service's UserResponse carries more - name, phone, campus, lock
@@ -86,7 +103,7 @@ public interface AuthFeignClient {
      */
     record UserEnvelope(boolean success, String message, UserView data) { }
 
-    record UserView(Long id, String email, boolean mustChangePassword) { }
+    record UserView(Long id, String email, String name, boolean mustChangePassword) { }
 
     /**
      * Mirrors InternalStudentBatchDto in auth-service. A copy, like every other

@@ -1,0 +1,6 @@
+email address,full name,first name,last name,date of birth,gender,address,phone number,roll number,department,passport photo
+student1.dbatu@gmail.com,Aarav Sharma,Aarav,Sharma,2002-05-15,MALE,"123 MG Road, Pune 411001",9876500001,ROLL-001,Computer Science,
+student2.dbatu@gmail.com,Ananya Verma,Ananya,Verma,2003-08-20,FEMALE,"456 FC Road, Pune 411004",9876500002,ROLL-002,Computer Science,
+student3.dbatu@gmail.com,Rohan Patil,Rohan,Patil,2002-11-10,MALE,"789 JM Road, Pune 411005",9876500003,ROLL-003,Computer Science,
+student4.dbatu@gmail.com,Priya Kulkarni,Priya,Kulkarni,2003-01-25,FEMALE,"101 Karve Road, Pune 411038",9876500004,ROLL-004,Computer Science,
+student5.dbatu@gmail.com,Aditya Deshmukh,Aditya,Deshmukh,2002-09-05,MALE,"202 Baner Road, Pune 411045",9876500005,ROLL-005,Computer Science,

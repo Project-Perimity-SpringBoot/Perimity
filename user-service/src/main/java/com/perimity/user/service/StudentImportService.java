@@ -76,7 +76,7 @@ public class StudentImportService {
     private final ResponseSheetParser parser;
     private final ImportRowValidator validator;
     private final AuthFeignClient authClient;
-    private final com.perimity.user.client.GatepassFeignClient gatepassClient;
+    private final StudentPassIssuer passIssuer;
     private final StudentImportBatchRepository batchRepository;
     private final StudentImportRowRepository rowRepository;
     private final StudentProfileRepository studentRepository;
@@ -89,7 +89,7 @@ public class StudentImportService {
     public StudentImportService(ResponseSheetParser parser,
                                 ImportRowValidator validator,
                                 AuthFeignClient authClient,
-                                com.perimity.user.client.GatepassFeignClient gatepassClient,
+                                StudentPassIssuer passIssuer,
                                 StudentImportBatchRepository batchRepository,
                                 StudentImportRowRepository rowRepository,
                                 StudentProfileRepository studentRepository,
@@ -102,7 +102,7 @@ public class StudentImportService {
         this.parser = parser;
         this.validator = validator;
         this.authClient = authClient;
-        this.gatepassClient = gatepassClient;
+        this.passIssuer = passIssuer;
         this.batchRepository = batchRepository;
         this.rowRepository = rowRepository;
         this.studentRepository = studentRepository;
@@ -505,19 +505,36 @@ public class StudentImportService {
             boolean isNew = "CREATED".equals(accountResult.outcome());
 
             /*
-             * The profile already exists - auth-service published user.created
-             * and the listener provisioned an empty one. This fills it in.
+             * The profile usually exists already - auth-service published
+             * user.created and the listener provisioned an empty one. This
+             * fills it in.
              *
-             * findByUserId rather than create: racing the listener would hit the
-             * unique index on user_id. If the event has not landed yet, the row
-             * is created here instead, and the listener's existence check makes
-             * its own attempt a no-op. Either order works.
+             * ==============================================================
+             *  THE INSERT MUST NOT RACE THE LISTENER
+             * ==============================================================
+             * This used to be findByUserId().orElseGet(build a new one), and
+             * that lost. auth-service creates every account in the batch and
+             * publishes an event for each, so the listener is provisioning
+             * rows on another thread while this loop runs. A row that was
+             * absent at the SELECT could exist by the time Hibernate issued
+             * the INSERT, and uk_student_user fired mid-batch.
+             *
+             * The whole of confirm() is one transaction, so that one collision
+             * rolled back every profile written before it AND left the batch at
+             * VALIDATED - while the accounts, which live in another service,
+             * survived. Twelve students with a login, no profile, and no pass.
+             *
+             * insertIfAbsent settles it in the database with ON CONFLICT DO
+             * NOTHING, so whichever of the two writers arrives second is a
+             * no-op rather than an exception. After it, the row is guaranteed
+             * to be there and everything below is an UPDATE.
              */
+            studentRepository.insertIfAbsent(accountResult.userId(), batch.getCampusId());
+
             StudentProfile profile = studentRepository.findByUserId(accountResult.userId())
-                    .orElseGet(() -> StudentProfile.builder()
-                            .userId(accountResult.userId())
-                            .campusId(batch.getCampusId())
-                            .build());
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Profile for account " + accountResult.userId()
+                                    + " could not be created or read."));
 
             applyRow(profile, row, batch.getUploadedBy());
 
@@ -542,21 +559,10 @@ public class StudentImportService {
 
             studentRepository.save(profile);
 
-            try {
-                gatepassClient.issuePass(new com.perimity.user.client.GatepassFeignClient.IssuePassRequest(
-                        accountResult.userId(),
-                        displayName(row),
-                        batch.getCampusId(),
-                        null,
-                        "DAILY",
-                        null,
-                        java.time.LocalDate.now(),
-                        null
-                ));
-                log.info("Issued standing DAILY pass for imported student {} (user {})", displayName(row), accountResult.userId());
-            } catch (Exception ex) {
-                log.error("Could not issue DAILY pass for student {} (user {}): {}", displayName(row), accountResult.userId(), ex.getMessage());
-            }
+            // The name is already here, from the sheet - no lookup needed.
+            // Never throws: a gatepass outage must not undo the profile.
+            passIssuer.ensureStandingPass(
+                    accountResult.userId(), batch.getCampusId(), displayName(row));
 
             if (isNew) {
                 created++;

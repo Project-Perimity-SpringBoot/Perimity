@@ -102,7 +102,9 @@ class ImportRowValidatorTest {
      */
     private void emailBelongsTo(String email, Long userId) {
         doReturn(new AuthFeignClient.UserEnvelope(true, "ok",
-                new AuthFeignClient.UserView(userId, email, true)))
+                // name is null here on purpose: validation resolves ids only.
+                // The name matters to StudentPassIssuer, which is not this test.
+                new AuthFeignClient.UserView(userId, email, null, true)))
                 .when(authClient).findByEmail(email);
     }
 
