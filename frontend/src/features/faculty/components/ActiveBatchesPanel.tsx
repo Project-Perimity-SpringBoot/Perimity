@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { Loader, Layers, ArrowRight } from 'lucide-react';
-import { Progress } from '@ui/index';
+import { ArrowRight, Layers, Loader } from 'lucide-react';
+import { Badge, Progress } from '@ui/index';
+import { SectionHeader } from '@components/data';
 import { bulkApi } from '@lib/api/services/gatepass.api';
 import { bulkKeys } from '@lib/query/keys';
 import type { BulkUploadBatchResponse } from '@/types/gatepass.types';
@@ -25,20 +26,16 @@ export function ActiveBatchesPanel() {
   if (batches.isPending || unfinished.length === 0) return null;
 
   return (
-    <section aria-labelledby="active-batches" className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-4">
-      <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
-          <Layers className="size-5" />
-        </div>
-        <div>
-          <h2 id="active-batches" className="font-bold text-slate-900 text-base">
-            Active Import & Pass Batches
-          </h2>
-          <p className="text-xs text-slate-500">Live batch progress and unconfirmed uploads.</p>
-        </div>
-      </div>
+    <section aria-labelledby="active-batches" className="flex flex-col gap-[var(--sp-4)]">
+      <SectionHeader
+        id="active-batches"
+        icon={Layers}
+        title="Active batches"
+        description="Uploads still running or waiting on your confirmation."
+        divided
+      />
 
-      <div className="grid gap-3">
+      <div className="grid gap-[var(--sp-3)]">
         {unfinished.map((batch) => (
           <BatchRow key={batch.id} batch={batch} />
         ))}
@@ -53,26 +50,33 @@ function BatchRow({ batch }: { batch: BulkUploadBatchResponse }) {
   return (
     <Link
       to={`/faculty/onboarding/batches/${batch.id}`}
-      className="group flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 transition-all hover:border-indigo-300 hover:bg-white hover:shadow-md"
+      className="surface-card lift group flex flex-col gap-[var(--sp-2)] p-[var(--sp-4)]"
     >
-      <div className="flex items-center justify-between gap-4">
-        <span className="font-bold text-slate-900 text-sm truncate group-hover:text-indigo-600 transition-colors">
+      <div className="flex items-center justify-between gap-[var(--sp-4)]">
+        <span className="text-body-md min-w-0 truncate text-[var(--ink-900)]">
           {batch.originalFilename}
         </span>
-        <span className="shrink-0 font-mono text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 flex items-center gap-1">
-          {awaitingConfirm ? 'Awaiting Confirmation' : `${batch.processedRows} of ${batch.validRows} Generated`}
-          <ArrowRight className="size-3 group-hover:translate-x-0.5 transition-transform" />
+        <span className="flex shrink-0 items-center gap-[var(--sp-2)]">
+          <Badge tone={awaitingConfirm ? 'brand' : 'neutral'}>
+            {awaitingConfirm
+              ? 'Awaiting confirmation'
+              : `${batch.processedRows} of ${batch.validRows} generated`}
+          </Badge>
+          <ArrowRight
+            className="size-4 text-[var(--ink-400)] transition-transform duration-[var(--motion-fast)] group-hover:translate-x-0.5"
+            aria-hidden
+          />
         </span>
       </div>
 
       {awaitingConfirm ? (
-        <p className="text-xs text-slate-500">
-          {batch.validRows} passes validated & ready to issue. Click to confirm.
+        <p className="text-small text-[var(--ink-500)]">
+          {batch.validRows} passes validated and ready to issue. Open to confirm.
         </p>
       ) : (
-        <div className="flex items-center gap-3 pt-1">
+        <div className="flex items-center gap-[var(--sp-3)]">
           <Progress value={batch.percentComplete} className="flex-1" />
-          <Loader className="size-4 shrink-0 animate-spin text-indigo-600" />
+          <Loader className="size-4 shrink-0 animate-spin text-[var(--brand-600)]" aria-hidden />
         </div>
       )}
     </Link>

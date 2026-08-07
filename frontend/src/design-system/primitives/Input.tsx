@@ -12,11 +12,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       ref={ref}
       aria-invalid={invalid || undefined}
       className={cn(
-        'h-9 w-full rounded-[var(--r-sm)] border bg-[var(--surface)] px-3',
+        'h-[var(--control-h)] w-full rounded-[var(--r-sm)] border bg-[var(--surface)] px-[var(--sp-3)]',
         'text-[var(--t-body-size)] text-[var(--ink-900)]',
         'placeholder:text-[var(--ink-400)]',
         'transition-colors duration-[var(--motion-fast)]',
+        'hover:border-[var(--ink-400)]',
         'disabled:cursor-not-allowed disabled:bg-[var(--surface-sunken)] disabled:opacity-60',
+        'disabled:hover:border-[var(--border-strong)]',
         invalid ? 'border-[var(--deny-solid)]' : 'border-[var(--border-strong)]',
         mono && 'font-[var(--font-mono)] tracking-[var(--t-mono-tracking)]',
         className,
@@ -35,8 +37,10 @@ export const Textarea = forwardRef<
     ref={ref}
     aria-invalid={invalid || undefined}
     className={cn(
-      'min-h-20 w-full rounded-[var(--r-sm)] border bg-[var(--surface)] px-3 py-2',
+      'min-h-24 w-full rounded-[var(--r-sm)] border bg-[var(--surface)] px-[var(--sp-3)] py-[var(--sp-2)]',
       'text-[var(--t-body-size)] text-[var(--ink-900)] placeholder:text-[var(--ink-400)]',
+      'transition-colors duration-[var(--motion-fast)] hover:border-[var(--ink-400)]',
+      'disabled:cursor-not-allowed disabled:bg-[var(--surface-sunken)] disabled:opacity-60',
       invalid ? 'border-[var(--deny-solid)]' : 'border-[var(--border-strong)]',
       className,
     )}
@@ -65,10 +69,12 @@ export const NativeSelect = forwardRef<
     ref={ref}
     aria-invalid={invalid || undefined}
     className={cn(
-      'h-9 w-full appearance-none rounded-[var(--r-sm)] border bg-[var(--surface)] px-3',
+      'h-[var(--control-h)] w-full appearance-none rounded-[var(--r-sm)] border bg-[var(--surface)] px-[var(--sp-3)]',
       'text-[var(--t-body-size)] text-[var(--ink-900)]',
       'transition-colors duration-[var(--motion-fast)]',
+      'hover:border-[var(--ink-400)]',
       'disabled:cursor-not-allowed disabled:bg-[var(--surface-sunken)] disabled:opacity-60',
+      'disabled:hover:border-[var(--border-strong)]',
       // The chevron is a background image so the control keeps native keyboard
       // and OS-picker behaviour that a custom listbox would have to reimplement.
       'bg-[length:16px] bg-[right_0.6rem_center] bg-no-repeat pr-9',

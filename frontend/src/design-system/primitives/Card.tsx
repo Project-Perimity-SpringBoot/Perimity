@@ -1,7 +1,7 @@
 import { cn } from '@lib/utils/cn';
 
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <section className={cn('surface-card', className)} {...props} />;
+  return <section className={cn('surface-panel', className)} {...props} />;
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

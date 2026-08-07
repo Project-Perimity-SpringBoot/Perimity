@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Check, Copy, Download, ExternalLink, Info, RefreshCw, Settings2, Share2, Sparkles, CheckCircle2, ListOrdered
+  Check, CheckCircle2, Copy, Download, ExternalLink, Info, ListOrdered,
+  RefreshCw, Settings2, Share2,
 } from 'lucide-react';
-import { Button, Field, Input } from '@ui/index';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Badge, Button, Field, Input } from '@ui/index';
+import { SectionHeader } from '@components/data';
+import { Alert } from '@components/feedback';
 import { studentImportApi } from '@lib/api/services/user.api';
 import { saveFile } from '@lib/api/download';
 import { importKeys } from '@lib/query/keys';
@@ -22,6 +25,13 @@ const FORM_QUESTIONS: ReadonlyArray<{ label: string; type: string; required: boo
   { label: 'Roll number', type: 'Short text', required: true },
   { label: 'Department', type: 'Dropdown (Campus)', required: true },
   { label: 'Passport photo', type: 'File Upload (Images)', required: true },
+];
+
+const SETUP_STEPS: ReadonlyArray<{ num: string; title: string; desc: string }> = [
+  { num: '1', title: 'Create the form', desc: 'Build it using the exact question list below.' },
+  { num: '2', title: 'Photo upload', desc: 'Set the photo question to a single image upload.' },
+  { num: '3', title: 'Link a sheet', desc: 'In Responses, click the Sheets icon to create one.' },
+  { num: '4', title: 'Grant read access', desc: 'Share the sheet and Drive folder with the service account.' },
 ];
 
 export function IntakeFormPanel({ onPulled }: { onPulled: (b: ImportBatchResponse) => void }) {
@@ -96,159 +106,127 @@ export function IntakeFormPanel({ onPulled }: { onPulled: (b: ImportBatchRespons
 
   if (!data?.configured || editing) {
     return (
-      <section className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-b from-white via-indigo-50/20 to-white p-6 shadow-sm sm:p-8">
-        <div className="flex items-start justify-between gap-4 border-b border-indigo-100/80 pb-6">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
-              <Settings2 className="size-5" aria-hidden />
+      <section className="surface-panel flex flex-col gap-[var(--sp-6)] p-[var(--sp-6)]">
+        <SectionHeader
+          icon={Settings2}
+          title="Intake form setup"
+          description="Configure your campus intake form once. After that, importing submissions is one click."
+          divided
+        />
+
+        <div className="grid gap-[var(--sp-3)] sm:grid-cols-2 lg:grid-cols-4">
+          {SETUP_STEPS.map((step) => (
+            <div key={step.num} className="surface-inset flex flex-col gap-[var(--sp-2)] p-[var(--sp-4)]">
+              <div className="flex items-center gap-[var(--sp-2)]">
+                <span className="text-caption flex size-6 shrink-0 items-center justify-center rounded-[var(--r-circle)] bg-[var(--brand-600)] text-white">
+                  {step.num}
+                </span>
+                <span className="text-body-md text-[var(--ink-900)]">{step.title}</span>
+              </div>
+              <p className="text-small text-[var(--ink-500)]">{step.desc}</p>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Intake Form Setup</h2>
-              <p className="text-sm text-slate-500">
-                Configure your campus intake form once. Afterwards, import student submissions in one click.
-              </p>
-            </div>
-          </div>
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 border border-indigo-100">
-            <Sparkles className="size-3.5" /> Step 1 of 3
-          </div>
+          ))}
         </div>
 
-        <div className="mt-6 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { num: '1', title: 'Create Google Form', desc: 'Build form using the exact question list below.' },
-              { num: '2', title: 'File Upload Photo', desc: 'Set photo question to single file image upload.' },
-              { num: '3', title: 'Link Spreadsheet', desc: 'Click Sheets icon in Responses to create spreadsheet.' },
-              { num: '4', title: 'Grant Read Access', desc: 'Share sheet & Drive folder with service account.' },
-            ].map((step) => (
-              <div key={step.num} className="relative rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex size-7 items-center justify-center rounded-full bg-indigo-100 font-bold text-xs text-indigo-700 border border-indigo-200/80">
-                    {step.num}
-                  </span>
-                  <span className="font-semibold text-sm text-slate-900">{step.title}</span>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-slate-500">{step.desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ListOrdered className="size-4 text-indigo-600" />
-                <h3 className="font-semibold text-slate-900 text-sm">Required Form Questions</h3>
-              </div>
+        <div className="surface-inset flex flex-col gap-[var(--sp-4)] p-[var(--sp-4)]">
+          <SectionHeader
+            icon={ListOrdered}
+            title="Required form questions"
+            actions={
               <Button variant="secondary" size="sm" onClick={() => void copyQuestions()}>
-                {questionsCopied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-                {questionsCopied ? 'Copied' : 'Copy All Questions'}
+                {questionsCopied ? <Check aria-hidden /> : <Copy aria-hidden />}
+                {questionsCopied ? 'Copied' : 'Copy all'}
               </Button>
-            </div>
+            }
+          />
 
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {FORM_QUESTIONS.map((q, i) => (
-                <div
-                  key={q.label}
-                  className="flex items-center justify-between rounded-lg border border-slate-200/60 bg-white px-3 py-2 text-xs shadow-2xs"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-semibold text-[10px] text-slate-600">
-                      {i + 1}
-                    </span>
-                    <span className="font-medium truncate text-slate-800">{q.label}</span>
-                  </div>
-                  <span className="shrink-0 rounded-md bg-indigo-50/80 px-2 py-0.5 font-mono text-[10px] text-indigo-700 border border-indigo-100">
-                    {q.type}
+          <ul className="grid gap-[var(--sp-2)] sm:grid-cols-2 lg:grid-cols-3">
+            {FORM_QUESTIONS.map((q, i) => (
+              <li
+                key={q.label}
+                className="flex items-center justify-between gap-[var(--sp-2)] rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--surface)] px-[var(--sp-3)] py-[var(--sp-2)]"
+              >
+                <span className="flex min-w-0 items-center gap-[var(--sp-2)]">
+                  <span className="text-caption flex size-5 shrink-0 items-center justify-center rounded-[var(--r-circle)] bg-[var(--surface-sunken)] text-[var(--ink-500)]">
+                    {i + 1}
                   </span>
-                </div>
-              ))}
-            </div>
+                  <span className="text-small truncate text-[var(--ink-900)]">{q.label}</span>
+                </span>
+                <Badge className="shrink-0">{q.type}</Badge>
+              </li>
+            ))}
+          </ul>
 
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50/80 p-3 text-xs text-amber-800 border border-amber-200/60">
-              <Info className="size-4 shrink-0 text-amber-600" aria-hidden />
-              <span>
-                <strong>Note:</strong> Google Form automatically includes <strong>Timestamp</strong> and <strong>Email Address</strong>. Do not add semester fields.
-              </span>
-            </div>
-          </div>
+          <Alert tone="info" live={false}>
+            The form automatically includes <strong>Timestamp</strong> and{' '}
+            <strong>Email Address</strong>. Do not add semester fields.
+          </Alert>
+        </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Form Shareable Link" hint="What students open to fill their details.">
-              {({ id, describedBy }) => (
-                <Input
-                  id={id}
-                  aria-describedby={describedBy}
-                  placeholder="https://docs.google.com/forms/d/e/.../viewform"
-                  value={formUrl}
-                  onChange={(e) => setFormUrl(e.target.value)}
-                  className="bg-white"
-                />
-              )}
-            </Field>
-            <Field label="Responses Spreadsheet Link" hint="The linked Google Sheets URL.">
-              {({ id, describedBy }) => (
-                <Input
-                  id={id}
-                  aria-describedby={describedBy}
-                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
-                  value={sheetUrl}
-                  onChange={(e) => setSheetUrl(e.target.value)}
-                  className="bg-white"
-                />
-              )}
-            </Field>
-          </div>
-
-          <div className="flex items-center gap-3 border-t border-slate-200/80 pt-4">
-            <Button onClick={() => save.mutate()} loading={save.isPending}>
-              Save Form Settings
-            </Button>
-            {data?.configured && (
-              <Button variant="ghost" onClick={() => setEditing(false)}>
-                Cancel
-              </Button>
+        <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
+          <Field label="Form shareable link" hint="What students open to fill in their details.">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                placeholder="https://docs.google.com/forms/d/e/.../viewform"
+                value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+              />
             )}
-          </div>
+          </Field>
+          <Field label="Responses spreadsheet link" hint="The linked Google Sheets URL.">
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                aria-describedby={describedBy}
+                placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+              />
+            )}
+          </Field>
+        </div>
+
+        <div className="flex items-center justify-end gap-[var(--sp-2)] border-t border-[var(--border)] pt-[var(--sp-4)]">
+          {data?.configured && (
+            <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+          )}
+          <Button onClick={() => save.mutate()} loading={save.isPending}>
+            Save form settings
+          </Button>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60">
-            <CheckCircle2 className="size-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-slate-900 text-base">Intake Form Configured</h2>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                ACTIVE
-              </span>
-            </div>
-            <p className="text-xs truncate text-slate-500 mt-0.5">{data.formUrl}</p>
-          </div>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setFormUrl(data.formUrl ?? '');
-            setSheetUrl('');
-            setEditing(true);
-          }}
-        >
-          Reconfigure Form
-        </Button>
-      </div>
+    <section className="surface-panel flex flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
+      <SectionHeader
+        icon={CheckCircle2}
+        title="Intake form configured"
+        description={data.formUrl ?? undefined}
+        badge={<Badge tone="brand">Active</Badge>}
+        divided
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setFormUrl(data.formUrl ?? '');
+              setSheetUrl('');
+              setEditing(true);
+            }}
+          >
+            Reconfigure
+          </Button>
+        }
+      />
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-[var(--sp-2)]">
         <Button variant="secondary" size="sm" onClick={() => void copyLink()}>
-          {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
-          {copied ? 'Copied Link' : 'Copy Form Link'}
+          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+          {copied ? 'Copied' : 'Copy form link'}
         </Button>
 
         <Button variant="secondary" size="sm" asChild>
@@ -259,37 +237,35 @@ export function IntakeFormPanel({ onPulled }: { onPulled: (b: ImportBatchRespons
             target="_blank"
             rel="noreferrer noopener"
           >
-            <Share2 className="size-3.5" /> Share via WhatsApp
+            <Share2 aria-hidden /> Share via WhatsApp
           </a>
         </Button>
 
         <Button variant="ghost" size="sm" asChild>
           <a href={data.formUrl ?? '#'} target="_blank" rel="noreferrer noopener">
-            <ExternalLink className="size-3.5" /> Open Form
+            <ExternalLink aria-hidden /> Open form
           </a>
         </Button>
       </div>
 
-      <div className="mt-5 border-t border-slate-100 pt-5">
+      <div className="border-t border-[var(--border)] pt-[var(--sp-4)]">
         {data.driveAvailable ? (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-[var(--sp-2)]">
             <Button onClick={() => pull.mutate()} loading={pull.isPending}>
-              <RefreshCw className="size-4" /> Import Latest Responses
+              <RefreshCw aria-hidden /> Import latest responses
             </Button>
             <Button variant="ghost" onClick={() => download.mutate()} loading={download.isPending}>
-              <Download className="size-4" /> Download Sheet (.xlsx)
+              <Download aria-hidden /> Download sheet (.xlsx)
             </Button>
-            <span className="text-xs text-slate-500 font-medium">
-              ✨ Direct sync active — imports directly from Google Sheets
+            <span className="text-small text-[var(--ink-500)]">
+              Direct sync is active — responses import straight from the sheet.
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 rounded-lg bg-indigo-50/60 p-3 text-xs text-indigo-900 border border-indigo-100">
-            <Info className="size-4 text-indigo-600 shrink-0" />
-            <span>
-              Direct Drive sync is disabled. Download the Excel file from Google Forms and drag it into the box below.
-            </span>
-          </div>
+          <Alert tone="info" icon={Info} live={false}>
+            Direct Drive sync is disabled. Download the Excel file from the form and drop it into
+            the upload box below.
+          </Alert>
         )}
       </div>
     </section>

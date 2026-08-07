@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { Download, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { Download, FileSpreadsheet } from 'lucide-react';
 import { Button, Field, NativeSelect, Progress } from '@ui/index';
-import { FormError } from '@components/feedback';
+import { PageHeader, SectionHeader, StatCard, Stepper } from '@components/data';
+import { Alert, FormError } from '@components/feedback';
 import { FileDropzone } from '@components/upload';
 import { bulkApi, eventApi } from '@lib/api/services/gatepass.api';
 import { eventKeys } from '@lib/query/keys';
@@ -13,6 +14,8 @@ import { useToast } from '@hooks/useToast';
 import { useAuth } from '@hooks/useAuth';
 import type { PassType } from '@/types/enums';
 import type { BulkValidationSummaryResponse } from '@/types/gatepass.types';
+
+const STEPS = ['Choose & upload', 'Review validation', 'Passes issued'];
 
 export default function OnboardingPage() {
   const toast = useToast();
@@ -80,67 +83,73 @@ export default function OnboardingPage() {
     validate.mutate();
   };
 
+  const header = (
+    <PageHeader
+      breadcrumbs={[{ label: 'Faculty', to: '/faculty' }, { label: 'Bulk onboarding' }]}
+      title="Bulk pass onboarding"
+      description="Upload a sheet to generate and issue many gate passes at once."
+      actions={
+        <Button
+          variant="secondary"
+          onClick={() => template.mutate()}
+          loading={template.isPending}
+        >
+          <Download aria-hidden /> Download template
+        </Button>
+      }
+    />
+  );
+
   if (validate.isPending) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 pb-16">
-        <div className="rounded-3xl border border-indigo-100 bg-white p-8 shadow-sm space-y-6 text-center">
-          <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 animate-pulse border border-indigo-100">
-            <FileSpreadsheet className="size-8" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="font-extrabold text-slate-900 text-xl">Validating Excel Batch Sheet</h2>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Checking row formats, duplicate records, and department validity. No passes created yet.
+      <div className="flex flex-col gap-[var(--sp-6)]">
+        {header}
+        <div className="surface-panel px-[var(--sp-6)] py-[var(--sp-6)]">
+          <Stepper steps={STEPS} current={0} />
+        </div>
+        <div className="surface-panel flex flex-col items-center gap-[var(--sp-4)] p-[var(--sp-8)] text-center">
+          <span className="flex size-14 animate-pulse items-center justify-center rounded-[var(--r-lg)] bg-[var(--brand-50)]">
+            <FileSpreadsheet className="size-6 text-[var(--brand-600)]" aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-h2 text-[var(--ink-900)]">Validating the sheet</h2>
+            <p className="text-small mt-[var(--sp-1)] text-[var(--ink-500)]">
+              Checking row formats, duplicates and department validity. No passes created yet.
             </p>
           </div>
-          <Progress value={0} indeterminate label="Reading rows and verifying addresses…" />
+          <Progress value={0} indeterminate label="Reading rows and verifying addresses…" className="w-full max-w-md" />
         </div>
       </div>
     );
   }
 
-  if (summary) return (
-    <SummaryStep
-      summary={summary}
-      passType={passType}
-      onBack={reset}
-      onConfirm={() => confirm.mutate()}
-      confirming={confirm.isPending}
-      onErrorReport={() => errorReport.mutate()}
-      fetchingReport={errorReport.isPending}
-    />
-  );
+  if (summary) {
+    return (
+      <SummaryStep
+        header={header}
+        summary={summary}
+        passType={passType}
+        onBack={reset}
+        onConfirm={() => confirm.mutate()}
+        confirming={confirm.isPending}
+        onErrorReport={() => errorReport.mutate()}
+        fetchingReport={errorReport.isPending}
+      />
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-16">
-      {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
-              <Sparkles className="size-3.5 text-indigo-300" /> Batch Pass Issuance
-            </div>
-            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Bulk Pass Onboarding</h1>
-            <p className="text-sm text-indigo-200/90 max-w-xl">
-              Upload an Excel sheet to generate and issue multiple gate passes simultaneously.
-            </p>
-          </div>
+    <div className="flex flex-col gap-[var(--sp-6)]">
+      {header}
 
-          <Button
-            variant="secondary"
-            onClick={() => template.mutate()}
-            loading={template.isPending}
-            className="gap-2 bg-white/10 text-white border-white/10 hover:bg-white/20"
-          >
-            <Download className="size-4" /> Download Excel Template
-          </Button>
-        </div>
+      <div className="surface-panel px-[var(--sp-6)] py-[var(--sp-6)]">
+        <Stepper steps={STEPS} current={0} />
       </div>
 
-      <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-6">
+      <div className="surface-panel flex max-w-3xl flex-col gap-[var(--sp-4)] p-[var(--sp-6)]">
         <FormError messages={formErrors} />
 
-        <Field label="Pass Category" required>
+        <Field label="Pass category" required>
           {({ id }) => (
             <NativeSelect
               id={id}
@@ -149,19 +158,18 @@ export default function OnboardingPage() {
                 setPassType(event.target.value as PassType);
                 setEventId('');
               }}
-              className="bg-white font-medium"
             >
-              <option value="DAILY">Student Cohort — standing campus daily passes</option>
-              <option value="EVENT">Event Visitors — passes bound to a specific event</option>
+              <option value="DAILY">Student cohort — standing campus daily passes</option>
+              <option value="EVENT">Event visitors — passes bound to a specific event</option>
             </NativeSelect>
           )}
         </Field>
 
         {passType === 'EVENT' && (
           <Field
-            label="Target Campus Event"
+            label="Target campus event"
             required
-            hint="The selected event's validity dates will automatically apply to every attendee."
+            hint="The event's validity dates apply automatically to every attendee."
           >
             {({ id }) => (
               <NativeSelect
@@ -169,7 +177,6 @@ export default function OnboardingPage() {
                 value={eventId}
                 disabled={events.isPending}
                 onChange={(event) => setEventId(event.target.value)}
-                className="bg-white font-medium"
               >
                 <option value="">Select an active event…</option>
                 {(events.data?.items ?? [])
@@ -189,12 +196,13 @@ export default function OnboardingPage() {
           onClear={() => setFile(null)}
         />
 
-        <div className="space-y-2 text-xs text-slate-500">
-          <p>
-            Required columns: <span className="font-mono text-slate-700">{BULK_COLUMNS.required.join(', ')}</span>.
-            Optional: <span className="font-mono text-slate-700">{BULK_COLUMNS.optional.join(', ')}</span>.
-            Columns are found by header name, so a Google Form responses sheet can be
-            uploaded as exported. Up to {BULK_COLUMNS.maxRows} rows per file.
+        <div className="surface-inset flex flex-col gap-[var(--sp-2)] p-[var(--sp-4)]">
+          <p className="text-small text-[var(--ink-700)]">
+            Required columns:{' '}
+            <span className="text-mono">{BULK_COLUMNS.required.join(', ')}</span>. Optional:{' '}
+            <span className="text-mono">{BULK_COLUMNS.optional.join(', ')}</span>. Columns are
+            found by header name, so a form responses sheet can be uploaded as exported. Up to{' '}
+            {BULK_COLUMNS.maxRows} rows per file.
           </p>
 
           {/*
@@ -205,22 +213,18 @@ export default function OnboardingPage() {
             and knowing that is the intended outcome.
           */}
           {passType === 'EVENT' && (
-            <p>
-              Attendees are matched to existing accounts by email. Someone who already
-              has an account keeps it and gains the event pass alongside their current
-              one; anyone new gets a visitor account that signs in with an emailed code,
-              no password. Both receive their pass and their sign-in details by email.
+            <p className="text-small text-[var(--ink-500)]">
+              Attendees are matched to existing accounts by email. Someone who already has an
+              account keeps it and gains the event pass alongside their current one; anyone new
+              gets a visitor account that signs in with an emailed code, no password. Both
+              receive their pass and sign-in details by email.
             </p>
           )}
         </div>
 
-        <div className="flex justify-end pt-2 border-t border-slate-100">
-          <Button
-            onClick={startValidate}
-            disabled={!file}
-            className="bg-indigo-600 font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 px-6"
-          >
-            Validate & Preview Sheet
+        <div className="flex justify-end border-t border-[var(--border)] pt-[var(--sp-4)]">
+          <Button onClick={startValidate} disabled={!file}>
+            Validate & preview
           </Button>
         </div>
       </div>
@@ -229,8 +233,9 @@ export default function OnboardingPage() {
 }
 
 function SummaryStep({
-  summary, passType, onBack, onConfirm, confirming, onErrorReport, fetchingReport,
+  header, summary, passType, onBack, onConfirm, confirming, onErrorReport, fetchingReport,
 }: {
+  header: React.ReactNode;
   summary: BulkValidationSummaryResponse;
   passType: PassType;
   onBack: () => void;
@@ -242,72 +247,73 @@ function SummaryStep({
   const { totalRows, validRows, invalidRows, errors, awaitingConfirmation } = summary;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-16">
-      <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-6">
-        <div>
-          <h2 className="font-extrabold text-slate-900 text-2xl">Sheet Validation Results</h2>
-          <p className="text-xs text-slate-500">Verify sheet counts before confirming batch pass creation.</p>
-        </div>
+    <div className="flex flex-col gap-[var(--sp-6)]">
+      {header}
 
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
-            <dt className="text-xs font-semibold text-slate-500">Total Rows Read</dt>
-            <dd className="mt-1 text-3xl font-extrabold text-slate-900">{totalRows}</dd>
-          </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
-            <dt className="text-xs font-semibold text-emerald-700">Valid Rows</dt>
-            <dd className="mt-1 text-3xl font-extrabold text-emerald-800">{validRows}</dd>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center">
-            <dt className="text-xs font-semibold text-amber-700">Rows With Errors</dt>
-            <dd className="mt-1 text-3xl font-extrabold text-amber-800">{invalidRows}</dd>
-          </div>
-        </div>
-
-        <p className="text-sm leading-relaxed text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
-          {validRows === 0 ? (
-            <span className="font-bold text-rose-700">No rows in this sheet could be parsed cleanly. Please correct errors and re-upload.</span>
-          ) : (
-            <>
-              <strong className="font-bold text-slate-900">{validRows}</strong> {passType === 'EVENT' ? 'event passes' : 'daily passes'} will be generated and issued.
-              {invalidRows > 0 && (
-                <span className="text-slate-500"> The remaining {invalidRows} rows with errors will be skipped.</span>
-              )}
-            </>
-          )}
-        </p>
+      <div className="surface-panel px-[var(--sp-6)] py-[var(--sp-6)]">
+        <Stepper steps={STEPS} current={1} />
       </div>
 
-      {errors.length > 0 && (
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 text-base">Row Errors Found</h3>
-            <Button variant="secondary" size="sm" onClick={onErrorReport} loading={fetchingReport} className="gap-2">
-              <FileSpreadsheet className="size-4 text-indigo-600" /> Export Full Error Report
-            </Button>
-          </div>
+      <section className="flex flex-col gap-[var(--sp-4)]">
+        <SectionHeader
+          title="Validation results"
+          description="Check the counts before confirming that passes are created."
+          divided
+        />
 
-          <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80 bg-slate-50/50">
-            {errors.slice(0, 20).map((row) => (
-              <div key={`${row.rowNumber}-${row.email ?? ''}`} className="flex items-center justify-between p-3 px-4 text-xs">
-                <span className="font-mono font-bold text-slate-500">Row {row.rowNumber}</span>
-                <span className="font-medium text-slate-900 truncate max-w-[200px]">{row.email ?? '—'}</span>
-                <span className="text-amber-700 font-semibold">{row.reason}</span>
-              </div>
-            ))}
-          </div>
+        <div className="grid gap-[var(--sp-4)] sm:grid-cols-3">
+          <StatCard label="Total rows read" value={totalRows} />
+          <StatCard label="Valid rows" value={validRows} />
+          <StatCard label="Rows with errors" value={invalidRows} />
         </div>
+
+        {validRows === 0 ? (
+          <Alert tone="danger" title="No rows could be parsed">
+            Correct the errors in the sheet and upload it again.
+          </Alert>
+        ) : (
+          <Alert tone="info" live={false}>
+            <strong>{validRows}</strong> {passType === 'EVENT' ? 'event passes' : 'daily passes'}{' '}
+            will be generated and issued.
+            {invalidRows > 0 && ` The remaining ${invalidRows} rows with errors are skipped.`}
+          </Alert>
+        )}
+      </section>
+
+      {errors.length > 0 && (
+        <section className="flex flex-col gap-[var(--sp-4)]">
+          <SectionHeader
+            title="Row errors"
+            description={`${errors.length} row${errors.length === 1 ? '' : 's'} could not be used.`}
+            divided
+            actions={
+              <Button variant="secondary" size="sm" onClick={onErrorReport} loading={fetchingReport}>
+                <FileSpreadsheet aria-hidden /> Export full report
+              </Button>
+            }
+          />
+
+          <ul className="surface-panel overflow-hidden">
+            {errors.slice(0, 20).map((row) => (
+              <li
+                key={`${row.rowNumber}-${row.email ?? ''}`}
+                className="flex flex-wrap items-center justify-between gap-[var(--sp-2)] border-b border-[var(--border)] px-[var(--sp-4)] py-[var(--sp-3)] last:border-0"
+              >
+                <span className="text-mono text-[var(--ink-500)]">Row {row.rowNumber}</span>
+                <span className="text-small min-w-0 flex-1 truncate text-[var(--ink-900)]">
+                  {row.email ?? '—'}
+                </span>
+                <span className="text-small text-[var(--review-fg)]">{row.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={onBack}>Upload Another Sheet</Button>
-        <Button
-          onClick={onConfirm}
-          loading={confirming}
-          disabled={!awaitingConfirmation}
-          className="bg-indigo-600 font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 px-6"
-        >
-          Confirm & Issue {validRows} Passes
+      <div className="flex justify-end gap-[var(--sp-2)]">
+        <Button variant="secondary" onClick={onBack}>Upload another sheet</Button>
+        <Button onClick={onConfirm} loading={confirming} disabled={!awaitingConfirmation}>
+          Confirm & issue {validRows} passes
         </Button>
       </div>
     </div>

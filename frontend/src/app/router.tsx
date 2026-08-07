@@ -29,6 +29,9 @@ import {
  *   GuardSessionGate   → GUARD with no OPEN session → /guard/session
  */
 const HomePage = lazy(() => import('@features/public/routes/HomePage'));
+const SupportPage = lazy(() => import('@features/public/routes/SupportPage'));
+const PrivacyPage = lazy(() => import('@features/public/routes/PrivacyPage'));
+const TermsPage = lazy(() => import('@features/public/routes/TermsPage'));
 const ForbiddenPage = lazy(() => import('@features/public/routes/ForbiddenPage'));
 const NotFoundPage = lazy(() => import('@features/public/routes/NotFoundPage'));
 
@@ -93,6 +96,9 @@ const CampusAdminsPage = lazy(() => import('@features/super-admin/routes/CampusA
 
 export const router = createBrowserRouter([
   { path: '/', element: <HomePage /> },
+  { path: '/support', element: <SupportPage /> },
+  { path: '/privacy', element: <PrivacyPage /> },
+  { path: '/terms', element: <TermsPage /> },
   { path: '/forbidden', element: <ForbiddenPage /> },
 
   {
