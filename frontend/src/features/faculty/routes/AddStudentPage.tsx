@@ -33,6 +33,16 @@ export default function AddStudentPage() {
 
   const form = useForm<AddStudentValues>({
     resolver: zodResolver(addStudentSchema),
+    /*
+     * Validate on blur, then live once a field has been corrected.
+     *
+     * react-hook-form defaults to onSubmit, so every rule on this page stayed
+     * silent while it was being filled in - a phone number could be typed to
+     * any length and looked accepted until submit. Blur is the moment the
+     * person has finished with the field and before they have moved on.
+     */
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
     defaultValues: {
       name: '', email: '', phone: '', temporaryPassword: '',
       departmentId: '', rollNo: '', govId: '', address: '',
