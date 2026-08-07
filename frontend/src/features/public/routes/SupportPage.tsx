@@ -230,7 +230,7 @@ export default function SupportPage() {
       </section>
 
       {/* FAQ Section */}
-      <section className="border-t border-[var(--border)] bg-[var(--surface-subtle)] px-[var(--sp-6)] py-[var(--sp-10)]">
+      <section className="border-t border-[var(--border)] bg-[var(--surface-subtle)] px-[var(--sp-6)] py-16 sm:py-24">
         <div className="mx-auto max-w-[900px]">
           <div className="flex items-center justify-between">
             <div>
@@ -294,7 +294,7 @@ export default function SupportPage() {
       </section>
 
       {/* Contact Form & Direct Channels */}
-      <section className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-[var(--sp-12)]">
+      <section className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-16 sm:py-24">
         <div className="grid gap-8 lg:grid-cols-12">
           {/* Left info panel */}
           <div className="lg:col-span-5">
@@ -317,10 +317,10 @@ export default function SupportPage() {
                   <h4 className="text-sm font-bold text-[var(--ink-900)]">Email Support</h4>
                   <p className="text-xs text-[var(--ink-500)]">Direct inquiries & ticket escalation</p>
                   <a
-                    href="mailto:support@perimity.com"
+                    href="mailto:perimity.info@gmail.com"
                     className="mt-1 block text-sm font-semibold text-[var(--brand-600)] hover:underline"
                   >
-                    support@perimity.com
+                    perimity.info@gmail.com
                   </a>
                 </div>
               </div>
@@ -333,7 +333,7 @@ export default function SupportPage() {
                   <h4 className="text-sm font-bold text-[var(--ink-900)]">Campus Gate Security Hotline</h4>
                   <p className="text-xs text-[var(--ink-500)]">For guards on duty and urgent entry issues</p>
                   <span className="mt-1 block text-sm font-semibold text-[var(--ink-900)]">
-                    +1 (800) 555-PERIMITY
+                    +91 9876543210
                   </span>
                 </div>
               </div>

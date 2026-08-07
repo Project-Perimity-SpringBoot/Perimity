@@ -120,9 +120,9 @@ export default function HomePage() {
               <ShieldCheck className="size-4" aria-hidden />
               Forgery-proof digital gate passes
             </span>
-            <a href="mailto:support@example.com" className="hidden items-center gap-[var(--sp-2)] hover:text-white sm:flex">
+            <a href="mailto:perimity.info@gmail.com" className="hidden items-center gap-[var(--sp-2)] hover:text-white sm:flex">
               <Mail className="size-4" aria-hidden />
-              support@example.com
+              perimity.info@gmail.com
             </a>
           </span>
           <Link to="/register/visitor" className="text-small flex items-center gap-[var(--sp-1)] text-[var(--home-bar-ink)] hover:text-white">
@@ -419,7 +419,7 @@ export default function HomePage() {
                 </span>
                 <div>
                   <dt className="text-body-md text-white">Support</dt>
-                  <dd className="text-small text-[var(--home-footer-ink)]">support@example.com</dd>
+                  <dd className="text-small text-[var(--home-footer-ink)]">perimity.info@gmail.com</dd>
                 </div>
               </div>
             </dl>
