@@ -6,7 +6,6 @@ import {
   Eye,
   FileText,
   KeyRound,
-  Lock,
   Mail,
   Server,
   ShieldCheck,
@@ -78,22 +77,19 @@ export default function PrivacyPage() {
       </header>
 
       {/* Hero Banner */}
-      <section className="bg-gradient-to-b from-[var(--home-bar)] to-[#111827] px-[var(--sp-6)] py-[var(--sp-10)] text-white">
+      <section className="bg-gradient-to-b from-[var(--home-bar)] to-[#111827] px-[var(--sp-6)] pt-16 pb-24 sm:pt-20 sm:pb-28 text-white">
         <div className="mx-auto max-w-[900px]">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-[var(--brand-300)]">
-            <Lock className="size-4" /> Data Protection & Privacy Compliance
-          </span>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl">
             Perimity Privacy Policy
           </h1>
-          <p className="mt-2 text-sm text-gray-300">
+          <p className="mt-3 text-sm text-gray-300 sm:text-base">
             Last Updated: August 2026 &bull; Effective for all Perimity digital gate pass systems across campuses
           </p>
         </div>
       </section>
 
       {/* Main Content Layout */}
-      <div className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-[var(--sp-12)]">
+      <div className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-12">
           {/* Left Sticky Sidebar Table of Contents */}
           <aside className="lg:col-span-4">
@@ -289,8 +285,8 @@ export default function PrivacyPage() {
                       <Mail className="size-4" /> privacy@perimity.com
                     </a>
                   </div>
-                  <Button asChild size="sm">
-                    <Link to="/support">Contact Support Desk</Link>
+                  <Button asChild size="sm" className="text-white">
+                    <Link to="/support" className="text-white font-semibold">Contact Support Desk</Link>
                   </Button>
                 </div>
               </div>

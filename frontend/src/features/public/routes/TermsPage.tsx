@@ -7,7 +7,6 @@ import {
   Gavel,
   Mail,
   QrCode,
-  Scale,
   ShieldAlert,
   ShieldCheck,
   UserCheck
@@ -78,22 +77,19 @@ export default function TermsPage() {
       </header>
 
       {/* Hero Banner */}
-      <section className="bg-gradient-to-b from-[var(--home-bar)] to-[#111827] px-[var(--sp-6)] py-[var(--sp-10)] text-white">
+      <section className="bg-gradient-to-b from-[var(--home-bar)] to-[#111827] px-[var(--sp-6)] pt-16 pb-24 sm:pt-20 sm:pb-28 text-white">
         <div className="mx-auto max-w-[900px]">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-[var(--brand-300)]">
-            <Scale className="size-4" /> Terms & Conditions of Use
-          </span>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl">
             Perimity Terms of Service
           </h1>
-          <p className="mt-2 text-sm text-gray-300">
+          <p className="mt-3 text-sm text-gray-300 sm:text-base">
             Last Updated: August 2026 &bull; User Agreement for Campus Gate Access & QR Pass Management
           </p>
         </div>
       </section>
 
       {/* Main Content Layout */}
-      <div className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-[var(--sp-12)]">
+      <div className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-12">
           {/* Left Sticky Sidebar Table of Contents */}
           <aside className="lg:col-span-4">
