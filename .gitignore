@@ -87,3 +87,7 @@ test-resume-responses.xlsx
 test-welcome-responses.xlsx
 test-import-responses.xlsx
 test-import-responses.xlsx
+
+# Every .env variant, not just the two we thought of
+.env*
+!.env.example
