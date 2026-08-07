@@ -43,6 +43,34 @@ cd /opt/perimity
 curl -fsSL https://raw.githubusercontent.com/Project-Perimity-SpringBoot/Perimity/main/docker-compose.prod.yml \
     -o /opt/perimity/docker-compose.prod.yml
 
+# 6b. Fetch the Postgres init script THE COMPOSE FILE BIND-MOUNTS
+#
+# ==========================================================================
+# WITHOUT THIS, EVERY JAVA SERVICE CRASH-LOOPS AND NOTHING SAYS WHY
+# ==========================================================================
+# docker-compose.prod.yml mounts a HOST path into the Postgres container:
+#
+#     ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/...
+#
+# Only the compose file was downloaded, so that path did not exist - and
+# Docker does not fail on a missing bind-mount source, it CREATES IT AS AN
+# EMPTY DIRECTORY. Postgres then skipped it (initdb.d ignores directories),
+# so authdb, userdb, gatepassdb, campusdb and qrdb were never created.
+#
+# Every service then died on startup with
+#
+#     HibernateException: Unable to determine Dialect without JDBC metadata
+#
+# which names the symptom and not the cause: the database it was told to
+# connect to simply did not exist. Postgres itself was healthy throughout, so
+# compose reported the stack as up while six containers restarted forever.
+#
+# The mount is relative to the compose file, so the directory layout has to be
+# reproduced exactly - hence mkdir -p on the same two levels.
+mkdir -p /opt/perimity/docker/postgres
+curl -fsSL https://raw.githubusercontent.com/Project-Perimity-SpringBoot/Perimity/main/docker/postgres/init-databases.sql \
+    -o /opt/perimity/docker/postgres/init-databases.sql
+
 # 7. Login to AWS ECR using Instance IAM Role
 #
 # ==========================================================================

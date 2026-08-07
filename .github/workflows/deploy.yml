@@ -80,7 +80,34 @@ jobs:
           docker push $ECR_REGISTRY/perimity/${{ matrix.service }}:$IMAGE_TAG
           docker push $ECR_REGISTRY/perimity/${{ matrix.service }}:latest
 
-  trigger-asg-refresh:
+  # ==========================================================================
+  #  DEPLOY IN PLACE. DO NOT REPLACE THE INSTANCE.
+  # ==========================================================================
+  # This job used to call `aws autoscaling start-instance-refresh`, which
+  # TERMINATES the running instance and launches a new one. On this
+  # architecture that is not a deploy, it is a factory reset:
+  #
+  #   * Postgres, Mongo, every uploaded photo, every QR and every pass PDF
+  #     live in DOCKER VOLUMES ON THE INSTANCE. A replacement starts with
+  #     empty volumes, so every account, campus, student and pass is gone.
+  #   * /opt/perimity/.env is written by the boot script only when the file is
+  #     ABSENT - which is always true on a new instance - so the real secrets
+  #     revert to the placeholders in scripts/ec2-userdata.sh and SMTP stops
+  #     working.
+  #   * "MinHealthyPercentage: 50" cannot keep half an instance alive when
+  #     desired capacity is 1, so the "zero-downtime" claim was never true
+  #     either - it took the only instance down. "InstanceWarmup: 300" also
+  #     assumed a five-minute boot; the real one takes about eleven.
+  #
+  # Pulling the new images onto the instance that is already running changes
+  # the code and touches nothing else. Compose recreates only the containers
+  # whose image digest actually moved, and named volumes are not part of a
+  # container's lifecycle, so the data stays exactly where it is.
+  #
+  # This does mean the LAUNCH TEMPLATE and the running instance can drift:
+  # user-data changes only take effect on a genuinely new instance. That is a
+  # deliberate trade - drift is recoverable, deleted data is not.
+  deploy-to-instance:
     needs: build-and-push-ecr
     runs-on: ubuntu-latest
     steps:
@@ -91,9 +118,62 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Trigger Auto Scaling Group Instance Refresh (Zero Downtime)
+      - name: Pull new images and restart containers in place
         run: |
-          echo "Triggering zero-downtime Instance Refresh on ASG 'perimity-asg'..."
-          aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name perimity-asg \
-            --preferences '{"MinHealthyPercentage": 50, "InstanceWarmup": 300}' || echo "ASG perimity-asg not yet active. Skipping refresh."
+          set -euo pipefail
+
+          INSTANCE_ID=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names perimity-asg \
+            --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService'].InstanceId | [0]" \
+            --output text)
+
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "::error::No InService instance in perimity-asg - nothing to deploy to."
+            exit 1
+          fi
+          echo "Deploying to $INSTANCE_ID"
+
+          # ECR login is re-done on the instance: the token the boot script got
+          # expires after 12 hours, so any deploy after that would fail to pull
+          # with an authentication error that looks nothing like an expiry.
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy ${{ github.sha }}" \
+            --parameters 'commands=[
+              "set -e",
+              "REGION=$(curl -sf -H \"X-aws-ec2-metadata-token: $(curl -sf -X PUT http://169.254.169.254/latest/api/token -H \"X-aws-ec2-metadata-token-ttl-seconds: 60\")\" http://169.254.169.254/latest/meta-data/placement/region || echo us-east-1)",
+              "ACCOUNT=$(aws sts get-caller-identity --region $REGION --query Account --output text)",
+              "aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com",
+              "cd /opt/perimity",
+              "docker compose -f docker-compose.prod.yml pull",
+              "docker compose -f docker-compose.prod.yml up -d",
+              "docker image prune -f",
+              "docker ps --format \"{{.Names}} {{.Status}}\""
+            ]' \
+            --query Command.CommandId --output text)
+
+          echo "SSM command: $CMD_ID"
+
+          # Poll rather than fire-and-forget. A deploy that reports success
+          # while the pull failed is worse than no deploy at all.
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            echo "  [$i] $STATUS"
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut)
+                aws ssm get-command-invocation --command-id "$CMD_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query StandardErrorContent --output text
+                echo "::error::Deploy failed on $INSTANCE_ID"
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+
+          aws ssm get-command-invocation --command-id "$CMD_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
