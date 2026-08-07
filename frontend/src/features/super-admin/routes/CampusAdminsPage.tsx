@@ -3,13 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, Plus, Edit3 } from 'lucide-react';
+import { Plus, Edit3 } from 'lucide-react';
 import {
   Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle, Field, Input, Textarea,
+  DialogHeader, DialogTitle, Field, Input, NativeSelect, Textarea,
 } from '@ui/index';
 import { DataTable, PageHeader, SearchFilterBar } from '@components/data';
-import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
+import { Alert, ConfirmDialog, ErrorState, FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { campusApi } from '@lib/api/services/campus.api';
 import { authKeys, campusKeys } from '@lib/query/keys';
@@ -265,7 +265,7 @@ export default function CampusAdminsPage() {
               size="sm"
               variant="ghost"
               onClick={() => setSuspending(user)}
-              className={user.active ? 'text-red-600 hover:text-red-700' : 'text-emerald-600'}
+              className={user.active ? 'text-[var(--deny-fg)]' : 'text-[var(--allow-fg)]'}
             >
               {user.active ? 'Suspend' : 'Activate'}
             </Button>
@@ -325,37 +325,41 @@ export default function CampusAdminsPage() {
               <FormError messages={formErrors} />
 
               <Field label="Target Campus" required error={createForm.formState.errors.campusId?.message}>
+                {/*
+                  * NativeSelect, not a bare <select>. The hand-rolled one here
+                  * was 40px tall against the 36px every other control used, had
+                  * no chevron, and replaced the global :focus-visible outline
+                  * with its own focus ring — so this was the one dropdown in
+                  * the product that looked and focused differently.
+                  */}
                 {({ id }) => (
-                  <select
+                  <NativeSelect
                     id={id}
-                    className="flex h-10 w-full rounded-[var(--r-sm)] border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-body-md text-[var(--ink-900)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-600)]"
                     value={createForm.watch('campusId') || ''}
                     onChange={(e) => createForm.setValue('campusId', Number(e.target.value), { shouldValidate: true })}
                   >
-                    <option value="">Select a campus...</option>
+                    <option value="">Select a campus…</option>
                     {(campuses.data ?? []).map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.code})
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 )}
               </Field>
 
               {activeAdminForSelectedCampus && (
-                <div className="rounded-[var(--r-md)] border border-amber-300 bg-amber-50 p-[var(--sp-3)] text-amber-900 text-body-sm flex gap-[var(--sp-2)] items-start">
-                  <AlertTriangle className="size-5 shrink-0 text-amber-600 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">One Campus, One Admin Rule</p>
-                    <p className="mt-1">
-                      <strong>{campusMap.get(Number(selectedCampusId))?.name}</strong> already has an active Campus Admin (
-                      <strong>{activeAdminForSelectedCampus.name}</strong> - {activeAdminForSelectedCampus.email}).
-                    </p>
-                    <p className="mt-1 text-amber-800 font-medium">
-                      You must suspend {activeAdminForSelectedCampus.name}&apos;s account before creating a new active admin for this campus.
-                    </p>
-                  </div>
-                </div>
+                <Alert tone="warning" title="One campus, one admin">
+                  <p>
+                    <strong>{campusMap.get(Number(selectedCampusId))?.name}</strong> already has an
+                    active Campus Admin (<strong>{activeAdminForSelectedCampus.name}</strong> —{' '}
+                    {activeAdminForSelectedCampus.email}).
+                  </p>
+                  <p className="mt-[var(--sp-1)]">
+                    Suspend {activeAdminForSelectedCampus.name}&apos;s account before creating a new
+                    active admin for this campus.
+                  </p>
+                </Alert>
               )}
 
               <Field label="Full name" required error={createForm.formState.errors.name?.message}>

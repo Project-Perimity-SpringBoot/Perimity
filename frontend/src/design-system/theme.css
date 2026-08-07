@@ -36,6 +36,19 @@
   --color-pass-event: var(--pass-event);
   --color-pass-visitor: var(--pass-visitor);
 
+  --color-notice-info-fg: var(--notice-info-fg);
+  --color-notice-info-bg: var(--notice-info-bg);
+  --color-notice-info-border: var(--notice-info-border);
+  --color-notice-success-fg: var(--notice-success-fg);
+  --color-notice-success-bg: var(--notice-success-bg);
+  --color-notice-success-border: var(--notice-success-border);
+  --color-notice-warning-fg: var(--notice-warning-fg);
+  --color-notice-warning-bg: var(--notice-warning-bg);
+  --color-notice-warning-border: var(--notice-warning-border);
+  --color-notice-danger-fg: var(--notice-danger-fg);
+  --color-notice-danger-bg: var(--notice-danger-bg);
+  --color-notice-danger-border: var(--notice-danger-border);
+
   --color-status-fg: var(--status-fg);
   --color-status-bg: var(--status-bg);
   --color-status-border: var(--status-border);
@@ -55,9 +68,11 @@
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
   --radius-pill: var(--r-pill);
 
   --shadow-card: var(--sh-card);
+  --shadow-card-hover: var(--sh-card-hover);
   --shadow-overlay: var(--sh-overlay);
 
   --breakpoint-sm: 640px;
@@ -117,11 +132,47 @@
   .text-label { font-size: var(--t-label-size); font-weight: var(--t-label-weight); letter-spacing: var(--t-label-tracking); text-transform: uppercase; }
   .text-mono { font-family: var(--font-mono); font-size: var(--t-mono-size); font-weight: var(--t-mono-weight); letter-spacing: var(--t-mono-tracking); }
 
+  /* THREE SURFACES, AND THE HIERARCHY BETWEEN THEM ------------------------
+     card   — the default. A thing on the desk: stat tiles, table shells.
+     panel  — the page's main container. Larger radius, deeper shadow.
+     inset  — a group WITHIN a card. No shadow, no lift; it recedes.
+
+     The nesting matters more than any single value. A form whose fields sit
+     on an inset inside a panel reads as one grouped step; the same fields
+     loose on a white card read as a list that happens to have a heading.
+     Pages were reaching for a bare <div> for the middle case, which is why
+     the same "section" appeared at four different radii across the app. */
   .surface-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     box-shadow: var(--sh-card);
+  }
+
+  .surface-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-card);
+  }
+
+  .surface-inset {
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+
+  /* Opt-in lift for anything clickable. Shadow and border only — never a
+     transform, because a card that moves under the cursor shifts the click
+     target out from under a user with a tremor. */
+  .lift {
+    transition:
+      box-shadow var(--motion-base) var(--ease-out),
+      border-color var(--motion-base) var(--ease-out);
+  }
+  .lift:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--sh-card-hover);
   }
 
   .scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }

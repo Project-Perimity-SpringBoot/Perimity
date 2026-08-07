@@ -18,7 +18,7 @@ export function SearchFilterBar({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-[var(--sp-3)] border-b border-[var(--border)] px-[var(--sp-4)] py-[var(--sp-3)]',
+        'surface-card flex flex-wrap items-center gap-[var(--sp-3)] px-[var(--sp-4)] py-[var(--sp-3)]',
         className,
       )}
     >

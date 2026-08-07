@@ -4,12 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarRange, Plus, Sparkles, Users } from 'lucide-react';
+import { CalendarRange, Plus } from 'lucide-react';
 import {
   Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle, Field, Input, Textarea,
 } from '@ui/index';
-import { DataTable } from '@components/data';
+import { DataTable, PageHeader } from '@components/data';
 import { ErrorState, FormError } from '@components/feedback';
 import { eventApi } from '@lib/api/services/gatepass.api';
 import { eventKeys } from '@lib/query/keys';
@@ -33,19 +33,19 @@ export default function EventsPage() {
   const columns: ColumnDef<EventResponse, unknown>[] = [
     {
       id: 'name',
-      header: 'Event Name & Details',
+      header: 'Event',
       accessorKey: 'name',
       cell: (info) => (
-        <span className="flex items-center gap-3 min-w-0">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 font-bold text-xs text-indigo-700 border border-indigo-100">
-            <CalendarRange className="size-4 text-indigo-600" />
+        <span className="flex min-w-0 items-center gap-[var(--sp-3)]">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-[var(--brand-50)]">
+            <CalendarRange className="size-4 text-[var(--brand-600)]" aria-hidden />
           </span>
           <span className="block min-w-0">
-            <span className="block truncate font-bold text-slate-900 text-sm">
+            <span className="text-body-md block truncate text-[var(--ink-900)]">
               {info.row.original.name}
             </span>
             {info.row.original.description && (
-              <span className="block truncate text-xs text-slate-500 max-w-[40ch]">
+              <span className="text-caption block max-w-[40ch] truncate text-[var(--ink-500)]">
                 {info.row.original.description}
               </span>
             )}
@@ -55,23 +55,16 @@ export default function EventsPage() {
     },
     {
       id: 'validFrom',
-      header: 'Event Duration',
+      header: 'Runs',
       accessorKey: 'validFrom',
-      cell: (info) => (
-        <span className="font-semibold text-xs text-slate-700">
-          {formatValidity(info.row.original.validFrom, info.row.original.validTo)}
-        </span>
-      ),
+      cell: (info) => formatValidity(info.row.original.validFrom, info.row.original.validTo),
     },
     {
       id: 'issuedPassCount',
       header: 'Attendees',
       accessorKey: 'issuedPassCount',
       cell: (info) => (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-mono text-xs font-bold text-slate-700 border border-slate-200/60">
-          <Users className="size-3 text-slate-500" />
-          {info.row.original.issuedPassCount} registered
-        </span>
+        <span className="tabular-nums">{info.row.original.issuedPassCount} registered</span>
       ),
     },
     {
@@ -79,10 +72,10 @@ export default function EventsPage() {
       header: 'Status',
       cell: (info) => {
         const event = info.row.original;
-        if (event.cancelled) return <Badge tone="neutral">Cancelled</Badge>;
+        if (event.cancelled) return <Badge>Cancelled</Badge>;
         return (
           <Badge tone={event.runningToday ? 'brand' : 'neutral'}>
-            {event.runningToday ? 'Running Today' : 'Scheduled'}
+            {event.runningToday ? 'Running today' : 'Scheduled'}
           </Badge>
         );
       },
@@ -94,32 +87,19 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-16">
-      {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
-              <Sparkles className="size-3.5 text-indigo-300" /> Event & Attendance Management
-            </div>
-            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">Campus Events</h1>
-            <p className="text-sm text-indigo-200/90 max-w-2xl">
-              Create campus events and manage attendee rosters. Event dates dictate the validity window for all issued attendee passes.
-            </p>
-          </div>
-
-          <Button
-            size="lg"
-            onClick={() => setCreating(true)}
-            className="gap-2 bg-indigo-600 font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-500"
-          >
-            <Plus className="size-4" /> Create New Event
+    <div className="flex flex-col gap-[var(--sp-6)]">
+      <PageHeader
+        breadcrumbs={[{ label: 'Faculty', to: '/faculty' }, { label: 'Events' }]}
+        title="Campus events"
+        description="Event dates set the validity window for every attendee pass issued against them."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden /> Create event
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Events Table */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+      <div className="surface-panel overflow-hidden">
         <DataTable
           columns={columns}
           data={events.data?.items ?? []}
@@ -130,7 +110,7 @@ export default function EventsPage() {
           getRowId={(row) => String(row.id)}
           onRowClick={(row) => navigate(`/faculty/events/${row.id}/attendance`)}
           emptyHeading="No events created yet"
-          emptyDescription="Create an event to start issuing event visitor passes and managing attendance."
+          emptyDescription="Create an event to start issuing attendee passes and tracking attendance."
         />
       </div>
 
@@ -181,23 +161,23 @@ function CreateEventDialog({
       <DialogContent>
         <form noValidate onSubmit={handleSubmit((values) => create.mutate(values))}>
           <DialogHeader>
-            <DialogTitle>Create New Campus Event</DialogTitle>
+            <DialogTitle>Create an event</DialogTitle>
             <DialogDescription>
-              Set event dates. These dates will automatically bound the validity of all attendee passes.
+              These dates bound the validity of every attendee pass issued for the event.
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="flex flex-col gap-4">
+          <DialogBody className="flex flex-col gap-[var(--sp-4)]">
             <FormError messages={formErrors} />
 
-            <Field label="Event Name" required error={errors.name?.message}>
+            <Field label="Event name" required error={errors.name?.message}>
               {({ id, describedBy }) => (
                 <Input
                   id={id}
                   aria-describedby={describedBy}
                   invalid={Boolean(errors.name)}
                   maxLength={LIMITS.eventName.max}
-                  placeholder="e.g. Annual Technical Symposium 2026"
+                  placeholder="Annual Technical Symposium 2026"
                   {...register('name')}
                 />
               )}
@@ -211,14 +191,14 @@ function CreateEventDialog({
                   aria-describedby={describedBy}
                   invalid={Boolean(errors.description)}
                   maxLength={LIMITS.eventDescription.max}
-                  placeholder="Brief summary of the event activities and venue..."
+                  placeholder="Brief summary of the activities and venue"
                   {...register('description')}
                 />
               )}
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Start Date" required error={errors.validFrom?.message}>
+            <div className="grid gap-[var(--sp-4)] sm:grid-cols-2">
+              <Field label="Start date" required error={errors.validFrom?.message}>
                 {({ id, describedBy }) => (
                   <Input
                     id={id}
@@ -230,7 +210,7 @@ function CreateEventDialog({
                 )}
               </Field>
 
-              <Field label="End Date" required error={errors.validTo?.message}>
+              <Field label="End date" required error={errors.validTo?.message}>
                 {({ id, describedBy }) => (
                   <Input
                     id={id}
@@ -248,8 +228,8 @@ function CreateEventDialog({
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={create.isPending} className="bg-indigo-600 text-white">
-              Create Event
+            <Button type="submit" loading={create.isPending}>
+              Create event
             </Button>
           </DialogFooter>
         </form>

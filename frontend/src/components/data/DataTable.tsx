@@ -62,7 +62,7 @@ export function DataTable<T>({
       {/* Desktop and tablet: a real table. */}
       <div className="hidden overflow-x-auto scrollbar-thin sm:block">
         <table className="w-full border-collapse text-left">
-          <thead>
+          <thead className="bg-[var(--surface-subtle)]">
             {table.getHeaderGroups().map((group) => (
               <tr key={group.id} className="border-b border-[var(--border)]">
                 {group.headers.map((header) => {
@@ -99,18 +99,29 @@ export function DataTable<T>({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row, index) => (
+            {/*
+              * Zebra striping is gone, and that is deliberate rather than a
+              * simplification. It was fighting the hover tint: every other row
+              * already had a fill, so hovering an odd row was a clear change
+              * and hovering an even row was almost none — the affordance was
+              * inconsistent depending on where in the table you happened to
+              * be. A hairline per row separates them, and the fill is reserved
+              * for the row under the cursor, where it means something.
+              */}
+            {table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 className={cn(
                   'border-b border-[var(--border)] last:border-0',
-                  index % 2 === 1 && 'bg-[var(--surface-subtle)]',
-                  onRowClick && 'cursor-pointer hover:bg-[var(--brand-50)]',
+                  'transition-colors duration-[var(--motion-fast)]',
+                  onRowClick
+                    ? 'cursor-pointer hover:bg-[var(--brand-50)]'
+                    : 'hover:bg-[var(--surface-subtle)]',
                 )}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="text-body px-[var(--sp-4)] py-[var(--sp-3)] align-middle">
+                  <td key={cell.id} className="text-body px-[var(--sp-4)] py-[var(--sp-4)] align-middle">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -133,7 +144,7 @@ export function DataTable<T>({
             <li
               key={row.id}
               onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              className="surface-card p-[var(--sp-3)]"
+              className={cn('surface-card p-[var(--sp-4)]', onRowClick && 'lift cursor-pointer')}
             >
               {/*
                 * A DIV, not a P.

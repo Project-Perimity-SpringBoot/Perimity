@@ -3,4 +3,6 @@ export * from './DataTable';
 export * from './Pagination';
 export * from './SearchFilterBar';
 export * from './PageHeader';
+export * from './SectionHeader';
+export * from './Stepper';
 export * from './DescriptionList';

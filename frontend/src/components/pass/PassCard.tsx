@@ -34,6 +34,17 @@ export interface PassCardProps {
  * which is on GatePassResponse — so every pass in the system claimed the same
  * institution and the same department regardless of who held it. Fields the
  * API does not return are not shown at all.
+ *
+ * ==========================================================================
+ * WHY THIS ONE FILE KEEPS ITS OWN PALETTE
+ * ==========================================================================
+ * Every other surface in the product moved onto the shared surface/ink tokens.
+ * This one did not, and the violet is unchanged to the hex: the same pass is
+ * also rendered by qr-service as a PDF and as an emailed image, and a card
+ * that drifted to the app's indigo would no longer match the thing in the
+ * student's inbox. What DID change is that the values now live in tokens.css
+ * as --passcard-*, so the three renderings have one place to be reconciled
+ * instead of a colour spelled out in twenty class names here.
  */
 export function PassCard({ pass, variant = 'compact', onDownload, className }: PassCardProps) {
   const toast = useToast();
@@ -76,43 +87,40 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
   return (
     <article
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-lg shadow-violet-900/5 transition-all',
+        'relative overflow-hidden rounded-[var(--r-lg)] border border-[var(--passcard-hairline)]',
+        'bg-white shadow-[var(--passcard-shadow)]',
         className
       )}
       aria-label={`${passTypeLabel} ${passCode}`}
     >
       {/* 1. VIOLET HEADER BAND */}
-      <div className="flex items-center justify-between bg-gradient-to-r from-violet-900 to-violet-700 p-5 text-white">
+      <div className="flex items-center justify-between bg-[linear-gradient(to_right,var(--passcard-band-from),var(--passcard-band-to))] p-[var(--sp-4)] text-white">
         <div className="min-w-0">
-          <h2 className="text-base leading-tight font-extrabold tracking-wide uppercase">
-            Gate pass
-          </h2>
-          <p className="text-xs font-normal text-violet-200">Smart Campus Access</p>
+          <h2 className="text-h3 uppercase">Gate pass</h2>
+          <p className="text-caption text-[var(--passcard-band-ink)]">Smart Campus Access</p>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-sm font-extrabold tracking-wider uppercase">{passTypeLabel}</div>
-          <div className="font-mono text-xs text-violet-200">{passCode}</div>
+          <div className="text-label">{passTypeLabel}</div>
+          <div className="text-mono text-[var(--passcard-band-ink)]">{passCode}</div>
         </div>
       </div>
 
       {/* 2. HOLDER */}
-      <div className="flex items-center gap-4 p-5 pb-4">
+      <div className="flex items-center gap-[var(--sp-4)] p-[var(--sp-4)]">
         <HolderPhoto userId={pass.holderUserId} name={pass.holderName} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-lg leading-snug font-bold text-indigo-950">
-            {pass.holderName}
-          </h3>
-          <p className="text-xs text-slate-500">Show this QR at the gate</p>
+          <h3 className="text-h2 truncate text-[var(--passcard-ink)]">{pass.holderName}</h3>
+          <p className="text-caption text-[var(--passcard-ink-soft)]">Show this QR at the gate</p>
         </div>
         <PassStatusBadge status={pass.status} />
       </div>
 
-      <div className="px-5">
-        <hr className="border-violet-100" />
+      <div className="px-[var(--sp-4)]">
+        <hr className="border-[var(--passcard-hairline)]" />
       </div>
 
       {/* 3. DETAIL GRID */}
-      <dl className="grid grid-cols-2 gap-y-4 px-5 py-4 text-xs">
+      <dl className="grid grid-cols-2 gap-y-[var(--sp-4)] px-[var(--sp-4)] py-[var(--sp-4)]">
         <Field label="Pass ID">
           <span className="font-mono">{passCode}</span>
         </Field>
@@ -140,30 +148,30 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
 
       {/* 4. QR AND ACTIONS */}
       {detail && (
-        <div className="flex flex-col items-center gap-4 border-t border-violet-100 bg-violet-50/60 p-6">
+        <div className="flex flex-col items-center gap-[var(--sp-4)] border-t border-[var(--passcard-hairline)] bg-[var(--passcard-wash)] p-[var(--sp-6)]">
           {pass.scannable && pass.qrKey !== null ? (
             <PassQrImage passId={pass.id} />
           ) : (
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-caption text-center text-[var(--passcard-ink-soft)]">
               {pass.status === 'PENDING'
-                ? 'The QR code is currently generating...'
+                ? 'The QR code is currently generating…'
                 : 'This pass is not scannable.'}
             </p>
           )}
 
-          <p className="text-center text-[11px] text-slate-500">
+          <p className="text-caption text-center text-[var(--passcard-ink-soft)]">
             Scan at any gate. Re-issue if your profile changes.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-[var(--sp-2)]">
             <Button
               variant="secondary"
               size="sm"
               onClick={() => void handleDownloadPdf()}
               loading={downloadingPdf}
-              className="gap-2 border border-violet-200 bg-white shadow-2xs hover:bg-violet-50"
+              className="border-[var(--passcard-edge)] hover:bg-[var(--passcard-wash)]"
             >
-              <Download className="size-4 text-violet-700" />
+              <Download className="text-[var(--passcard-accent)]" aria-hidden />
               Download as PDF
             </Button>
 
@@ -172,9 +180,9 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
               size="sm"
               onClick={() => void handleSendEmail()}
               loading={sendingEmail}
-              className="gap-2 border border-violet-200 bg-violet-100 font-semibold text-violet-800 shadow-2xs hover:bg-violet-200"
+              className="border-[var(--passcard-edge)] bg-[var(--passcard-tint)] text-[var(--passcard-accent-strong)] hover:bg-[var(--passcard-edge)]"
             >
-              <Mail className="size-4 text-violet-700" />
+              <Mail className="text-[var(--passcard-accent)]" aria-hidden />
               Get on Email
             </Button>
           </div>
@@ -182,7 +190,7 @@ export function PassCard({ pass, variant = 'compact', onDownload, className }: P
       )}
 
       {/* 5. FOOTER */}
-      <div className="border-t border-violet-100 bg-violet-50 px-5 py-2.5 text-center font-mono text-[10px] text-violet-900/70">
+      <div className="text-mono border-t border-[var(--passcard-hairline)] bg-[var(--passcard-wash)] px-[var(--sp-4)] py-[var(--sp-2)] text-center text-[var(--passcard-footer-ink)]">
         Perimity · entry-only · do not share this code
       </div>
     </article>
@@ -246,13 +254,13 @@ function HolderPhoto({ userId, name }: { userId: number; name: string }) {
   });
 
   const initial = (
-    <span className="text-lg font-bold text-violet-700">
+    <span className="text-h2 text-[var(--passcard-accent)]">
       {name?.charAt(0).toUpperCase() ?? '?'}
     </span>
   );
 
   return (
-    <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-100">
+    <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-md)] bg-[var(--passcard-tint)]">
       <AuthedImage
         url={photo.data?.url}
         alt={`Photo of ${name}`}
@@ -266,8 +274,8 @@ function HolderPhoto({ userId, name }: { userId: number; name: string }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{label}</dt>
-      <dd className="mt-0.5 text-sm font-semibold text-indigo-950">{children}</dd>
+      <dt className="text-label text-[var(--passcard-ink-faint)]">{label}</dt>
+      <dd className="text-small mt-[var(--sp-1)] text-[var(--passcard-ink)]">{children}</dd>
     </div>
   );
 }
@@ -294,14 +302,14 @@ function PassQrImage({ passId }: { passId: number }) {
 
   if (qrQuery.isError || !src) {
     return (
-      <div className="flex size-48 items-center justify-center rounded-2xl border border-violet-100 bg-white">
-        <QrCode className="size-20 text-violet-200" aria-hidden />
+      <div className="flex size-48 items-center justify-center rounded-[var(--r-lg)] border border-[var(--passcard-hairline)] bg-white">
+        <QrCode className="size-20 text-[var(--passcard-edge)]" aria-hidden />
       </div>
     );
   }
 
   return (
-    <div className="flex size-52 items-center justify-center rounded-2xl border border-violet-100 bg-white p-3 shadow-md shadow-violet-900/5">
+    <div className="flex size-52 items-center justify-center rounded-[var(--r-lg)] border border-[var(--passcard-hairline)] bg-white p-[var(--sp-3)] shadow-[var(--passcard-shadow)]">
       <img src={src} alt="Pass QR Code" className="size-46 object-contain" />
     </div>
   );

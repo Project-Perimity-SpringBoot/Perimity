@@ -477,7 +477,7 @@ export default function HomePage() {
           <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-[var(--sp-3)] px-[var(--sp-6)] py-[var(--sp-6)]">
             <span className="text-small text-[var(--home-footer-ink)]">Perimity</span>
             <nav aria-label="Footer" className="flex gap-[var(--sp-4)] text-small text-[var(--home-footer-ink)]">
-              <a href="mailto:support@example.com" className="hover:text-white">Support</a>
+              <Link to="/support" className="hover:text-white">Support</Link>
               <Link to="/privacy" className="hover:text-white">Privacy</Link>
               <Link to="/terms" className="hover:text-white">Terms</Link>
             </nav>

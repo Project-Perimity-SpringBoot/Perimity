@@ -19,8 +19,8 @@ export function EmptyState({ icon: Icon = Inbox, heading, description, action, c
         className,
       )}
     >
-      <span className="flex size-12 items-center justify-center rounded-[var(--r-circle)] bg-[var(--surface-sunken)]">
-        <Icon className="size-5 text-[var(--ink-400)]" aria-hidden />
+      <span className="flex size-14 items-center justify-center rounded-[var(--r-circle)] bg-[var(--brand-50)]">
+        <Icon className="size-6 text-[var(--brand-300)]" aria-hidden />
       </span>
       <h3 className="text-h3 text-[var(--ink-900)]">{heading}</h3>
       {description && <p className="text-small max-w-sm text-[var(--ink-500)]">{description}</p>}

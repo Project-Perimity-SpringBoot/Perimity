@@ -24,7 +24,7 @@ export function TopBar({ title }: { title?: string }) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between gap-[var(--sp-4)] border-b border-[var(--border)] bg-[var(--surface)] px-[var(--sp-4)]"
+      className="sticky top-0 z-30 flex items-center justify-between gap-[var(--sp-4)] border-b border-[var(--border)] bg-[var(--surface)] px-[var(--sp-4)] lg:px-[var(--sp-6)]"
       style={{ height: 'var(--topbar-h)' }}
     >
       <div className="flex min-w-0 items-center gap-[var(--sp-3)]">

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
-import { CheckCircle2, FileSpreadsheet, RefreshCw, TriangleAlert, Sparkles, ArrowLeft } from 'lucide-react';
+import { FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { Button, Progress, SkeletonText } from '@ui/index';
-import { ErrorState } from '@components/feedback';
+import { PageHeader, StatCard } from '@components/data';
+import { Alert, ErrorState } from '@components/feedback';
 import { bulkApi } from '@lib/api/services/gatepass.api';
 import { bulkKeys } from '@lib/query/keys';
 import { formatDateTime } from '@lib/format/datetime';
@@ -43,7 +44,11 @@ export default function BatchProgressPage() {
     return <ErrorState error={batch.error} onRetry={() => void batch.refetch()} />;
   }
   if (batch.isPending || !batch.data) {
-    return <div className="rounded-3xl border border-slate-200 bg-white p-8"><SkeletonText lines={5} /></div>;
+    return (
+      <div className="surface-panel p-[var(--sp-6)]">
+        <SkeletonText lines={5} />
+      </div>
+    );
   }
 
   const data = batch.data;
@@ -53,36 +58,29 @@ export default function BatchProgressPage() {
   const stalled = Math.max(0, data.validRows - data.processedRows);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-16">
-      <Button variant="ghost" size="sm" asChild className="gap-2 text-slate-600 hover:text-slate-900">
-        <Link to="/faculty/onboarding"><ArrowLeft className="size-4" /> Back to Bulk Onboarding</Link>
-      </Button>
-
-      {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200 backdrop-blur-md border border-white/10">
-              <Sparkles className="size-3.5 text-indigo-300" /> Batch Job Tracker
-            </div>
-            <h1 className="text-3xl font-extrabold text-white sm:text-4xl">{data.originalFilename}</h1>
-            <p className="text-sm text-indigo-200/90">
-              Batch #{data.id} · Uploaded {formatDateTime(data.createdAt)}
-            </p>
-          </div>
-
-          <Button variant="secondary" asChild className="bg-white/10 text-white border-white/10 hover:bg-white/20">
-            <Link to="/faculty/onboarding">New Batch</Link>
+    <div className="flex flex-col gap-[var(--sp-6)]">
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Faculty', to: '/faculty' },
+          { label: 'Bulk onboarding', to: '/faculty/onboarding' },
+          { label: data.originalFilename },
+        ]}
+        title={data.originalFilename}
+        description={`Batch #${data.id} · uploaded ${formatDateTime(data.createdAt)}`}
+        actions={
+          <Button variant="secondary" asChild>
+            <Link to="/faculty/onboarding">New batch</Link>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Main Status & Progress Container */}
-      <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
-            <span>Pass Generation Progress</span>
-            <span className="font-mono text-indigo-600">{data.percentComplete}%</span>
+      <div className="surface-panel flex flex-col gap-[var(--sp-6)] p-[var(--sp-6)]">
+        <div className="flex flex-col gap-[var(--sp-2)]">
+          <div className="text-body-md flex items-center justify-between text-[var(--ink-900)]">
+            <span>Pass generation</span>
+            <span className="text-mono tabular-nums text-[var(--brand-600)]">
+              {data.percentComplete}%
+            </span>
           </div>
           <Progress
             value={data.percentComplete}
@@ -91,91 +89,71 @@ export default function BatchProgressPage() {
         </div>
 
         {running && (
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5 text-indigo-900 space-y-1">
-            <p className="font-bold text-sm">Passes are actively being created & emailed</p>
-            <p className="text-xs text-indigo-700">
-              You can safely navigate away from this page. Processing continues in the background.
-            </p>
-          </div>
+          <Alert tone="info" live={false} title="Passes are being created and emailed">
+            You can navigate away — processing continues in the background.
+          </Alert>
         )}
 
         {done && (
-          <div className="flex items-start gap-3.5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-            <CheckCircle2 className="size-5 shrink-0 text-emerald-600 mt-0.5" />
-            <div className="space-y-1 text-xs">
-              <p className="font-bold text-sm">
-                Completed: All {data.processedRows} passes created & emailed successfully!
-              </p>
-              <p className="text-emerald-700">
-                Finished {data.completedAt ? formatDateTime(data.completedAt) : 'just now'}.
-                {data.invalidRows > 0 && ` ${data.invalidRows} rows with errors were skipped.`}
-              </p>
-            </div>
-          </div>
+          <Alert
+            tone="success"
+            live={false}
+            title={`All ${data.processedRows} passes created and emailed`}
+          >
+            Finished {data.completedAt ? formatDateTime(data.completedAt) : 'just now'}.
+            {data.invalidRows > 0 && ` ${data.invalidRows} rows with errors were skipped.`}
+          </Alert>
         )}
 
         {failed && (
-          <div className="flex items-start gap-3.5 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-900">
-            <TriangleAlert className="size-5 shrink-0 text-rose-600 mt-0.5" />
-            <div className="space-y-1 text-xs">
-              <p className="font-bold text-sm">
-                {data.processedRows > 0 ? `Stopped after generating ${data.processedRows} of ${data.validRows} passes.` : 'Batch processing encountered an issue.'}
-              </p>
-              <p className="text-rose-700">
-                {data.processedRows > 0 ? `${data.processedRows} passes were generated & emailed. ${stalled} remain uncreated.` : 'No passes were generated.'}
-              </p>
-              {data.failureMessage && <p className="font-mono text-[11px] text-rose-800 mt-1">{data.failureMessage}</p>}
-            </div>
-          </div>
+          <Alert
+            tone="danger"
+            title={
+              data.processedRows > 0
+                ? `Stopped after generating ${data.processedRows} of ${data.validRows} passes`
+                : 'This batch could not be processed'
+            }
+          >
+            {data.processedRows > 0
+              ? `${data.processedRows} passes were generated and emailed. ${stalled} remain uncreated.`
+              : 'No passes were generated.'}
+            {data.failureMessage && (
+              <span className="text-mono mt-[var(--sp-1)] block">{data.failureMessage}</span>
+            )}
+          </Alert>
         )}
 
-        <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-100">
-          {failed && stalled > 0 && (
-            <Button
-              onClick={() => retry.mutate()}
-              loading={retry.isPending}
-              className="gap-2 bg-indigo-600 font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700"
-            >
-              <RefreshCw className="size-4" /> Retry Failed ({stalled})
-            </Button>
-          )}
-          {data.invalidRows > 0 && (
-            <Button
-              variant="secondary"
-              onClick={() => errorReport.mutate()}
-              loading={errorReport.isPending}
-              className="gap-2"
-            >
-              <FileSpreadsheet className="size-4 text-indigo-600" /> Export Error Report
-            </Button>
-          )}
-          {done && data.eventId && (
-            <Button variant="secondary" asChild>
-              <Link to={`/faculty/events/${data.eventId}/attendance`}>View Event Attendance</Link>
-            </Button>
-          )}
-        </div>
+        {(failed || data.invalidRows > 0 || (done && data.eventId)) && (
+          <div className="flex flex-wrap gap-[var(--sp-2)] border-t border-[var(--border)] pt-[var(--sp-4)]">
+            {failed && stalled > 0 && (
+              <Button onClick={() => retry.mutate()} loading={retry.isPending}>
+                <RefreshCw aria-hidden /> Retry failed ({stalled})
+              </Button>
+            )}
+            {data.invalidRows > 0 && (
+              <Button
+                variant="secondary"
+                onClick={() => errorReport.mutate()}
+                loading={errorReport.isPending}
+              >
+                <FileSpreadsheet aria-hidden /> Export error report
+              </Button>
+            )}
+            {done && data.eventId && (
+              <Button variant="secondary" asChild>
+                <Link to={`/faculty/events/${data.eventId}/attendance`}>View event attendance</Link>
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Batch Stats grid */}
-      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
-          <dt className="text-xs font-semibold text-slate-500">Rows in Sheet</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.totalRows}</dd>
-        </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
-          <dt className="text-xs font-semibold text-emerald-600">Valid Rows</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.validRows}</dd>
-        </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
-          <dt className="text-xs font-semibold text-amber-600">Rows With Errors</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.invalidRows}</dd>
-        </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 text-center shadow-sm">
-          <dt className="text-xs font-semibold text-indigo-600">Generated Passes</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-slate-900">{data.processedRows}</dd>
-        </div>
-      </dl>
+      <div className="grid gap-[var(--sp-4)] sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Rows in sheet" value={data.totalRows} />
+        <StatCard label="Valid rows" value={data.validRows} />
+        <StatCard label="Rows with errors" value={data.invalidRows} />
+        <StatCard label="Passes generated" value={data.processedRows} />
+      </div>
     </div>
   );
 }
