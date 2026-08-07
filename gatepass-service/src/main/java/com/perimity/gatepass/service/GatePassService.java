@@ -94,6 +94,39 @@ public class GatePassService {
             }
         }
 
+        /*
+         * ==============================================================
+         *  ONE STANDING PASS PER STUDENT, however many times this is called
+         * ==============================================================
+         * A student's everyday pass is now issued automatically the moment
+         * their account is made, and the callers that do it are not
+         * single-shot: an import batch can be resumed, the Add Student
+         * profile call can be retried, and a re-verification asks again.
+         * Without this check each of those mints another QR, the holder's
+         * My Pass screen fills up with passes that all work, and a revoke
+         * only kills whichever one somebody happened to revoke.
+         *
+         * The existing pass is returned rather than an error thrown. Every
+         * caller here is asking "make sure this person has their pass", and
+         * they already do - that is success, not a conflict.
+         *
+         * EVENT passes are excluded: their duplicate rule is the one above,
+         * which is per-event and correctly refuses rather than returns.
+         */
+        if (dto.getPassType() == PassType.DAILY
+                && dto.getEventId() == null
+                && dto.getVisitorRequestId() == null) {
+
+            Optional<GatePass> standing =
+                    passRepository.findLiveStandingDailyPass(dto.getHolderUserId());
+
+            if (standing.isPresent()) {
+                log.info("Holder {} already has standing pass {} ({}) - reusing it.",
+                        dto.getHolderUserId(), standing.get().getId(), standing.get().getStatus());
+                return GatePassResponse.from(standing.get());
+            }
+        }
+
         GatePass pass = GatePass.builder()
                 .holderUserId(dto.getHolderUserId())
                 .holderName(dto.getHolderName().trim())

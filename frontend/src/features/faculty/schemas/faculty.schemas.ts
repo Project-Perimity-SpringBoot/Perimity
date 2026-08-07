@@ -98,7 +98,11 @@ export const addStudentSchema = z.object({
     .max(LIMITS.email.max, 'That address is too long')
     .regex(RX.EMAIL, 'Enter a valid email address'),
 
-  phone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+  phone: z
+    .string()
+    .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+    .or(z.literal(''))
+    .optional(),
 
   temporaryPassword: z
     .string()

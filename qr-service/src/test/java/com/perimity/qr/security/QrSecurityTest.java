@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.perimity.qr.email.EmailSender;
 import com.perimity.qr.config.QrCorsConfig;
 import com.perimity.qr.config.SecurityConfig;
 import com.perimity.qr.controller.PingController;
@@ -46,6 +47,10 @@ class QrSecurityTest {
 
     @MockBean
     private GenerationJobService generationJobService;
+
+    /** Same reason as QrControllerTest: the slice must satisfy the ctor. */
+    @MockBean
+    private EmailSender emailSender;
 
     /**
      * The real JwtService needs perimity.jwt.secret and would refuse to start

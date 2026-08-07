@@ -53,6 +53,7 @@ class StudentProfileServiceTest {
     @Mock private StudentProfileRepository studentRepository;
     @Mock private ProfileGuard guard;
     @Mock private PassPauseClient passPauseClient;
+    @Mock private StudentPassIssuer passIssuer;
     @Mock private CurrentUser currentUser;
 
     private StudentProfileService service;
@@ -60,7 +61,8 @@ class StudentProfileServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudentProfileService(studentRepository, guard, passPauseClient, currentUser);
+        service = new StudentProfileService(
+                studentRepository, guard, passPauseClient, passIssuer, currentUser);
 
         existing = StudentProfile.builder()
                 .id(PROFILE_ID)

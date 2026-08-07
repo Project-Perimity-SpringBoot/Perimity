@@ -63,15 +63,18 @@ public class StudentProfileService {
     private final StudentProfileRepository studentRepository;
     private final ProfileGuard guard;
     private final PassPauseClient passPauseClient;
+    private final StudentPassIssuer passIssuer;
     private final CurrentUser currentUser;
 
     public StudentProfileService(StudentProfileRepository studentRepository,
                                  ProfileGuard guard,
                                  PassPauseClient passPauseClient,
+                                 StudentPassIssuer passIssuer,
                                  CurrentUser currentUser) {
         this.studentRepository = studentRepository;
         this.guard = guard;
         this.passPauseClient = passPauseClient;
+        this.passIssuer = passIssuer;
         this.currentUser = currentUser;
     }
 
@@ -116,48 +119,74 @@ public class StudentProfileService {
          * setting a roll number must not wipe it, and their verification status
          * must not silently change.
          */
-        Optional<StudentProfile> existing = studentRepository.findByUserId(dto.getUserId());
+        /*
+         * ==================================================================
+         *  AND THE ROW IS MADE SURE OF FIRST, NOT LOOKED FOR
+         * ==================================================================
+         * "Find it, insert one if it is missing" is the obvious shape and it
+         * is the one that fails. The listener is provisioning the row on
+         * another thread at the same moment this request arrives - the browser
+         * calls this endpoint the instant the account comes back, which is the
+         * instant auth-service published the event - so a profile that is
+         * genuinely absent at the SELECT can exist by the INSERT. That is
+         * uk_student_user, surfaced to faculty as "The request conflicts with
+         * existing data" on a screen where they did nothing wrong, leaving an
+         * account with no profile behind it.
+         *
+         * Catching the violation here does not work either: Hibernate marks
+         * the transaction rollback-only when a constraint fails, so the
+         * recovery save would fail again at commit. insertIfAbsent pushes the
+         * race into the database, where ON CONFLICT DO NOTHING settles it
+         * without an exception. Whatever happens, a row exists after this line
+         * and the rest of the method is a fill-in.
+         */
+        studentRepository.insertIfAbsent(dto.getUserId(), dto.getCampusId());
 
-        if (existing.isPresent()) {
-            StudentProfile profile = existing.get();
-            requireVisible(profile);
-            requireRollNoAvailable(dto.getCampusId(), rollNo, profile.getId());
+        StudentProfile profile = studentRepository.findByUserId(dto.getUserId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Profile for account " + dto.getUserId()
+                                + " could not be created or read."));
 
-            if (rollNo != null) {
-                profile.setRollNo(rollNo);
-            }
-            if (dto.getDepartmentId() != null) {
-                profile.setDepartmentId(dto.getDepartmentId());
-            }
-            if (trimToNull(dto.getGovId()) != null) {
-                profile.setGovId(trimToNull(dto.getGovId()));
-            }
-            if (trimToNull(dto.getAddress()) != null) {
-                profile.setAddress(trimToNull(dto.getAddress()));
-            }
-            if (trimToNull(dto.getPhotoS3Key()) != null) {
-                profile.setPhotoS3Key(trimToNull(dto.getPhotoS3Key()));
-            }
+        requireVisible(profile);
+        requireRollNoAvailable(dto.getCampusId(), rollNo, profile.getId());
 
-            StudentProfile saved = studentRepository.save(profile);
-            log.info("Filled in auto-provisioned student profile {} for account {}.",
-                    saved.getId(), saved.getUserId());
-            return StudentProfileResponse.from(saved, guard.departmentName(saved.getDepartmentId()));
+        if (rollNo != null) {
+            profile.setRollNo(rollNo);
+        }
+        if (dto.getDepartmentId() != null) {
+            profile.setDepartmentId(dto.getDepartmentId());
+        }
+        if (trimToNull(dto.getGovId()) != null) {
+            profile.setGovId(trimToNull(dto.getGovId()));
+        }
+        if (trimToNull(dto.getAddress()) != null) {
+            profile.setAddress(trimToNull(dto.getAddress()));
+        }
+        if (trimToNull(dto.getPhotoS3Key()) != null) {
+            profile.setPhotoS3Key(trimToNull(dto.getPhotoS3Key()));
         }
 
-        requireRollNoAvailable(dto.getCampusId(), rollNo, null);
-
-        StudentProfile profile = StudentProfile.builder()
-                .userId(dto.getUserId())
-                .campusId(dto.getCampusId())
-                .departmentId(dto.getDepartmentId())
-                .rollNo(rollNo)
-                .govId(trimToNull(dto.getGovId()))
-                .address(trimToNull(dto.getAddress()))
-                .photoS3Key(trimToNull(dto.getPhotoS3Key()))
-                .build();
-
         StudentProfile saved = studentRepository.save(profile);
+        log.info("Filled in student profile {} for account {}.",
+                saved.getId(), saved.getUserId());
+
+        /*
+         * ==================================================================
+         *  THE PASS, WHICH NOTHING ON THIS PATH USED TO ISSUE
+         * ==================================================================
+         * A student added one at a time got an account and a profile and no
+         * pass - ever. The only code in the product that issued a student pass
+         * was the bulk import, so the two ways of adding the same person
+         * produced different people: one who could get through the gate and one
+         * who could not.
+         *
+         * Last, after the profile is saved, and it cannot fail this method -
+         * see StudentPassIssuer, which swallows everything. gatepass being down
+         * must not turn a created student into a 500 the browser reports as
+         * "the account was not created", when it was.
+         */
+        passIssuer.ensureStandingPass(saved.getUserId(), saved.getCampusId(), null);
+
         return StudentProfileResponse.from(saved, guard.departmentName(saved.getDepartmentId()));
     }
 
