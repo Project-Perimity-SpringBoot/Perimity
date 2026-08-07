@@ -132,14 +132,25 @@ export const UPLOAD_RULES = {
     accept: ['image/png', 'image/jpeg', 'image/webp'] as const,
     label: 'PNG, JPEG or WebP, up to 2 MB',
   },
+  /*
+   * XLSX ONLY, and the label has to say so.
+   *
+   * This offered XLS and CSV as well, but ResponseSheetParser reads a real
+   * workbook and nothing else - its own error text names "a .csv renamed, an
+   * .xls" as the case it rejects. So the dropzone invited a file the server
+   * was always going to refuse, and the failure then read "That does not look
+   * like an .xlsx workbook", which blames the person's file rather than the
+   * label that told them to pick it.
+   *
+   * Narrowing `accept` also makes the OS file picker grey the wrong files out,
+   * which stops the mistake before the upload rather than after it.
+   */
   bulkSheet: {
     maxBytes: 5 * 1024 * 1024,
     accept: [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'text/csv',
     ] as const,
-    label: 'XLSX, XLS or CSV, up to 5 MB',
+    label: 'XLSX only, up to 5 MB',
   },
 } as const;
 
