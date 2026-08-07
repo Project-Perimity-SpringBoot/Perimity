@@ -31,11 +31,57 @@ mkdir -p /opt/perimity
 cd /opt/perimity
 
 # 6. Fetch docker-compose.prod.yml from GitHub
-curl -sSL https://raw.githubusercontent.com/Project-Perimity-SpringBoot/Perimity/main/docker-compose.prod.yml -o /opt/perimity/docker-compose.prod.yml
+#
+# -f MATTERS HERE. Without it, a 404 - which is what a PRIVATE repository
+# returns to an unauthenticated request - is written to the file as an HTML
+# error page and curl still exits 0. Step 9 then sees a file that exists, runs
+# `docker-compose up` against HTML, and fails with a YAML parse error that says
+# nothing about the repository being private.
+#
+# With -f the download fails loudly here instead, while the reason is still
+# obvious.
+curl -fsSL https://raw.githubusercontent.com/Project-Perimity-SpringBoot/Perimity/main/docker-compose.prod.yml \
+    -o /opt/perimity/docker-compose.prod.yml
 
 # 7. Login to AWS ECR using Instance IAM Role
-AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region || echo "us-east-1")
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text || echo "682975283868")
+#
+# ==========================================================================
+# IMDSv2: THE TOKEN IS NOT OPTIONAL ON AMAZON LINUX 2023
+# ==========================================================================
+# This was a plain unauthenticated curl, and it is why nothing ever started.
+# AL2023 requires a session token for instance metadata, so the request comes
+# back HTTP 401 with an EMPTY BODY - and, crucially, curl exits 0. A non-zero
+# exit is what `|| echo "us-east-1"` waits for, so the fallback never fired and
+# AWS_REGION was set to the empty string.
+#
+# The next line then ran `aws ecr get-login-password --region ` with nothing
+# after the flag:
+#
+#     aws: [ERROR]: argument --region: expected one argument
+#     Error: Cannot perform an interactive login from a non TTY device
+#
+# and `set -e` killed the script before the compose stack was ever started.
+# Every instance then failed its ELB health check and the ASG replaced it, in a
+# loop, roughly every six minutes.
+#
+# -f is on the token request so a genuine failure is a non-zero exit rather
+# than a silent empty string - the exact trap this is fixing. The `:-` default
+# on the next line is the real belt-and-braces: it triggers on empty, which is
+# what actually happened, where `||` only triggers on failure.
+TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || echo "")
+
+AWS_REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
+    http://169.254.169.254/latest/meta-data/placement/region || echo "")
+AWS_REGION=${AWS_REGION:-us-east-1}
+
+# The CLI negotiates its own IMDSv2 token, so this call works where the raw
+# curl above did not. Defaulted the same way and for the same reason.
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --region "$AWS_REGION" \
+    --query "Account" --output text || echo "")
+AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-682975283868}
+
+echo "Resolved region=$AWS_REGION account=$AWS_ACCOUNT_ID"
 
 if [ -n "$AWS_ACCOUNT_ID" ]; then
     echo "Logging into AWS ECR ($AWS_ACCOUNT_ID in $AWS_REGION)..."
