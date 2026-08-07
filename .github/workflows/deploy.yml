@@ -1,0 +1,99 @@
+name: Perimity Production Build and Deploy to AWS ECR & EC2
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  guard-rails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Ensure no institution branding in source
+        run: |
+          if grep -rIn --exclude-dir=.git --exclude-dir=docs \
+               --exclude-dir=node_modules --exclude-dir=target --exclude-dir=dist \
+               --exclude=docker-build.yml --exclude=deploy.yml \
+               --exclude=package-lock.json --exclude='*.lock' \
+               -iE 'c-?dac' . ; then
+            echo "::error::Institution-specific branding found. Perimity is campus-agnostic."
+            exit 1
+          fi
+          echo "Guard rails clean."
+
+      - name: Ensure no committed .env file
+        run: |
+          if [ -f .env ]; then
+            echo "::error::.env is committed. Remove it and keep only .env.example."
+            exit 1
+          fi
+          echo "No .env file found in repo."
+
+  build-and-push-ecr:
+    needs: guard-rails
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth-service
+          - user-service
+          - gatepass-service
+          - campus-service
+          - guard-service
+          - qr-service
+          - frontend
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check if Dockerfile exists
+        id: check
+        run: |
+          if [ -f "${{ matrix.service }}/Dockerfile" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build, tag, and push image to AWS ECR
+        if: steps.check.outputs.exists == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/perimity/${{ matrix.service }}:$IMAGE_TAG -t $ECR_REGISTRY/perimity/${{ matrix.service }}:latest ./${{ matrix.service }}
+          docker push $ECR_REGISTRY/perimity/${{ matrix.service }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/perimity/${{ matrix.service }}:latest
+
+  trigger-asg-refresh:
+    needs: build-and-push-ecr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Trigger Auto Scaling Group Instance Refresh (Zero Downtime)
+        run: |
+          echo "Triggering zero-downtime Instance Refresh on ASG 'perimity-asg'..."
+          aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name perimity-asg \
+            --preferences '{"MinHealthyPercentage": 50, "InstanceWarmup": 300}' || echo "ASG perimity-asg not yet active. Skipping refresh."

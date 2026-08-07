@@ -1,0 +1,223 @@
+# Perimity — Production Docker Compose Stack for AWS EC2 Deployment
+services:
+  # ---------- Infrastructure Services (Public Docker Hub) ----------
+  postgres:
+    image: postgres:16
+    container_name: perimity-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-perimity}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-perimity_prod_pass}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-perimity}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: perimity-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: perimity-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: perimity-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---------- Microservices (AWS ECR Images) ----------
+  discovery-server:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/discovery-server:latest
+    container_name: perimity-discovery
+    restart: unless-stopped
+    env_file: .env
+    ports: ["8761:8761"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  auth-service:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/auth-service:latest
+    container_name: perimity-auth
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-perimity}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-perimity_prod_pass}
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true"
+      GATEPASS_BASE_URL: http://gatepass-service:8083
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    ports: ["8081:8081"]
+    depends_on:
+      discovery-server: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+
+  user-service:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/user-service:latest
+    container_name: perimity-user
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/userdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-perimity}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-perimity_prod_pass}
+      RABBITMQ_HOST: rabbitmq
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      AUTH_SERVICE_URL: http://auth-service:8081
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true"
+      STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8082:8082"]
+    depends_on:
+      discovery-server: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+
+  gatepass-service:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/gatepass-service:latest
+    container_name: perimity-gatepass
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gatepassdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-perimity}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-perimity_prod_pass}
+      RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_HOST: rabbitmq
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      CAMPUS_SERVICE_URL: http://campus-service:8084
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true"
+      STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8083:8083"]
+    depends_on:
+      discovery-server: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+
+  campus-service:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/campus-service:latest
+    container_name: perimity-campus
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/campusdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-perimity}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-perimity_prod_pass}
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true"
+      STORAGE_LOCAL_DIR: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8084:8084"]
+    depends_on:
+      discovery-server: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+
+  qr-service:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/qr-service:latest
+    container_name: perimity-qr
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/qrdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-perimity}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-perimity_prod_pass}
+      RABBITMQ_HOST: rabbitmq
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true"
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      QR_STORAGE_LOCAL_ROOT: /storage
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    volumes:
+      - perimity_storage:/storage
+    ports: ["8086:8086"]
+    depends_on:
+      discovery-server: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+
+  guard-service:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/guard-service:latest
+    container_name: perimity-guard
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/entrylogdb
+      QR_SERVICE_URL: http://qr-service:8086
+      GATEPASS_SERVICE_URL: http://gatepass-service:8083
+      CAMPUS_SERVICE_URL: http://campus-service:8084
+      USER_SERVICE_URL: http://user-service:8082
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -Djava.net.preferIPv4Stack=true"
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    ports: ["8085:8085"]
+    depends_on:
+      discovery-server: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+
+  frontend:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/perimity/frontend:latest
+    container_name: perimity-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - user-service
+      - gatepass-service
+      - campus-service
+      - guard-service
+      - qr-service
+
+volumes:
+  perimity_storage:
+  postgres_data:
+  mongo_data:
+  rabbitmq_data:
