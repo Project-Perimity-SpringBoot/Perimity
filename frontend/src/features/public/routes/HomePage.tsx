@@ -393,23 +393,23 @@ export default function HomePage() {
             <dl className="mt-[var(--sp-8)] grid gap-[var(--sp-6)]">
               <div className="flex items-start gap-[var(--sp-4)]">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-white/10">
-                  <Layers className="size-5 text-white" aria-hidden />
+                  <QrCode className="size-5 text-white" aria-hidden />
                 </span>
                 <div>
-                  <dt className="text-body-md text-white">Architecture</dt>
+                  <dt className="text-body-md text-white">Secure QR Passes</dt>
                   <dd className="text-small text-[var(--home-footer-ink)]">
-                    Six Spring Boot microservices, service discovery, one React front end
+                    Encrypted, time-bound QR codes delivered directly via email as PDF passes
                   </dd>
                 </div>
               </div>
               <div className="flex items-start gap-[var(--sp-4)]">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-white/10">
-                  <Users className="size-5 text-white" aria-hidden />
+                  <ShieldCheck className="size-5 text-white" aria-hidden />
                 </span>
                 <div>
-                  <dt className="text-body-md text-white">Roles</dt>
+                  <dt className="text-body-md text-white">Real-Time Gate Auditing</dt>
                   <dd className="text-small text-[var(--home-footer-ink)]">
-                    Student · Faculty · Visitor · Guard · Campus Admin · Super Admin
+                    Instant guard scanner verdicts with full entry logs and campus security controls
                   </dd>
                 </div>
               </div>
