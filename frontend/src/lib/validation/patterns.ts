@@ -153,6 +153,43 @@ export const OTP_RULES = {
 } as const;
 
 /**
+ * Columns the STUDENT intake sheet must carry.
+ *
+ * ======================================================================
+ *  A DIFFERENT SHEET FROM BULK_COLUMNS, NOT A LONGER ONE
+ * ======================================================================
+ * The event sheet needs a name and an email; everything else is a bonus,
+ * because a guest attending a lecture has no roll number and never will.
+ * The student sheet is the opposite: it becomes somebody's campus record, so
+ * date of birth, address, roll number, department and a passport photo are
+ * all required, and a sheet missing any of them is rejected BEFORE any row is
+ * read - naming the column, not producing two hundred identical row errors.
+ *
+ * The photo is required for a reason worth remembering: a student with no
+ * photo cannot hold a pass, because a guard would have no face to check
+ * against the person at the gate.
+ *
+ * Kept in step with FormColumn in user-service. That enum is the authority;
+ * this copy exists only to tell faculty what to upload.
+ */
+export const STUDENT_IMPORT_COLUMNS = {
+  required: [
+    'email address',
+    'full name',
+    'first name',
+    'last name',
+    'date of birth',
+    'gender',
+    'address',
+    'phone number',
+    'roll number',
+    'department',
+    'passport photo',
+  ] as const,
+  optional: ['middle name', 'phone country code'] as const,
+} as const;
+
+/**
  * Bulk sheet columns, matched by header name. Position is irrelevant.
  *
  * The optional list is long because faculty running an event reuse the Google
