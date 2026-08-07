@@ -475,7 +475,9 @@ export default function HomePage() {
 
         <div className="border-t border-white/10">
           <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-[var(--sp-3)] px-[var(--sp-6)] py-[var(--sp-6)]">
-            <span className="text-small text-[var(--home-footer-ink)]">Perimity</span>
+            <span className="text-small text-[var(--home-footer-ink)]">
+              &copy; {new Date().getFullYear()} Perimity. All rights reserved.
+            </span>
             <nav aria-label="Footer" className="flex gap-[var(--sp-4)] text-small text-[var(--home-footer-ink)]">
               <Link to="/support" className="hover:text-white">Support</Link>
               <Link to="/privacy" className="hover:text-white">Privacy</Link>
