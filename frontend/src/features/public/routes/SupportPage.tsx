@@ -182,7 +182,7 @@ export default function SupportPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="bg-gradient-to-b from-[var(--home-bar)] to-[#111827] px-[var(--sp-6)] py-[var(--sp-12)] text-white">
+      <section className="bg-gradient-to-b from-[var(--home-bar)] to-[#111827] px-[var(--sp-6)] py-16 sm:py-24 text-white">
         <div className="mx-auto max-w-[900px] text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-[var(--brand-300)]">
             <LifeBuoy className="size-4" /> 24/7 Campus Assistance & Helpdesk
@@ -209,11 +209,11 @@ export default function SupportPage() {
       </section>
 
       {/* Support Categories */}
-      <section className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-[var(--sp-10)]">
+      <section className="mx-auto max-w-[1200px] px-[var(--sp-6)] py-16 sm:py-24">
         <h2 className="text-xl font-bold text-[var(--ink-900)] sm:text-2xl">Browse Help Topics</h2>
         <p className="mt-1 text-sm text-[var(--ink-500)]">Quick assistance organized by role and feature</p>
 
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {CATEGORIES.map((cat, i) => (
             <div
               key={i}
