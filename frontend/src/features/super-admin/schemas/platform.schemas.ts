@@ -18,9 +18,21 @@ export const campusSchema = z.object({
     .regex(RX.DISPLAY_NAME, 'Use letters, numbers and basic punctuation'),
   address: z.string().max(LIMITS.address.max, 'Keep the address under 250 characters').or(z.literal('')).optional(),
   contactEmail: z.string().regex(RX.EMAIL, 'Enter a valid email address').or(z.literal('')).optional(),
+  /*
+   * RX.PHONE, not a hand-rolled ten-digit rule.
+   *
+   * Every backend field this reaches uses ^\+?[1-9]\d{6,14}$ - an optional
+   * country code and 7 to 15 digits. The old /^\d{10}$/ here was wrong in
+   * both directions: it REFUSED +919876543210, which is the format the API
+   * documents and the one people actually type, and it ACCEPTED 0123456789,
+   * which the server then rejected with a 400 the form could not explain.
+   *
+   * Any country code is allowed on purpose. Nothing about this product is
+   * India-only, and a visitor from anywhere may be given a pass.
+   */
   contactPhone: z
     .string()
-    .regex(/^\d{10}$/, 'Contact phone must be exactly 10 digits')
+    .regex(RX.PHONE, 'Include the country code, e.g. +919876543210')
     .or(z.literal(''))
     .optional(),
 });
@@ -72,7 +84,7 @@ export const adminEditSchema = z.object({
     .min(LIMITS.personName.min, 'Name is required')
     .max(LIMITS.personName.max, 'Name may be at most 120 characters')
     .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
-  phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits').or(z.literal('')).optional(),
+  phone: z.string().regex(RX.PHONE, 'Include the country code, e.g. +919876543210').or(z.literal('')).optional(),
 });
 export type AdminEditValues = z.infer<typeof adminEditSchema>;
 

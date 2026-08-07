@@ -98,9 +98,21 @@ export const addStudentSchema = z.object({
     .max(LIMITS.email.max, 'That address is too long')
     .regex(RX.EMAIL, 'Enter a valid email address'),
 
+  /*
+   * RX.PHONE, not the Indian national rule.
+   *
+   * This field lands on auth-service's UserCreateDto.phone, which accepts
+   * ^\+?[1-9]\d{6,14}$ - a country code and 7 to 15 digits. Demanding a bare
+   * ten-digit Indian number here refused +919876543210, the format the API
+   * documents and the one people type, while the server would have taken it.
+   *
+   * The visitor form is deliberately different: gatepass-service enforces the
+   * Indian rule on visitorPhone, so its form matches that. This one has no
+   * country-code field beside it, so the code has to live in the number.
+   */
   phone: z
     .string()
-    .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+    .regex(RX.PHONE, 'Include the country code, e.g. +919876543210')
     .or(z.literal(''))
     .optional(),
 
