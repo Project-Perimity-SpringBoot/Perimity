@@ -44,15 +44,25 @@ public class ProfileLookupService {
     private final StudentProfileRepository studentRepository;
     private final FacultyProfileRepository facultyRepository;
     private final StorageService storage;
+    /*
+     * ProfileGuard, and NOT CurrentUser-flavoured anything - see the class note.
+     * Only departmentName() is used here, which is a plain repository read with
+     * no caller in it. requireSelectableDepartment() must never be called from
+     * this class: it is a write-path rule about what staff may choose, and an
+     * internal read has nobody to refuse.
+     */
+    private final ProfileGuard guard;
     private final int presignMinutes;
 
     public ProfileLookupService(StudentProfileRepository studentRepository,
                                 FacultyProfileRepository facultyRepository,
                                 StorageService storage,
+                                ProfileGuard guard,
                                 @Value("${perimity.storage.presign-minutes}") int presignMinutes) {
         this.studentRepository = studentRepository;
         this.facultyRepository = facultyRepository;
         this.storage = storage;
+        this.guard = guard;
         this.presignMinutes = presignMinutes;
     }
 
@@ -79,12 +89,14 @@ public class ProfileLookupService {
     @Transactional(readOnly = true)
     public Optional<ProfileSummaryResponse> findSummary(Long userId) {
         Optional<ProfileSummaryResponse> student = studentRepository.findByUserId(userId)
-                .map(p -> ProfileSummaryResponse.from(p, photoUrl(p.getPhotoS3Key())));
+                .map(p -> ProfileSummaryResponse.from(p, photoUrl(p.getPhotoS3Key()),
+                        guard.departmentName(p.getDepartmentId())));
         if (student.isPresent()) {
             return student;
         }
         return facultyRepository.findByUserId(userId)
-                .map(p -> ProfileSummaryResponse.from(p, photoUrl(p.getPhotoS3Key())));
+                .map(p -> ProfileSummaryResponse.from(p, photoUrl(p.getPhotoS3Key()),
+                        guard.departmentName(p.getDepartmentId())));
     }
 
     // ----------------------------------------------------------- helpers

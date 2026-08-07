@@ -47,37 +47,54 @@ public record ProfileSummaryResponse(
         ProfileType profileType,
         String identifierCode,
         Long departmentId,
+        /**
+         * The department's NAME, not just its id.
+         *
+         * Added because the id alone was useless to the one caller that needed
+         * it. gatepass-service puts the department on the printed pass, and it
+         * cannot turn 3 into "Computer Science" - the departments table lives
+         * here. Without the name resolved on this side, every pass printed
+         * DEPARTMENT as a dash.
+         *
+         * Null for a profile with no department, which is normal: a faculty
+         * member may have none, and a student has none until staff set one.
+         */
+        String departmentName,
         String photoS3Key,
         String photoUrl
 ) {
 
     public static ProfileSummaryResponse from(StudentProfile e) {
-        return from(e, null);
+        return from(e, null, null);
     }
 
-    public static ProfileSummaryResponse from(StudentProfile e, String photoUrl) {
+    public static ProfileSummaryResponse from(StudentProfile e, String photoUrl,
+                                              String departmentName) {
         return new ProfileSummaryResponse(
                 e.getUserId(),
                 e.getCampusId(),
                 ProfileType.STUDENT,
                 e.getRollNo(),
                 e.getDepartmentId(),
+                departmentName,
                 e.getPhotoS3Key(),
                 photoUrl
         );
     }
 
     public static ProfileSummaryResponse from(FacultyProfile e) {
-        return from(e, null);
+        return from(e, null, null);
     }
 
-    public static ProfileSummaryResponse from(FacultyProfile e, String photoUrl) {
+    public static ProfileSummaryResponse from(FacultyProfile e, String photoUrl,
+                                              String departmentName) {
         return new ProfileSummaryResponse(
                 e.getUserId(),
                 e.getCampusId(),
                 ProfileType.FACULTY,
                 e.getEmployeeId(),
                 e.getDepartmentId(),
+                departmentName,
                 e.getPhotoS3Key(),
                 photoUrl
         );

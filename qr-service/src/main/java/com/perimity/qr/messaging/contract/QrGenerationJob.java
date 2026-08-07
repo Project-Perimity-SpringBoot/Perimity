@@ -68,6 +68,18 @@ public record QrGenerationJob(
         String holderName,
         String holderEmail,
 
+        /*
+         * The holder's department name, resolved by gatepass-service from
+         * user-service.
+         *
+         * PdfDocumentService has rendered a DEPARTMENT field since Day 6 and
+         * has printed a dash on every pass, because this field did not exist on
+         * either copy of the contract and toGenerateRequest therefore had
+         * nothing to map. Null still prints the dash, which is right for a
+         * visitor and for a student with no department set.
+         */
+        String departmentName,
+
         String passType,
         Long eventId,
         String eventName,

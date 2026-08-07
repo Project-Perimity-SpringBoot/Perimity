@@ -58,7 +58,7 @@ export default function BlocklistPage() {
     queryFn: () => authApi.blocklistCount(),
   });
 
-  const { register, handleSubmit, reset, setError, formState: { errors } } = useForm<BlocklistValues>({
+  const { register, handleSubmit, reset, setError, setValue, formState: { errors } } = useForm<BlocklistValues>({
     resolver: zodResolver(blocklistSchema),
     defaultValues: { email: '', phone: '', reason: '' },
   });
@@ -185,10 +185,18 @@ export default function BlocklistPage() {
                 )}
               </Field>
 
-              <Field label="Phone" error={errors.phone?.message}>
+              <Field label="Phone" hint="Optional. 10 digits only." error={errors.phone?.message}>
                 {({ id, describedBy }) => (
-                  <Input id={id} type="tel" placeholder="+919876543210" aria-describedby={describedBy}
-                         invalid={Boolean(errors.phone)} {...register('phone')} />
+                  <Input id={id} type="tel" placeholder="9876543210" aria-describedby={describedBy}
+                         maxLength={10}
+                         inputMode="numeric"
+                         invalid={Boolean(errors.phone)}
+                         {...register('phone', {
+                           onChange: (e) => {
+                             const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                             setValue('phone', digits, { shouldValidate: true });
+                           },
+                         })} />
                 )}
               </Field>
 

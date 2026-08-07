@@ -86,9 +86,12 @@ public class PassEmailRetryService {
         job.setEmailError(null);
         generationJobRepository.save(job);
 
+        // departmentName is null here, like holderName and the campus fields:
+        // a resend re-sends the STORED PDF, so nothing on this object reaches
+        // the document. Only the recipient, subject and body are used.
         QrGenerationJob rebuilt = new QrGenerationJob(
                 job.getJobRef(), passId, job.getCampusId(), null, null, job.getBatchId(),
-                null, null, recipient,
+                null, null, recipient, null,
                 null, null, null,
                 qr.getValidFrom(), qr.getValidTo(),
                 null, subject, body, null);

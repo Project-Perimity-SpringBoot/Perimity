@@ -63,7 +63,7 @@ export default function ApplyPage() {
   });
 
   const {
-    register, handleSubmit, setError, watch, formState: { errors },
+    register, handleSubmit, setError, setValue, watch, formState: { errors },
   } = useForm<VisitorRequestValues>({
     resolver: zodResolver(visitorRequestSchema),
     /*
@@ -193,7 +193,12 @@ export default function ApplyPage() {
                   placeholder="9876543210"
                   maxLength={10}
                   inputMode="numeric"
-                  {...register('visitorPhone')}
+                  {...register('visitorPhone', {
+                    onChange: (e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setValue('visitorPhone', digits, { shouldValidate: true });
+                    },
+                  })}
                 />
               )}
             </Field>

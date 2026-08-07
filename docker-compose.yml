@@ -377,6 +377,23 @@ services:
       CAMPUS_SERVICE_URL: http://campus-service:8084
       USER_SERVICE_URL: http://user-service:8082
       EUREKA_URL: http://discovery-server:8761/eureka/
+      # A DEVELOPMENT OVERRIDE OF THE SCAN BUDGET. Do not copy this to a real
+      # deployment.
+      #
+      # The default is 400ms per hop, which is correct: FR-SCAN-3 gives a scan
+      # one second, a scan is two hops, so each gets half. On this compose stack
+      # that budget is not achievable - twelve containers share one laptop, and
+      # qr-service renders PDFs on the same JVM that answers /decrypt. The first
+      # scan after a restart is a cold controller, a cold JPA path and cold
+      # Jackson serializers, and it loses to 400ms. guard-service then reports
+      # "qr-service decrypt is unreachable", which is true of the deadline and
+      # not of the service.
+      #
+      # 2000ms buys the cold call room. The cost is real and worth stating: a
+      # genuinely dead qr-service now takes 2s to say so instead of 400ms, and
+      # a scan can take 4s across both hops. That is the wrong trade at a gate
+      # with a queue and the right one on a developer machine.
+      INTERNAL_TIMEOUT_MS: 2000
     ports: ["8085:8085"]
     depends_on:
       discovery-server: { condition: service_healthy }

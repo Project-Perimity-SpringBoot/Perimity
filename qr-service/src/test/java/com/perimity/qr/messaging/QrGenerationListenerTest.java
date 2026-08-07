@@ -131,6 +131,7 @@ class QrGenerationListenerTest {
     void rejectsMissingIdempotencyKey() {
         QrGenerationJob message = new QrGenerationJob(
                 null, 7L, 1L, null, null, 100L, 9L, "Someone", "a@example.com",
+                null,
                 "DAILY", null, null, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5),
                 null, "subject", "greeting", LocalDateTime.now());
 
@@ -146,6 +147,7 @@ class QrGenerationListenerTest {
     void rejectsInvalidPayload() {
         QrGenerationJob message = new QrGenerationJob(
                 "uuid-2", 7L, null, null, null, 100L, 9L, "Someone", "a@example.com",
+                null,
                 "DAILY", null, null, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5),
                 null, "subject", "greeting", LocalDateTime.now());
 
@@ -234,6 +236,7 @@ class QrGenerationListenerTest {
         return new QrGenerationJob(
                 jobId, 7L, 1L, "Demo Campus", "DEMO", batchId,
                 9L, "Someone", "a@example.com",
+                "Computer Science",
                 "DAILY", null, null,
                 LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5),
                 null, "subject", "greeting", LocalDateTime.now());

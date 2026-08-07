@@ -353,7 +353,13 @@ public class InternalServiceClient {
 
     public record BlockedEnvelope(boolean success, BlockedView data) { }
 
-    public record ProfileView(Long userId, String identifierCode, String photoS3Key) { }
+    /**
+     * departmentName is read straight off user-service's response rather than
+     * resolved from departmentId here. The departments table lives over there,
+     * and an id this service cannot translate is an id it should not carry.
+     */
+    public record ProfileView(Long userId, String identifierCode, String departmentName,
+                              String photoS3Key) { }
 
     public static record ProfileEnvelope(boolean success, ProfileView data) { }
 }

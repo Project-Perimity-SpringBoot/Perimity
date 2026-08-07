@@ -105,6 +105,17 @@ public class QrJobPublisher {
                     .map(Event::getName).orElse(null);
         }
 
+        /*
+         * The department, for the PDF.
+         *
+         * Fails soft like every other enrichment here: a visitor has no profile
+         * at all and this correctly returns empty, and user-service being down
+         * costs a line on a PDF rather than a pass that never issues.
+         */
+        String departmentName = internal.profileOf(pass.getHolderUserId())
+                .map(InternalServiceClient.ProfileView::departmentName)
+                .orElse(null);
+
         return new QrGenerationJob(
                 UUID.randomUUID().toString(),
                 pass.getId(),
@@ -114,6 +125,7 @@ public class QrJobPublisher {
                 pass.getHolderUserId(),
                 pass.getHolderName(),
                 holderEmail,
+                departmentName,
                 pass.getPassType().name(),
                 pass.getEventId(),
                 eventName,

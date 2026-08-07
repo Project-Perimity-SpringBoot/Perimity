@@ -149,15 +149,22 @@ export default function AddStudentPage() {
               )}
             </Field>
 
-            <Field label="Phone" error={form.formState.errors.phone?.message}>
+            <Field label="Phone" hint="Optional. 10 digits only." error={form.formState.errors.phone?.message}>
               {({ id, describedBy }) => (
                 <Input
                   id={id}
                   type="tel"
-                  placeholder="+919876543210"
+                  placeholder="9876543210"
+                  maxLength={10}
+                  inputMode="numeric"
                   aria-describedby={describedBy}
                   invalid={Boolean(form.formState.errors.phone)}
-                  {...form.register('phone')}
+                  {...form.register('phone', {
+                    onChange: (e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      form.setValue('phone', digits, { shouldValidate: true });
+                    },
+                  })}
                 />
               )}
             </Field>

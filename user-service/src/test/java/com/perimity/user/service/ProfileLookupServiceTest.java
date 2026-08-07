@@ -44,12 +44,13 @@ class ProfileLookupServiceTest {
     @Mock private StudentProfileRepository studentRepository;
     @Mock private FacultyProfileRepository facultyRepository;
     @Mock private StorageService storage;
+    @Mock private ProfileGuard guard;
 
     private ProfileLookupService service;
 
     @BeforeEach
     void setUp() {
-        service = new ProfileLookupService(studentRepository, facultyRepository, storage, 15);
+        service = new ProfileLookupService(studentRepository, facultyRepository, storage, guard, 15);
         when(storage.presignedReadUrl(anyString(), any())).thenReturn(SIGNED);
     }
 

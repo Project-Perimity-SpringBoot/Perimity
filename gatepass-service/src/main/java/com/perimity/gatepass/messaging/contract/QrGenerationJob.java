@@ -32,6 +32,18 @@ public record QrGenerationJob(
         String holderName,
         String holderEmail,
 
+        /*
+         * The holder's department NAME, for the DEPARTMENT field on the PDF.
+         *
+         * qr-service has rendered that field since Day 6 and has been printing
+         * a dash on every pass ever issued, because this field did not exist
+         * and its QrGenerationRequest.departmentName was therefore never set.
+         *
+         * Null is legitimate and stays a dash: a visitor has no department, and
+         * neither does a student before staff assign one.
+         */
+        String departmentName,
+
         String passType,
         Long eventId,
         String eventName,

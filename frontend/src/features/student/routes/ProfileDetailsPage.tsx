@@ -504,10 +504,16 @@ export default function ProfileDetailsPage() {
                          invalid={Boolean(form.formState.errors.phoneCountryCode)}
                          {...form.register('phoneCountryCode')} />
                   <Input id={id} className="flex-1" inputMode="numeric"
+                         maxLength={10} placeholder="9876543210"
                          autoComplete="tel-national" aria-label="Phone number"
                          aria-describedby={describedBy}
                          invalid={Boolean(form.formState.errors.phoneNumber)}
-                         {...form.register('phoneNumber')} />
+                         {...form.register('phoneNumber', {
+                           onChange: (e) => {
+                             const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                             form.setValue('phoneNumber', digits, { shouldValidate: true });
+                           },
+                         })} />
                 </div>
               )}
             </Field>
@@ -527,9 +533,15 @@ export default function ProfileDetailsPage() {
                          invalid={Boolean(form.formState.errors.altPhoneCountryCode)}
                          {...form.register('altPhoneCountryCode')} />
                   <Input id={id} className="flex-1" inputMode="numeric"
+                         maxLength={10} placeholder="9876543210"
                          aria-label="Second phone number" aria-describedby={describedBy}
                          invalid={Boolean(form.formState.errors.altPhoneNumber)}
-                         {...form.register('altPhoneNumber')} />
+                         {...form.register('altPhoneNumber', {
+                           onChange: (e) => {
+                             const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                             form.setValue('altPhoneNumber', digits, { shouldValidate: true });
+                           },
+                         })} />
                 </div>
               )}
             </Field>

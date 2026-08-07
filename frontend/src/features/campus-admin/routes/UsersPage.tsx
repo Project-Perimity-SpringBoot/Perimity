@@ -332,12 +332,19 @@ export default function UsersPage() {
                   )}
                 </Field>
 
-                <Field label="Phone" error={createForm.formState.errors.phone?.message}>
+                <Field label="Phone" hint="Optional. 10 digits only." error={createForm.formState.errors.phone?.message}>
                   {({ id, describedBy }) => (
                     <Input id={id} type="tel" aria-describedby={describedBy}
-                           placeholder="+919876543210"
+                           placeholder="9876543210"
+                           maxLength={10}
+                           inputMode="numeric"
                            invalid={Boolean(createForm.formState.errors.phone)}
-                           {...createForm.register('phone')} />
+                           {...createForm.register('phone', {
+                             onChange: (e) => {
+                               const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                               createForm.setValue('phone', digits, { shouldValidate: true });
+                             },
+                           })} />
                   )}
                 </Field>
               </div>

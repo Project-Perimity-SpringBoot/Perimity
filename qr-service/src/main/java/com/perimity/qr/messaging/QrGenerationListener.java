@@ -253,6 +253,10 @@ public class QrGenerationListener {
                 .holderUserId(message.holderUserId())
                 .holderName(message.holderName())
                 .campusName(message.campusName())
+                // Dropped until now, which is why every PDF printed a dash for
+                // DEPARTMENT. Not needed to generate the QR, but the PDF is
+                // built from this same request object.
+                .departmentName(message.departmentName())
                 .validFrom(message.validFrom())
                 .validTo(message.validTo())
                 .build();

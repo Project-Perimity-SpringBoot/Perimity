@@ -136,6 +136,7 @@ class PassEmailServiceTest {
 
         QrGenerationJob noCopy = new QrGenerationJob(
                 "uuid-1", 7L, 1L, null, null, null, 9L, "Someone", "visitor@example.com",
+                null,
                 "DAILY", null, null, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5),
                 null, null, null, LocalDateTime.now());
 
@@ -153,6 +154,7 @@ class PassEmailServiceTest {
         return new QrGenerationJob(
                 "uuid-1", 7L, 1L, "Demo Campus", "DEMO", null,
                 9L, "Someone", email,
+                "Computer Science",
                 "EVENT", 3L, "Open Day",
                 LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 5),
                 null,

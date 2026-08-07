@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Issues a student's standing DAILY pass.
@@ -76,6 +78,42 @@ public class StudentPassIssuer {
             return;
         }
 
+        /*
+         * ==================================================================
+         *  AFTER THE COMMIT, NOT INSIDE IT
+         * ==================================================================
+         * Both callers are mid-transaction with the profile written but NOT yet
+         * committed. Issuing here and now starts a chain that reads straight
+         * back into this service: gatepass saves the pass, publishes the QR job
+         * after its own commit, and QrJobPublisher then calls
+         * GET /api/user/internal/profiles/{id}/summary for the department name.
+         *
+         * That read is a different connection and cannot see an uncommitted
+         * row. It would find the profile as it was BEFORE this transaction -
+         * with no department - and the PDF would print a dash again, which is
+         * exactly the bug this was meant to fix.
+         *
+         * Waiting for the commit also stops an HTTP round trip being held
+         * inside a database transaction, which on a 200-row import is 200 open
+         * connections' worth of waiting.
+         *
+         * The same afterCommit pattern gatepass-service uses for the same
+         * reason - see QrJobPublisher.
+         */
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            issueNow(userId, campusId, holderName);
+                        }
+                    });
+            return;
+        }
+        issueNow(userId, campusId, holderName);
+    }
+
+    private void issueNow(Long userId, Long campusId, String holderName) {
         String name = holderName == null || holderName.isBlank() ? lookUpName(userId) : holderName;
 
         if (name == null || name.isBlank()) {
