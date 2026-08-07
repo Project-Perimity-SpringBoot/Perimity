@@ -100,8 +100,24 @@ public class DrivePhotoFetcher {
         }
 
         try {
+            /*
+             * setSupportsAllDrives, on both calls.
+             *
+             * Without it the API pretends Shared Drive files do not exist -
+             * a flat 404, the same answer it gives for a file that was never
+             * shared. So a correctly shared folder on a Shared Drive fails
+             * identically to an unshared one on My Drive, and the log cannot
+             * tell you which mistake you made.
+             *
+             * Harmless for ordinary My Drive files, so it is set
+             * unconditionally rather than behind a flag nobody would know to
+             * turn on.
+             */
             com.google.api.services.drive.model.File meta =
-                    client.files().get(fileId).setFields("id, name, size, mimeType").execute();
+                    client.files().get(fileId)
+                            .setSupportsAllDrives(true)
+                            .setFields("id, name, size, mimeType")
+                            .execute();
 
             Long size = meta.getSize();
             if (size != null && size > MAX_BYTES) {
@@ -111,7 +127,9 @@ public class DrivePhotoFetcher {
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            client.files().get(fileId).executeMediaAndDownloadTo(out);
+            client.files().get(fileId)
+                    .setSupportsAllDrives(true)
+                    .executeMediaAndDownloadTo(out);
             byte[] bytes = out.toByteArray();
 
             if (bytes.length == 0) {
