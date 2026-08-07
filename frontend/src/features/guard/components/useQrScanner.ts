@@ -102,6 +102,39 @@ export type CameraState = 'idle' | 'starting' | 'running' | 'denied' | 'unsuppor
 export function useQrScanner(onToken: (token: string) => void) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  /*
+   * ==========================================================================
+   * WHY THIS IS A CALLBACK REF AND NOT A PLAIN ONE
+   * ==========================================================================
+   * The verdict screen replaces the scanner with an early return, so the
+   * <video> element is UNMOUNTED for as long as a verdict is on screen and a
+   * brand new one mounts when the countdown dismisses it.
+   *
+   * The stream survives that - it belongs to the hook, not to the element -
+   * but a plain ref only ever recorded the new node. Nothing put the stream
+   * back onto it, so the guard came back from a successful scan to a black
+   * rectangle, with state still 'running' and the button still offering to
+   * pause a camera that was showing nothing. Pausing and starting fixed it
+   * because start() is the only place that ever assigned srcObject.
+   *
+   * A callback ref runs on every mount, which is exactly the moment the
+   * element needs the stream. Reattaching is idempotent - the srcObject check
+   * makes a re-render that passes the same node a no-op.
+   */
+  const attachVideo = useCallback((element: HTMLVideoElement | null) => {
+    videoRef.current = element;
+    if (!element) return;
+
+    const stream = streamRef.current;
+    if (!stream || element.srcObject === stream) return;
+
+    element.srcObject = stream;
+    // Autoplay is permitted here - the element is muted and playsInline, and
+    // the stream is already granted. A rejection means the element went away
+    // again mid-attach, which the next mount handles.
+    void element.play().catch(() => {});
+  }, []);
   const timerRef = useRef<number | null>(null);
   const lastRef = useRef<{ token: string; at: number }>({ token: '', at: 0 });
 
@@ -119,6 +152,10 @@ export function useQrScanner(onToken: (token: string) => void) {
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    // Detach as well as stop. A stopped track leaves its last frame painted on
+    // the element, so without this "Pause camera" freezes on the guard's face
+    // instead of clearing.
+    if (videoRef.current) videoRef.current.srcObject = null;
     setState('idle');
   }, []);
 
@@ -143,6 +180,7 @@ export function useQrScanner(onToken: (token: string) => void) {
       if (!element) { stop(); return; }
       element.srcObject = stream;
       await element.play();
+
 
       timerRef.current = window.setInterval(() => {
         void (async () => {
@@ -188,5 +226,7 @@ export function useQrScanner(onToken: (token: string) => void) {
    * state 'unsupported' after start(), which is the only moment we can know
    * whether the chunk loads.
    */
-  return { videoRef, state, start, stop, supported: true };
+  // videoRef is the callback - the screen attaches it exactly as before, and
+  // it now survives the element being unmounted by the verdict screen.
+  return { videoRef: attachVideo, state, start, stop, supported: true };
 }

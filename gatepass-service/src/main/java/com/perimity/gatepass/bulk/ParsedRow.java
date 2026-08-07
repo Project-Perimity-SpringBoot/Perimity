@@ -19,12 +19,67 @@ public record ParsedRow(
         String name,
         String email,
         String phone,
-        String purpose
+        String purpose,
+        Details details
 ) {
+
+    /**
+     * The rest of a Google Form responses sheet.
+     *
+     * ======================================================================
+     *  WHY THESE ARE ALL OPTIONAL AND WHY THEY ARE IN A NESTED RECORD
+     * ======================================================================
+     * A faculty member running an event reuses whatever form they already
+     * have. The student intake form asks for date of birth, address, roll
+     * number and a passport photo; a guest-lecture RSVP form asks for a name
+     * and an email and nothing else. BOTH have to upload cleanly, so not one
+     * field here may be required - name and email remain the only two the
+     * sheet must carry.
+     *
+     * They live in a nested record rather than as nine more components on
+     * ParsedRow so that the row's identity fields stay readable at the call
+     * site, and so that "was anything else supplied at all" is one null check.
+     *
+     * Nothing here is trusted as an identifier. rollNo and department are
+     * recorded as the sheet spelled them; they are NOT used to match an
+     * attendee to an existing student, because a typo in a roll number would
+     * then hand one person another person's pass. Matching is by email only,
+     * which auth-service owns.
+     */
+    public record Details(
+            String firstName,
+            String middleName,
+            String lastName,
+            String dateOfBirth,
+            String gender,
+            String address,
+            String rollNo,
+            String department,
+            String photoLink
+    ) {
+
+        /** True when the sheet carried none of these columns, or all of them blank. */
+        public boolean isEmpty() {
+            return blank(firstName) && blank(middleName) && blank(lastName)
+                    && blank(dateOfBirth) && blank(gender) && blank(address)
+                    && blank(rollNo) && blank(department) && blank(photoLink);
+        }
+    }
+
+    /**
+     * The four-column form, for callers and tests that only care about
+     * identity. Kept so that a sheet with no extra columns, and every test
+     * written before those columns existed, still construct a ParsedRow the
+     * short way.
+     */
+    public ParsedRow(int rowNumber, String name, String email, String phone, String purpose) {
+        this(rowNumber, name, email, phone, purpose, null);
+    }
 
     /** True when every cell in the row was blank - a trailing row Excel kept. */
     public boolean isEmpty() {
-        return blank(name) && blank(email) && blank(phone) && blank(purpose);
+        return blank(name) && blank(email) && blank(phone) && blank(purpose)
+                && (details == null || details.isEmpty());
     }
 
     /** Lowercased email, for duplicate detection and identity matching. */

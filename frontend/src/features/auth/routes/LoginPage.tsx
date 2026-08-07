@@ -3,8 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Eye, EyeOff } from 'lucide-react';
-import { Button, Field, Input } from '@ui/index';
+import { Button, Field, Input, PasswordInput } from '@ui/index';
 import { FormError } from '@components/feedback';
 import {
   AccountLockedNotice, SessionExpiredNotice, isLockoutMessage,
@@ -21,7 +20,6 @@ export default function LoginPage() {
   const { completeSignIn } = useAuth();
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
 
   const form = useForm<LoginValues>({
@@ -101,25 +99,13 @@ export default function LoginPage() {
 
         <Field label="Password" required error={form.formState.errors.password?.message}>
           {({ id, describedBy }) => (
-            <div className="relative">
-              <Input
-                id={id}
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                aria-describedby={describedBy}
-                invalid={!!form.formState.errors.password}
-                className="pr-10"
-                {...form.register('password')}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--r-sm)] p-1 text-[var(--ink-500)]"
-              >
-                {showPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-              </button>
-            </div>
+            <PasswordInput
+              id={id}
+              autoComplete="current-password"
+              aria-describedby={describedBy}
+              invalid={!!form.formState.errors.password}
+              {...form.register('password')}
+            />
           )}
         </Field>
 

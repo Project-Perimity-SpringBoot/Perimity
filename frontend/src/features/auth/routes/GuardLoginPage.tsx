@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { ArrowLeft, ClipboardList, Layers, QrCode, ShieldCheck, Users } from 'lucide-react';
-import { Button, Field, Input } from '@ui/index';
+import { Button, Field, Input, PasswordInput } from '@ui/index';
 import { FormError } from '@components/feedback';
 import { authApi } from '@lib/api/services/auth.api';
 import { useAuth } from '@hooks/useAuth';
@@ -182,9 +182,8 @@ export default function GuardLoginPage() {
 
               <Field label="Password" required error={form.formState.errors.password?.message}>
                 {({ id, describedBy }) => (
-                  <Input
+                  <PasswordInput
                     id={id}
-                    type="password"
                     autoComplete="current-password"
                     aria-describedby={describedBy}
                     invalid={!!form.formState.errors.password}
