@@ -95,3 +95,6 @@ test-resume-responses.xlsx
 test-welcome-responses.xlsx
 test-import-responses.xlsx
 test-import-responses.xlsx
+
+# Eclipse workspace metadata - machine-local, and its checksums trip the branding guard-rail
+.metadata/

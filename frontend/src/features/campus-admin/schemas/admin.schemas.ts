@@ -24,7 +24,7 @@ export const userCreateSchema = z
       .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
     phone: z
       .string()
-      .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+      .regex(RX.PHONE, 'Include the country code, e.g. +919876543210')
       .or(z.literal(''))
       .optional(),
     role: z.enum(ROLES),
@@ -68,7 +68,7 @@ export const userUpdateSchema = z.object({
     .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
   phone: z
     .string()
-    .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+    .regex(RX.PHONE, 'Include the country code, e.g. +919876543210')
     .or(z.literal(''))
     .optional(),
 });
@@ -114,7 +114,7 @@ export const blocklistSchema = z
     email: email.or(z.literal('')).optional(),
     phone: z
       .string()
-      .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+      .regex(RX.PHONE, 'Include the country code, e.g. +919876543210')
       .or(z.literal(''))
       .optional(),
     reason: z
