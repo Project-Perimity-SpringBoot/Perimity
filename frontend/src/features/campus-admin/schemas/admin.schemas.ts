@@ -22,7 +22,11 @@ export const userCreateSchema = z
       .min(LIMITS.personName.min, 'Name is required')
       .max(LIMITS.personName.max, 'Name may be at most 120 characters')
       .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
-    phone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+    phone: z
+      .string()
+      .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+      .or(z.literal(''))
+      .optional(),
     role: z.enum(ROLES),
     temporaryPassword: z.string().or(z.literal('')).optional(),
   })
@@ -62,7 +66,11 @@ export const userUpdateSchema = z.object({
     .min(LIMITS.personName.min, 'Name is required')
     .max(LIMITS.personName.max, 'Name may be at most 120 characters')
     .regex(RX.PERSON_NAME, 'Use letters, spaces, hyphens and apostrophes only'),
-  phone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+  phone: z
+    .string()
+    .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+    .or(z.literal(''))
+    .optional(),
 });
 export type UserUpdateValues = z.infer<typeof userUpdateSchema>;
 
@@ -104,7 +112,11 @@ export type GateValues = z.infer<typeof gateSchema>;
 export const blocklistSchema = z
   .object({
     email: email.or(z.literal('')).optional(),
-    phone: z.string().regex(RX.PHONE, 'Enter a valid phone number').or(z.literal('')).optional(),
+    phone: z
+      .string()
+      .regex(RX.PHONE_NATIONAL_IN, 'Enter a 10-digit mobile number starting with 6, 7, 8 or 9')
+      .or(z.literal(''))
+      .optional(),
     reason: z
       .string()
       .min(LIMITS.blocklistReason.min, 'Give a reason of at least 5 characters')
