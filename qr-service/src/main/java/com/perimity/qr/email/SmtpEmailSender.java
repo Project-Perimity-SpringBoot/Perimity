@@ -36,6 +36,10 @@ public class SmtpEmailSender implements EmailSender {
     private static final String ATTACHMENT_NAME = "gate-pass.pdf";
     private static final String PDF_CONTENT_TYPE = "application/pdf";
 
+    /** Three tries, then the job row records the failure. */
+    private static final int SEND_ATTEMPTS = 3;
+    private static final long RETRY_BACKOFF_MS = 1500L;
+
     private final JavaMailSender mailSender;
     private final String fromAddress;
     private final String fromName;
@@ -97,7 +101,7 @@ public class SmtpEmailSender implements EmailSender {
             helper.addAttachment(ATTACHMENT_NAME,
                     new ByteArrayResource(email.pdf()), PDF_CONTENT_TYPE);
 
-            mailSender.send(message);
+            sendWithRetry(message);
 
             // The address is not logged. It is personal data, the log is not,
             // and there is nothing this line could tell you that the job row
@@ -114,5 +118,51 @@ public class SmtpEmailSender implements EmailSender {
             // message did not go.
             throw new EmailDeliveryException("Mail server refused the pass email", ex);
         }
+    }
+
+    /**
+     * Send, and try again if the connection simply did not open.
+     *
+     * The same fix as auth-service, for the same measured reason: roughly half
+     * of outbound connections to Gmail from inside a container are dropped
+     * before the handshake, while the identical connection from the host
+     * succeeds every time. The credentials and the port are fine - the socket
+     * is not.
+     *
+     * This one carries a PDF, so a lost send costs the holder the pass itself,
+     * not just a retryable code.
+     *
+     * An authentication failure is NOT retried. A wrong App Password is wrong
+     * on every attempt, and repeating it is how Google starts refusing the
+     * account outright.
+     */
+    private void sendWithRetry(MimeMessage message) {
+        MailException last = null;
+
+        for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
+            try {
+                mailSender.send(message);
+                if (attempt > 1) {
+                    log.info("Pass email sent on attempt {}", attempt);
+                }
+                return;
+            } catch (org.springframework.mail.MailAuthenticationException ex) {
+                throw ex;
+            } catch (MailException ex) {
+                last = ex;
+                if (attempt < SEND_ATTEMPTS) {
+                    log.warn("Pass email failed on attempt {} of {}, retrying: {}",
+                            attempt, SEND_ATTEMPTS, ex.getMessage());
+                    try {
+                        Thread.sleep(RETRY_BACKOFF_MS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+
+        throw last;
     }
 }

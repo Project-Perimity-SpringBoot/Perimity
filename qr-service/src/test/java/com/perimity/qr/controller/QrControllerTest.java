@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.perimity.qr.email.EmailSender;
 import com.perimity.qr.dto.BatchProgressResponse;
 import com.perimity.qr.dto.JobStatusResponse;
 import com.perimity.qr.dto.QrRecordResponse;
@@ -71,6 +72,19 @@ class QrControllerTest {
 
     @MockBean
     private GenerationJobService generationJobService;
+
+    /*
+     * QrController grew an EmailSender when the "email my pass" endpoint
+     * landed, and a @WebMvcTest slice only loads the controller - every
+     * collaborator has to be mocked here or the context cannot be built. It
+     * was not, so all 22 tests in this slice died at startup with
+     * NoSuchBeanDefinitionException rather than on an assertion, which is why
+     * the failure looked like config rather than coverage.
+     *
+     * Nothing in this class exercises sending; it exists so the context loads.
+     */
+    @MockBean
+    private EmailSender emailSender;
 
     @Test
     void downloadPdf_returnsPdfBytesAsAnAttachment() throws Exception {

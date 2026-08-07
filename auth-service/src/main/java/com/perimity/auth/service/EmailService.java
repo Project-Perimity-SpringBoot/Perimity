@@ -43,6 +43,10 @@ public class EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
+    /** Three tries, then give up and let the caller log it. */
+    private static final int MAIL_SEND_ATTEMPTS = 3;
+    private static final long MAIL_RETRY_BACKOFF_MS = 1500L;
+
     private final JavaMailSender mailSender;
     private final boolean mailEnabled;
     private final String fromName;
@@ -116,7 +120,55 @@ public class EmailService {
         if (fromAddress != null && !fromAddress.isBlank()) {
             helper.setFrom(fromAddress, fromName);
         }
-        mailSender.send(message);
+        sendWithRetry(message, toEmail);
+    }
+
+    /**
+     * Send, and try again if the connection simply did not open.
+     *
+     * Measured on this setup: roughly half of outbound connections to Gmail
+     * from inside a container are dropped before the handshake, while the same
+     * connection from the host succeeds every time. The credentials, port and
+     * From address are all correct - the socket just does not open. One dropped
+     * packet should not cost somebody their password reset, and a demo hall's
+     * wifi is not going to be kinder than this.
+     *
+     * Three attempts turns a coin flip into about a one-in-eight chance of
+     * losing the mail, and the backoff keeps a genuinely down server from being
+     * hammered.
+     *
+     * An authentication failure is NOT retried. A wrong App Password is wrong
+     * on every attempt, and repeating it is how Google starts refusing the
+     * account outright.
+     */
+    private void sendWithRetry(MimeMessage message, String toEmail) {
+        MailException last = null;
+
+        for (int attempt = 1; attempt <= MAIL_SEND_ATTEMPTS; attempt++) {
+            try {
+                mailSender.send(message);
+                if (attempt > 1) {
+                    log.info("Mail to {} sent on attempt {}", toEmail, attempt);
+                }
+                return;
+            } catch (org.springframework.mail.MailAuthenticationException ex) {
+                throw ex;
+            } catch (MailException ex) {
+                last = ex;
+                if (attempt < MAIL_SEND_ATTEMPTS) {
+                    log.warn("Mail to {} failed on attempt {} of {}, retrying: {}",
+                            toEmail, attempt, MAIL_SEND_ATTEMPTS, ex.getMessage());
+                    try {
+                        Thread.sleep(MAIL_RETRY_BACKOFF_MS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+
+        throw last;
     }
 
     private String introFor(OtpPurpose purpose) {

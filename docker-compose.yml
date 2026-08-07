@@ -160,6 +160,23 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Perimity}
       MAIL_ENABLED: "${MAIL_ENABLED:-true}"
+      # FORCE IPv4, AND THIS IS ABOUT SMTP.
+      #
+      # Gmail publishes both A and AAAA records. This container resolves the
+      # AAAA first and the JVM picks it, but the bridge network has no IPv6
+      # route - so every send died with MailConnectException ("Couldn't connect
+      # to host") long before authentication. Nothing was wrong with the
+      # credentials, the port or the address.
+      #
+      # Verified from inside this container: opening a socket to the IPv4
+      # address returns Gmail's real banner,
+      #   220 smtp.gmail.com ESMTP ... - gsmtp
+      # while the IPv6 address fails to route at all.
+      #
+      # JAVA_TOOL_OPTIONS rather than JAVA_OPTS: the entrypoint is exec-form
+      # ["java","-jar",...] and never expands a shell variable, but the JVM
+      # reads JAVA_TOOL_OPTIONS on its own.
+      JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
       # PROPOSAL. Container name, not localhost - see GatepassVisitorClient.
       GATEPASS_BASE_URL: http://gatepass-service:8083
       EUREKA_URL: http://discovery-server:8761/eureka/
@@ -315,6 +332,23 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-no-reply@example.com}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Perimity}
+      # FORCE IPv4, AND THIS IS ABOUT SMTP.
+      #
+      # Gmail publishes both A and AAAA records. This container resolves the
+      # AAAA first and the JVM picks it, but the bridge network has no IPv6
+      # route - so every send died with MailConnectException ("Couldn't connect
+      # to host") long before authentication. Nothing was wrong with the
+      # credentials, the port or the address.
+      #
+      # Verified from inside this container: opening a socket to the IPv4
+      # address returns Gmail's real banner,
+      #   220 smtp.gmail.com ESMTP ... - gsmtp
+      # while the IPv6 address fails to route at all.
+      #
+      # JAVA_TOOL_OPTIONS rather than JAVA_OPTS: the entrypoint is exec-form
+      # ["java","-jar",...] and never expands a shell variable, but the JVM
+      # reads JAVA_TOOL_OPTIONS on its own.
+      JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
       GATEPASS_SERVICE_URL: http://gatepass-service:8083
       QR_STORAGE_LOCAL_ROOT: /storage
       EUREKA_URL: http://discovery-server:8761/eureka/
