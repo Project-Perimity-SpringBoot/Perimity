@@ -95,7 +95,7 @@ public class GatePassInternalController {
                         .holderUserId(request.holderUserId())
                         .holderName(request.holderName())
                         .visitorRequestId(request.visitorRequestId())
-                        .passType(request.passType() != null ? com.perimity.gatepass.entity.enums.PassType.valueOf(request.passType()) : com.perimity.gatepass.entity.enums.PassType.DAILY)
+                        .passType(passTypeOf(request.passType()))
                         .eventId(request.eventId())
                         .validFrom(request.validFrom() != null ? request.validFrom() : java.time.LocalDate.now())
                         .validTo(request.validTo())
@@ -103,6 +103,43 @@ public class GatePassInternalController {
         dto.setCampusId(request.campusId());
 
         return ApiResponse.ok("Pass issued", service.issue(dto));
+    }
+
+    /**
+     * A pass type this service does not recognise is a bad request, not a 500.
+     *
+     * ==================================================================
+     *  WHY valueOf ON ITS OWN WAS WRONG HERE
+     * ==================================================================
+     * PassType.valueOf("Daily") - wrong case, a typo, or a value a newer
+     * caller knows and this build does not - throws IllegalArgumentException,
+     * which surfaces as a 500. The caller then cannot tell "I sent something
+     * invalid" from "gatepass-service is broken", and during a bulk student
+     * import that is the difference between one rejected row and an operator
+     * concluding the whole service is down.
+     *
+     * Null still means DAILY, which is what every existing caller relies on:
+     * user-service sends "DAILY" explicitly, the visitor flow sends nothing.
+     * Only a non-null value that names no known type is refused, and the
+     * message lists what is accepted so whoever sent it can fix it.
+     *
+     * The same reasoning guard-service already applies in the other
+     * direction - it deserialises status and passType as String precisely so
+     * an unknown value becomes a logged refusal rather than a 500 at a gate.
+     */
+    private static com.perimity.gatepass.entity.enums.PassType passTypeOf(String value) {
+        if (value == null || value.isBlank()) {
+            return com.perimity.gatepass.entity.enums.PassType.DAILY;
+        }
+        try {
+            return com.perimity.gatepass.entity.enums.PassType
+                    .valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(
+                    "\"" + value + "\" is not a pass type. Use one of: "
+                            + java.util.Arrays.toString(
+                                    com.perimity.gatepass.entity.enums.PassType.values()));
+        }
     }
 
     public record InternalIssueRequest(

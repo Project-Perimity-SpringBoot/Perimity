@@ -536,26 +536,68 @@ public class StudentImportService {
 
             attachPhoto(profile, row, batch.getCampusId());
 
-            if (profile.getPhotoS3Key() == null) {
+            boolean hasPhoto = profile.getPhotoS3Key() != null;
+            if (!hasPhoto) {
                 missingPhoto++;
             }
 
             studentRepository.save(profile);
 
-            try {
-                gatepassClient.issuePass(new com.perimity.user.client.GatepassFeignClient.IssuePassRequest(
-                        accountResult.userId(),
-                        displayName(row),
-                        batch.getCampusId(),
-                        null,
-                        "DAILY",
-                        null,
-                        java.time.LocalDate.now(),
-                        null
-                ));
-                log.info("Issued standing DAILY pass for imported student {} (user {})", displayName(row), accountResult.userId());
-            } catch (Exception ex) {
-                log.error("Could not issue DAILY pass for student {} (user {}): {}", displayName(row), accountResult.userId(), ex.getMessage());
+            /*
+             * ==============================================================
+             *  NO PHOTO, NO PASS
+             * ==============================================================
+             * This used to issue a pass unconditionally, which contradicted
+             * attachPhoto's own comment three methods down - "no pass issues
+             * until they upload one" - and, more to the point, contradicted
+             * what a pass is for.
+             *
+             * A guard scanning a QR sees the holder's photo and checks it
+             * against the person in front of them. Issue a pass with no photo
+             * and that check silently becomes "did a QR scan", which is the
+             * paper-pass problem this system exists to replace: something that
+             * proves a token is valid and nothing about who is holding it.
+             *
+             * The student is not blocked. They keep their account and their
+             * verified details; the pass appears as soon as a photo does,
+             * either from a re-import once the Drive link works or from the
+             * upload on their own profile page.
+             *
+             * It also makes missingPhotoCount on the progress screen mean
+             * something a person can act on: it is now the number of students
+             * who cannot get through the gate, not a statistic.
+             */
+            if (hasPhoto) {
+                try {
+                    gatepassClient.issuePass(new com.perimity.user.client.GatepassFeignClient.IssuePassRequest(
+                            accountResult.userId(),
+                            displayName(row),
+                            batch.getCampusId(),
+                            null,
+                            "DAILY",
+                            null,
+                            java.time.LocalDate.now(),
+                            null
+                    ));
+                    log.info("Issued standing DAILY pass for imported student {} (user {})",
+                            displayName(row), accountResult.userId());
+                } catch (Exception ex) {
+                    /*
+                     * Still swallowed. The account and the verified profile are
+                     * already written and correct; a gatepass outage must not
+                     * undo them or fail the other rows. The row carries the
+                     * reason so faculty can retry rather than guess.
+                     */
+                    log.error("Could not issue DAILY pass for student {} (user {}): {}",
+                            displayName(row), accountResult.userId(), ex.getMessage());
+                    row.setMessage(appendNote(row.getMessage(),
+                            "imported, but the pass could not be issued - retry the batch"));
+                }
+            } else {
+                log.info("No pass for imported student {} (user {}) - no photo on file",
+                        displayName(row), accountResult.userId());
+                row.setMessage(appendNote(row.getMessage(),
+                        "no pass yet - a passport photo is needed before one can be issued"));
             }
 
             if (isNew) {

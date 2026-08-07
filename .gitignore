@@ -91,3 +91,8 @@ test-import-responses.xlsx
 # Every .env variant, not just the two we thought of
 .env*
 !.env.example
+
+# Pitch deck build artifacts - not part of the product
+Perimity-Pitch*.pptx
+build_pitch.py
+~$*.pptx
