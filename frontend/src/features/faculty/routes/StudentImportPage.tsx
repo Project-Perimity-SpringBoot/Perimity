@@ -18,7 +18,7 @@ import { Alert, ConfirmDialog, ErrorState } from '@components/feedback';
 import { FileDropzone } from '@components/upload';
 import { IntakeFormPanel } from '../components/IntakeFormPanel';
 import { studentImportApi } from '@lib/api/services/user.api';
-import { importKeys } from '@lib/query/keys';
+import { authKeys, importKeys, passKeys, profileKeys } from '@lib/query/keys';
 import { UPLOAD_RULES } from '@lib/validation/patterns';
 import { useToast } from '@hooks/useToast';
 import type { ImportBatchResponse, ImportRowResponse } from '@/types/user.types';
@@ -67,7 +67,33 @@ export default function StudentImportPage() {
   const confirm = useMutation({
     mutationFn: () => studentImportApi.confirm(batchId as number),
     onSuccess: (result) => {
+      /*
+       * ====================================================================
+       *  A CONFIRM CHANGES FAR MORE THAN THE BATCH
+       * ====================================================================
+       * This used to invalidate importKeys alone, which is only the batch and
+       * its rows - the one screen the user is already looking at. Everything
+       * else the confirm actually changed stayed on cached data:
+       *
+       *   profileKeys  new student profiles, and the pending-verification
+       *                queue, since imported rows arrive already VERIFIED
+       *   authKeys     the accounts auth-service just created
+       *   passKeys     a standing DAILY pass per imported student, which is
+       *                what the admin overview's ACTIVE count reads
+       *
+       * So a faculty member imported thirty students and every count in the
+       * app carried on showing the number from before. Nothing was wrong in
+       * the database; the screens simply never asked again.
+       *
+       * Invalidating the ROOT key of each, not a specific one. A confirm can
+       * create, update and reject rows in the same run, and enumerating every
+       * affected key here means this list silently goes stale the next time
+       * someone adds a count somewhere.
+       */
       void queryClient.invalidateQueries({ queryKey: importKeys.all });
+      void queryClient.invalidateQueries({ queryKey: profileKeys.all });
+      void queryClient.invalidateQueries({ queryKey: authKeys.all });
+      void queryClient.invalidateQueries({ queryKey: passKeys.all });
       setConfirming(false);
       if (result.status === 'FAILED') {
         toast.error('The import did not finish', result.failureReason ?? undefined);

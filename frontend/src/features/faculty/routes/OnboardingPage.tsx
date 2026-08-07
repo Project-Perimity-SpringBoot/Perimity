@@ -8,7 +8,7 @@ import { Alert, FormError } from '@components/feedback';
 import { FileDropzone } from '@components/upload';
 import { bulkApi, eventApi } from '@lib/api/services/gatepass.api';
 import { studentImportApi } from '@lib/api/services/user.api';
-import { eventKeys, importKeys } from '@lib/query/keys';
+import { authKeys, eventKeys, importKeys, passKeys, profileKeys } from '@lib/query/keys';
 import { saveFile } from '@lib/api/download';
 import { UPLOAD_RULES, BULK_COLUMNS, STUDENT_IMPORT_COLUMNS } from '@lib/validation/patterns';
 import { useToast } from '@hooks/useToast';
@@ -108,7 +108,23 @@ export default function OnboardingPage() {
     mutationFn: () => studentImportApi.confirm(studentBatch?.id as number),
     onSuccess: (batch) => {
       setStudentBatch(batch);
+      /*
+       * The same four keys StudentImportPage invalidates, and for the same
+       * reason: a confirm creates accounts, writes profiles and issues a
+       * standing pass each. Invalidating importKeys alone refreshes the batch
+       * the user is already looking at and leaves every count in the app
+       * showing the number from before - the database is right and the screens
+       * simply never ask again.
+       *
+       * Duplicated deliberately rather than shared. Two screens can confirm an
+       * import and each owns its own mutation; a helper here would be one more
+       * place to look when the next screen forgets to call it. If a third
+       * appears, extract it then.
+       */
       void queryClient.invalidateQueries({ queryKey: importKeys.all });
+      void queryClient.invalidateQueries({ queryKey: profileKeys.all });
+      void queryClient.invalidateQueries({ queryKey: authKeys.all });
+      void queryClient.invalidateQueries({ queryKey: passKeys.all });
       if (batch.status !== 'FAILED') {
         toast.success(
           `${batch.createdCount + batch.updatedCount} student(s) imported and passes issued.`,
