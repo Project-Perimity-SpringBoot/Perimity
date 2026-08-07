@@ -3,6 +3,9 @@ package com.perimity.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -232,6 +235,77 @@ class StudentVerificationStateTest {
         assertThat(profile.getVerificationStatus()).isEqualTo(ProfileVerificationStatus.VERIFIED);
         assertThat(profile.getVerifiedBy()).isEqualTo(FACULTY_ACCOUNT);
         assertThat(profile.getVerifiedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("approving resumes the holder's paused passes")
+    void approvalResumesTheHoldersPasses() {
+        /*
+         * THE OTHER END OF THE PAUSE RULE, and it did not exist.
+         *
+         * A sensitive edit paused every pass the student held and nothing in
+         * the product ever moved one back - not verification, not any screen.
+         * The student's own pass page meanwhile promised "staff re-verify and
+         * it resumes". Students ended up with permanently dead passes.
+         *
+         * If this stops firing, nothing errors. The approval is recorded, the
+         * badge turns green, and the pass stays PAUSED with the student told to
+         * wait for staff who have already done their part - which is the exact
+         * failure this test exists to catch.
+         */
+        profile.setVerificationStatus(ProfileVerificationStatus.SUBMITTED);
+
+        service.decideVerification(PROFILE_ID,
+                StudentVerificationDecisionDto.builder().approved(true).build());
+
+        verify(passPauseClient).resumeAllForHolder(
+                eq(STUDENT_ACCOUNT), anyString(), eq(FACULTY_ACCOUNT));
+    }
+
+    @Test
+    @DisplayName("rejecting does NOT resume the passes")
+    void rejectionLeavesThePassesHeld() {
+        // A rejection means the details are still wrong. Resuming here would put
+        // a working pass in the pocket of somebody a reviewer just refused.
+        profile.setVerificationStatus(ProfileVerificationStatus.SUBMITTED);
+
+        service.decideVerification(PROFILE_ID, StudentVerificationDecisionDto.builder()
+                .approved(false).remarks("Photo is unusable.").build());
+
+        verify(passPauseClient, never()).resumeAllForHolder(anyLong(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("editing an unverified profile does not pause the pass")
+    void editingADraftDoesNotPause() {
+        /*
+         * updateOwnDetails used to call pauseHolder UNCONDITIONALLY, so fixing a
+         * typo in an address held the pass - and, before resume existed, held it
+         * forever. Nothing on this form reaches the gate: the pass carries
+         * auth-service's account name, and the photo and roll number are edited
+         * elsewhere.
+         *
+         * A DRAFT profile has no verification to invalidate, so there is nothing
+         * to hold the pass for.
+         */
+        profile.setVerificationStatus(ProfileVerificationStatus.DRAFT);
+
+        service.updateOwnDetails(STUDENT_ACCOUNT, details());
+
+        verify(passPauseClient, never()).pauseAllForHolder(anyLong(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("editing a VERIFIED profile still pauses the pass")
+    void editingAVerifiedProfileStillPauses() {
+        // The other half of the rule above. A checked record has just been
+        // changed, so the sign-off the pass rests on is void until somebody
+        // looks again.
+        profile.setVerificationStatus(ProfileVerificationStatus.VERIFIED);
+
+        service.updateOwnDetails(STUDENT_ACCOUNT, details());
+
+        verify(passPauseClient).pauseAllForHolder(eq(STUDENT_ACCOUNT), anyString(), anyLong());
     }
 
     @Test

@@ -75,6 +75,31 @@ public class GatePassInternalController {
                 Map.of("pausedCount", paused.size(), "passes", paused));
     }
 
+    /**
+     * The counterpart to /pause, called when faculty approve a profile.
+     *
+     * Takes the SAME HolderPauseDto as the pause endpoint. A second DTO with the
+     * same two fields would be one more thing to keep in step, and reason plus
+     * changedBy mean exactly what they mean above - what happened, and who is
+     * accountable for it. The name is the only thing that reads oddly, and a
+     * wrong name is cheaper than a duplicate contract.
+     *
+     * Idempotent by construction: a holder with nothing paused resumes zero
+     * passes and answers 200. Approving a profile twice is not an error.
+     */
+    @PostMapping("/holder/{holderUserId}/resume")
+    @Operation(summary = "user-service reports a profile was re-approved. Resumes every paused pass.")
+    public ApiResponse<Map<String, Object>> resumeHolder(
+            @PathVariable @Positive Long holderUserId,
+            @Valid @RequestBody HolderPauseDto dto) {
+
+        List<GatePassResponse> resumed =
+                service.resumeAllForHolder(holderUserId, dto.getReason(), dto.getChangedBy());
+
+        return ApiResponse.ok("Passes resumed",
+                Map.of("resumedCount", resumed.size(), "passes", resumed));
+    }
+
     @GetMapping("/holder/{holderUserId}/running-event")
     @Operation(summary = "Behavior 2 - does this person have an event running today?")
     public ApiResponse<Map<String, Object>> runningEvent(

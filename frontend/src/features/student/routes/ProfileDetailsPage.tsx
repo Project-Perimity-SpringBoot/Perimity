@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'react-router';
-import { AlertTriangle, ArrowLeft, Image as ImageIcon, Info } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Image as ImageIcon, Info, Trash2 } from 'lucide-react';
 import { Button, Field, Input, NativeSelect, SkeletonText, Textarea } from '@ui/index';
 import { ConfirmDialog, ErrorState, FormError } from '@components/feedback';
 import { NotFoundError } from '@lib/api/errors';
@@ -22,21 +22,25 @@ import {
 } from '../schemas/student.schemas';
 
 /**
- * The student's own details, and the request to have them checked.
+ * The student's own details, their photo, and the request to have them checked.
  *
  * ==========================================================================
- * WHY THIS IS NOT PART OF ProfileEditPage
+ * THE ONE EDIT SCREEN. ProfileEditPage MERGED INTO THIS ONE.
  * ==========================================================================
- * That screen patches: it sends only what changed, and changing a sensitive
- * field there pauses every active pass. This one replaces the whole record and
- * submits it for review. Two different save contracts and two different
- * consequences, so two screens — a single page with two Save buttons that
- * behave differently is a trap for whoever uses it.
+ * There were two. This one replaced the whole record and submitted it for
+ * review; ProfileEditPage patched the photo. The argument for keeping them
+ * apart was that two save contracts with two different consequences should not
+ * share a page.
  *
- * Address moved here from that screen. It is part of the verified record now,
- * so editing it has to reset the verification; leaving it on a partial-patch
- * screen would let a student change their address and keep a Verified badge
- * describing an address that no longer exists.
+ * It did not survive contact with the product. BOTH screens uploaded a photo,
+ * so the one field with a real consequence was editable in two places and each
+ * paused the pass - while ProfileEditPage's own comment claimed to be the only
+ * screen that could. The profile page then offered "Edit" and "Edit these"
+ * pointing at different screens, and a student who picked the wrong one got a
+ * warning that did not describe what they were about to do.
+ *
+ * One screen, one photo control, one Save, one Submit. /student/profile/edit
+ * redirects here; its Remove photo action came with it.
  *
  * ==========================================================================
  * SAVE AND SUBMIT ARE SEPARATE BUTTONS
@@ -79,6 +83,7 @@ export default function ProfileDetailsPage() {
   const [pendingValues, setPendingValues] = useState<StudentSelfDetailsValues | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [removingPhoto, setRemovingPhoto] = useState(false);
 
   /*
    * A 404 here is NOT an error state on this screen.
@@ -140,6 +145,26 @@ export default function ProfileDetailsPage() {
       setPhotoFile(null);
       toast.fromError(error, 'That photo could not be uploaded.');
     },
+  });
+
+  /*
+   * Carried over from /student/profile/edit when that screen merged into this
+   * one. Same invalidations as the upload above and for the same reasons: the
+   * profile row changed, the signed URL now points at nothing, and the pass may
+   * have moved to PAUSED server-side.
+   */
+  const removePhoto = useMutation({
+    mutationFn: () => studentApi.removePhoto(profile.data?.id as number),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: profileKeys.myStudent() });
+      void queryClient.invalidateQueries({
+        queryKey: profileKeys.photoUrl('student', profile.data?.id ?? 0),
+      });
+      void queryClient.invalidateQueries({ queryKey: passKeys.all });
+      setRemovingPhoto(false);
+      toast.success('Photo removed');
+    },
+    onError: (error) => toast.fromError(error, 'That photo could not be removed.'),
   });
 
   const form = useForm<StudentSelfDetailsValues>({
@@ -379,6 +404,27 @@ export default function ProfileDetailsPage() {
                   and pauses any pass you hold.
                 </p>
               )}
+              {/*
+                CARRIED OVER from /student/profile/edit, which this screen
+                replaced. That page could remove a photo and this one could
+                only replace it, so merging without this would have quietly
+                taken the ability away - the one thing a merge must not do.
+
+                Behind a confirm, because a profile with no photo cannot be
+                submitted for verification at all: the server names "passport
+                photo" among the fields that must be filled in.
+              */}
+              {hasPhoto && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRemovingPhoto(true)}
+                  disabled={uploadPhoto.isPending}
+                >
+                  <Trash2 aria-hidden />Remove current photo
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -607,6 +653,17 @@ export default function ProfileDetailsPage() {
         confirmLabel="Send"
         loading={submit.isPending}
         onConfirm={() => submit.mutate()}
+      />
+
+      <ConfirmDialog
+        open={removingPhoto}
+        onOpenChange={(open) => { if (!open) setRemovingPhoto(false); }}
+        title="Remove your photo?"
+        description="Without a photo a guard has nothing to check your face against, you cannot submit your details for checking, and any pass you hold will pause."
+        confirmLabel="Remove"
+        destructive
+        loading={removePhoto.isPending}
+        onConfirm={() => removePhoto.mutate()}
       />
     </div>
   );

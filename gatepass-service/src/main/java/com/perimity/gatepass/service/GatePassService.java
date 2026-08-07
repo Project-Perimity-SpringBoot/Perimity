@@ -314,6 +314,54 @@ public class GatePassService {
     }
 
     /**
+     * The other half of pauseAllForHolder, which did not exist.
+     *
+     * ==================================================================
+     *  WHY THIS IS A BUG FIX AND NOT A FEATURE
+     * ==================================================================
+     * A sensitive profile edit paused every pass a person held, and NOTHING in
+     * the product ever moved one back. Not verification, not any screen -
+     * gatepassApi.changeStatus had no caller anywhere in the frontend. The
+     * student's own pass page meanwhile promised "staff re-verify and it
+     * resumes - you keep the same QR code and nothing is reissued", which was
+     * true of the intent and false of the code.
+     *
+     * So a student who uploaded their photo lost their pass permanently, and
+     * the only ways back were a raw API call or an UPDATE statement.
+     *
+     * ==================================================================
+     *  ONLY PAUSED PASSES MOVE, AND ONLY TO ACTIVE
+     * ==================================================================
+     * The mirror of pause. A REVOKED pass must never come back this way -
+     * somebody revoked it deliberately and a profile approval is not a reversal
+     * of that decision. EXPIRED is past its date and resuming it would open the
+     * gate for a pass that ran out. PENDING has no QR yet and is qr-service's
+     * to finish.
+     *
+     * canTransitionTo is still consulted per pass rather than trusted from the
+     * query, because the status could have changed between the read and the
+     * write, and the state machine is the authority on this - not the filter
+     * that selected the rows.
+     */
+    @Transactional
+    public List<GatePassResponse> resumeAllForHolder(Long holderUserId, String reason,
+                                                     Long changedBy) {
+        List<GatePass> paused = passRepository
+                .findByHolderUserIdAndStatusOrderByCreatedAtDesc(holderUserId, PassStatus.PAUSED);
+
+        List<GatePass> resumed = paused.stream()
+                .filter(p -> p.getStatus().canTransitionTo(PassStatus.ACTIVE))
+                .peek(p -> applyTransition(p, PassStatus.ACTIVE, reason, changedBy))
+                .toList();
+
+        passRepository.saveAll(resumed);
+
+        log.info("Resumed {} pass(es) for holder {} - {}", resumed.size(), holderUserId, reason);
+
+        return resumed.stream().map(GatePassResponse::from).toList();
+    }
+
+    /**
      * Revoke every live pass issued for an event. Called by EventService when
      * an event is cancelled.
      *

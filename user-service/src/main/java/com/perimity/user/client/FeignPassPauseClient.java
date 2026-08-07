@@ -47,4 +47,22 @@ public class FeignPassPauseClient implements PassPauseClient {
             return false;
         }
     }
+
+    @Override
+    public boolean resumeAllForHolder(Long holderUserId, String reason, Long changedBy) {
+        if (holderUserId == null) {
+            return false;
+        }
+        try {
+            var response = gatepass.resumeHolder(holderUserId,
+                    new GatepassFeignClient.PauseRequest(reason, changedBy));
+            return response != null && response.success();
+
+        } catch (RuntimeException ex) {
+            log.error("Could not resume passes for holder {} after approval - "
+                            + "their pass is still PAUSED and needs resuming by hand. {}",
+                    holderUserId, ex.getMessage());
+            return false;
+        }
+    }
 }

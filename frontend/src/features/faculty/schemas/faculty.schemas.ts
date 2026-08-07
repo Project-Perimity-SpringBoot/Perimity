@@ -150,3 +150,24 @@ export const addStudentSchema = z.object({
     .optional(),
 });
 export type AddStudentValues = z.infer<typeof addStudentSchema>;
+
+/**
+ * UserStatusUpdateRequest, for deactivating or reactivating a student.
+ *
+ * A DUPLICATE of campus-admin's statusChangeSchema, and deliberately so.
+ * Features must not import from each other - eslint enforces it - and the
+ * alternative, hoisting four lines into a shared folder, would make two screens
+ * that happen to agree today unable to disagree tomorrow. The Campus Admin
+ * deactivates staff and faculty deactivate students; those are different acts
+ * that currently need the same field.
+ *
+ * The reason is MANDATORY on both. An account that stopped working with no
+ * recorded why is one nobody can explain to the person it happened to.
+ */
+export const studentStatusChangeSchema = z.object({
+  reason: z
+    .string()
+    .min(LIMITS.reason.min, 'Give a reason of at least 3 characters')
+    .max(LIMITS.reason.max, 'Keep the reason under 500 characters'),
+});
+export type StudentStatusChangeValues = z.infer<typeof studentStatusChangeSchema>;

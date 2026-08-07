@@ -67,7 +67,6 @@ const StudentPassHistory = lazy(() => import('@features/student/routes/PassHisto
 const StudentPassDetail = lazy(() => import('@features/student/routes/PassDetailPage'));
 const StudentEntryHistory = lazy(() => import('@features/student/routes/EntryHistoryPage'));
 const StudentProfile = lazy(() => import('@features/student/routes/ProfilePage'));
-const StudentProfileEdit = lazy(() => import('@features/student/routes/ProfileEditPage'));
 const StudentProfileDetails = lazy(() => import('@features/student/routes/ProfileDetailsPage'));
 const StudentDocuments = lazy(() => import('@features/student/routes/DocumentsPage'));
 
@@ -81,6 +80,7 @@ const VisitorPass = lazy(() => import('@features/visitor/routes/PassPage'));
 const FacultyOverview = lazy(() => import('@features/faculty/routes/FacultyOverview'));
 const FacultyApprovals = lazy(() => import('@features/faculty/routes/ApprovalsPage'));
 const FacultyAddStudent = lazy(() => import('@features/faculty/routes/AddStudentPage'));
+const FacultyStudents = lazy(() => import('@features/faculty/routes/StudentsPage'));
 const FacultyStudentVerification = lazy(
   () => import('@features/faculty/routes/StudentVerificationPage'),
 );
@@ -180,11 +180,25 @@ export const router = createBrowserRouter([
                   { path: '/student/passes/:id', element: <StudentPassDetail /> },
                   { path: '/student/entries', element: <StudentEntryHistory /> },
                   { path: '/student/profile', element: <StudentProfile /> },
-                  { path: '/student/profile/edit', element: <StudentProfileEdit /> },
-                  /* Separate from /profile/edit on purpose. That screen patches
-                     and can pause a pass; this one replaces the whole record and
-                     submits it for faculty to check. Different contracts, so
-                     different screens. */
+                  /*
+                    MERGED into /student/profile/details, which already edited
+                    everything this screen did plus the rest of the record.
+                    Two edit screens meant the photo could be changed in two
+                    places, each pausing the pass, and a student who used the
+                    wrong one got a warning that did not match what they were
+                    doing.
+
+                    A redirect rather than a deletion: this path is in browser
+                    history, in bookmarks and in at least one email. `replace`
+                    keeps the back button working - without it, going back
+                    lands here and redirects forward again.
+                  */
+                  {
+                    path: '/student/profile/edit',
+                    element: <Navigate to="/student/profile/details" replace />,
+                  },
+                  /* The one edit screen: photo, details, Save and Submit.
+                     /profile/edit above used to be the other one. */
                   { path: '/student/profile/details', element: <StudentProfileDetails /> },
                   { path: '/student/documents', element: <StudentDocuments /> },
                 ],
@@ -216,6 +230,12 @@ export const router = createBrowserRouter([
                 children: [
                   { path: '/faculty', element: <FacultyOverview /> },
                   { path: '/faculty/approvals', element: <FacultyApprovals /> },
+                  /* BEFORE /faculty/students/new, and it does not matter -
+                     these are exact paths, not patterns, so the router matches
+                     the literal one regardless of order. Listed first because
+                     it is the parent in the sidebar and the file should read
+                     the way a person navigates. */
+                  { path: '/faculty/students', element: <FacultyStudents /> },
                   /* Faculty are the ONLY role that may create a STUDENT
                      account, but until now the only way to do it was a
                      spreadsheet. This is the single-student path the policy

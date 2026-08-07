@@ -26,6 +26,14 @@ public interface GatepassFeignClient {
     PauseEnvelope pauseHolder(@PathVariable("id") Long holderUserId,
                               @RequestBody PauseRequest request);
 
+    /**
+     * The release, called when faculty approve a profile. Same body as pause -
+     * what happened, and who is accountable for it.
+     */
+    @PostMapping("/api/gatepass/internal/passes/holder/{id}/resume")
+    PauseEnvelope resumeHolder(@PathVariable("id") Long holderUserId,
+                               @RequestBody PauseRequest request);
+
     @PostMapping("/api/gatepass/internal/passes/issue")
     IssuePassEnvelope issuePass(@RequestBody IssuePassRequest request);
 

@@ -58,24 +58,46 @@ public class HttpPassPauseClient implements PassPauseClient {
 
     @Override
     public boolean pauseAllForHolder(Long holderUserId, String reason, Long changedBy) {
+        return call("pause", holderUserId, reason, changedBy,
+                "Could not pause passes for holder {} after a sensitive edit ({}). "
+                        + "The pass may still be ACTIVE and needs manual review: {}");
+    }
+
+    @Override
+    public boolean resumeAllForHolder(Long holderUserId, String reason, Long changedBy) {
+        return call("resume", holderUserId, reason, changedBy,
+                "Could not resume passes for holder {} after approval ({}). "
+                        + "Their pass is still PAUSED and needs resuming by hand: {}");
+    }
+
+    /**
+     * Both directions are the same request to a different last path segment, so
+     * they are one method.
+     *
+     * The failure MESSAGE is the parameter rather than the log call being
+     * duplicated, because the two failures need different things done about
+     * them: a failed pause leaves a pass live that should not be, and a failed
+     * resume leaves a pass dead that should not be. "The call failed" would tell
+     * whoever reads the log neither.
+     */
+    private boolean call(String action, Long holderUserId, String reason, Long changedBy,
+                         String failureMessage) {
         try {
             restClient.post()
-                    .uri("/api/gatepass/internal/passes/holder/{holderUserId}/pause", holderUserId)
+                    .uri("/api/gatepass/internal/passes/holder/{holderUserId}/" + action, holderUserId)
                     .header(HEADER, internalApiKey)
                     .body(Map.of("reason", reason, "changedBy", changedBy))
                     .retrieve()
                     .toBodilessEntity();
 
-            log.info("Paused passes for holder {} - {}", holderUserId, reason);
+            log.info("Sent {} for holder {} - {}", action, holderUserId, reason);
             return true;
 
         } catch (RuntimeException ex) {
             // Deliberately swallowed. See PassPauseClient's Javadoc: the profile
-            // edit is already committed, so failing the response here would tell
+            // write is already committed, so failing the response here would tell
             // the user their save did not work when it did.
-            log.error("Could not pause passes for holder {} after a sensitive edit ({}). "
-                            + "The pass may still be ACTIVE and needs manual review: {}",
-                    holderUserId, reason, ex.getMessage());
+            log.error(failureMessage, holderUserId, reason, ex.getMessage());
             return false;
         }
     }

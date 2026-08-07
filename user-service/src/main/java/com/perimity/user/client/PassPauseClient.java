@@ -26,4 +26,27 @@ public interface PassPauseClient {
      * @return true when gatepass-service accepted the request
      */
     boolean pauseAllForHolder(Long holderUserId, String reason, Long changedBy);
+
+    /**
+     * Release every pass this person holds, because their profile was checked
+     * and approved.
+     *
+     * ======================================================================
+     *  THE HALF OF THIS INTERFACE THAT WAS MISSING
+     * ======================================================================
+     * Pausing without a way to resume is not half a feature, it is a trap. A
+     * student who changed their photo lost their pass and no screen, service or
+     * scheduled job could ever give it back - while the pass page told them it
+     * would resume once staff re-verified. This is the call that makes that
+     * sentence true.
+     *
+     * Same no-throw contract as pause, and for a stronger reason: this runs
+     * after a verification decision has been COMMITTED. Failing here must not
+     * roll back a faculty member's approval - the profile really is verified,
+     * and a pass that stayed paused is a thing somebody can fix, where a
+     * verification that silently vanished is not.
+     *
+     * @return true when gatepass-service accepted the request
+     */
+    boolean resumeAllForHolder(Long holderUserId, String reason, Long changedBy);
 }

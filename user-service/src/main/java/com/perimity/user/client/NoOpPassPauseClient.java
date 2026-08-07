@@ -23,4 +23,16 @@ public class NoOpPassPauseClient implements PassPauseClient {
                 holderUserId, reason);
         return false;
     }
+
+    @Override
+    public boolean resumeAllForHolder(Long holderUserId, String reason, Long changedBy) {
+        // WARN for the same reason as pause, and it matters slightly more here:
+        // a missed pause leaves a pass working, which a person notices. A missed
+        // resume leaves it dead, and the student is told to wait for staff who
+        // have already done their part.
+        log.warn("gatepass-service is not configured - NOT resuming passes for holder {} after: {}. "
+                        + "Their pass stays PAUSED until it is resumed by hand.",
+                holderUserId, reason);
+        return false;
+    }
 }

@@ -103,9 +103,17 @@ export default function ProfilePage() {
       <PageHeader
         title="Your profile"
         description="What a guard sees when your pass is scanned."
+        /*
+          Points at /details, which is now the ONE edit screen.
+          There used to be two: /profile/edit for the photo and /details for
+          everything else - except /details uploaded a photo too. So the photo
+          was editable in two places, each pausing the pass, and this page had
+          an "Edit" button and an "Edit these" link going to different screens.
+          /profile/edit now redirects here.
+        */
         actions={
           <Button asChild>
-            <Link to="/student/profile/edit"><Pencil aria-hidden />Edit</Link>
+            <Link to="/student/profile/details"><Pencil aria-hidden />Edit</Link>
           </Button>
         }
       />

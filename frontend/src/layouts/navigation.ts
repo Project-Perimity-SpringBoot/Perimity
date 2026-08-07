@@ -34,6 +34,12 @@ export const NAVIGATION: Record<Role, NavItem[]> = {
   FACULTY: [
     { to: '/faculty', label: 'Overview', icon: LayoutDashboard, end: true },
     { to: '/faculty/approvals', label: 'Approvals', icon: ClipboardList, badge: 'pendingRequests' },
+    /* The directory of everyone this role onboards.
+       Same capability as Add student, and for the reason the capability is
+       named after: UserAdminController maps FACULTY to exactly {STUDENT} in
+       both VISIBLE and CREATABLE, so whoever may create a student is exactly
+       who may list one and change that account's status. */
+    { to: '/faculty/students', label: 'Students', icon: Users, capability: 'profile:createStudent' },
     /* Gated on profile:createStudent, which only FACULTY and the two admin
        roles hold - it mirrors UserAdminController.CREATABLE, where FACULTY is
        the only role that may create a STUDENT. */

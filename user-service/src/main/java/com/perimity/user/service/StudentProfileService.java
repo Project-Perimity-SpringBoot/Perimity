@@ -352,6 +352,16 @@ public class StudentProfileService {
         StudentProfile profile = findOrCreateProfileOf(userId);
         requireEditable(profile);
 
+        /*
+         * ==================================================================
+         *  READ BEFORE WRITE: was this record one somebody had already checked?
+         * ==================================================================
+         * Captured here because the setters below destroy the answer, and the
+         * answer is what decides whether the pass gets held. See the pause
+         * block further down.
+         */
+        boolean wasVerified = status(profile) == ProfileVerificationStatus.VERIFIED;
+
         profile.setFirstName(trimToNull(dto.getFirstName()));
         profile.setMiddleName(trimToNull(dto.getMiddleName()));
         profile.setLastName(trimToNull(dto.getLastName()));
@@ -364,13 +374,38 @@ public class StudentProfileService {
         profile.setAltPhoneNumber(trimToNull(dto.getAltPhoneNumber()));
 
         /*
-         * Only a VERIFIED profile has its decision wiped. A REJECTED one keeps
-         * its remarks on purpose: the student is editing precisely because they
-         * were told what was wrong, and clearing the reason the moment they
-         * start typing would take away the instructions mid-task. Those remarks
-         * are cleared on the next submit instead.
+         * ==================================================================
+         *  PAUSE ONLY WHEN THERE WAS A VERIFICATION TO INVALIDATE
+         * ==================================================================
+         * This used to be an UNCONDITIONAL pauseHolder on every save, and it is
+         * the reason students ended up with permanently dead passes. Correcting
+         * a typo in an address held the pass; so did saving a half-finished form
+         * twice. Combined with the fact that nothing could resume a pass, every
+         * save was a one-way trip.
+         *
+         * The rule that actually matters: a pass rests on a CHECKED profile. If
+         * this record was VERIFIED, the student has just changed the details a
+         * named member of staff signed off, so the sign-off is void and the pass
+         * must be held until somebody looks again - which is exactly what the
+         * status change below does.
+         *
+         * If it was DRAFT or REJECTED there is no verification to invalidate.
+         * Nothing about the pass changes, so nothing is held.
+         *
+         * NONE OF THESE FIELDS REACH THE GATE, which is worth saying because it
+         * looks like they should. StudentProfile is explicit that auth-service's
+         * User.name is the authoritative name and the one a pass carries; these
+         * three name parts are supporting detail. The fields a guard actually
+         * sees - photo and roll number - are not on this form and are handled by
+         * update(), which pauses on a real change to any of them.
+         *
+         * The remarks note that used to live here: a REJECTED profile keeps its
+         * remarks on purpose, because the student is editing precisely because
+         * they were told what was wrong. Those are cleared on the next submit.
          */
-        pauseHolder(userId, List.of("personal details update"));
+        if (wasVerified) {
+            pauseHolder(userId, List.of("verified details were edited"));
+        }
 
         if (isCompleteForSubmission(profile)) {
             profile.setVerificationStatus(ProfileVerificationStatus.SUBMITTED);
@@ -478,6 +513,35 @@ public class StudentProfileService {
         profile.setVerificationRemarks(trimToNull(dto.getRemarks()));
 
         StudentProfile saved = studentRepository.save(profile);
+
+        /*
+         * ==============================================================
+         *  APPROVAL IS WHAT RELEASES THE PASS
+         * ==============================================================
+         * This is the other end of the pause rule, and until now it did not
+         * exist. A sensitive edit held every pass the student had; nothing
+         * anywhere released one. The student's pass page said "staff re-verify
+         * and it resumes", staff re-verified, and it did not.
+         *
+         * Only on APPROVAL. A rejection means the details are still wrong, so
+         * the pass must stay held - resuming there would put a working pass in
+         * the pocket of somebody a reviewer has just refused.
+         *
+         * Never throws: the decision above is already committed and is correct
+         * on its own. A gatepass outage must not turn a recorded approval into
+         * a 500 that makes the reviewer approve again.
+         */
+        if (approved) {
+            boolean resumed = passPauseClient.resumeAllForHolder(
+                    saved.getUserId(),
+                    "Profile re-approved by staff",
+                    reviewerId);
+
+            if (!resumed) {
+                log.warn("Profile {} was verified but its holder's passes could not be resumed. "
+                        + "Resume them from the student list.", saved.getId());
+            }
+        }
 
         // Ids only. A rejection reason is free text written by one user and read
         // by another, and free text in a log line is how log forgery starts.
