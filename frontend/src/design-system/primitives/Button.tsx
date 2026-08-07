@@ -22,8 +22,8 @@ const button = cva(
     variants: {
       variant: {
         primary:
-          'bg-[var(--brand-600)] text-white shadow-[0_1px_2px_rgba(19,19,22,0.08)] ' +
-          'hover:bg-[color-mix(in_srgb,var(--brand-600)_88%,black)]',
+          'bg-[var(--brand-600)] !text-white shadow-[0_1px_2px_rgba(19,19,22,0.08)] ' +
+          'hover:bg-[color-mix(in_srgb,var(--brand-600)_88%,black)] hover:!text-white [&_a]:!text-white [&_*]:!text-white',
         secondary:
           'bg-[var(--surface)] text-[var(--ink-900)] border border-[var(--border-strong)] ' +
           'shadow-[0_1px_2px_rgba(19,19,22,0.04)] hover:bg-[var(--surface-subtle)] hover:border-[var(--ink-400)]',
@@ -31,8 +31,8 @@ const button = cva(
           'bg-transparent text-[var(--brand-600)] border border-[var(--brand-200)] ' +
           'hover:bg-[var(--brand-50)] hover:border-[var(--brand-300)]',
         danger:
-          'bg-[var(--deny-solid)] text-white shadow-[0_1px_2px_rgba(19,19,22,0.08)] ' +
-          'hover:bg-[color-mix(in_srgb,var(--deny-solid)_88%,black)]',
+          'bg-[var(--deny-solid)] !text-white shadow-[0_1px_2px_rgba(19,19,22,0.08)] ' +
+          'hover:bg-[color-mix(in_srgb,var(--deny-solid)_88%,black)] hover:!text-white [&_a]:!text-white [&_*]:!text-white',
         ghost: 'text-[var(--ink-700)] hover:bg-[var(--surface-sunken)] hover:text-[var(--ink-900)]',
         link: 'text-[var(--brand-600)] underline-offset-4 hover:underline p-0 h-auto active:translate-y-0',
       },
