@@ -12,11 +12,11 @@ import { ROLE_LABEL } from './navigation';
 export function TopBar({ title }: { title?: string }) {
   const { identity, profile, logout } = useAuth();
 
-  // Resolved once and cached for the session. The token carries only the id.
+  // Resolved once and cached for the session. Visitors are campus-agnostic and do not have a home campus badge.
   const campus = useQuery({
     queryKey: campusKeys.detail(identity?.campusId ?? 0),
     queryFn: () => campusApi.getOne(identity!.campusId!),
-    enabled: identity?.campusId != null,
+    enabled: identity?.campusId != null && identity?.role !== 'VISITOR',
     staleTime: 30 * 60_000,
   });
 
@@ -43,7 +43,7 @@ export function TopBar({ title }: { title?: string }) {
         </Button>
         <span className="h-5 w-px shrink-0 bg-[var(--border)]" aria-hidden />
         {title && <p className="text-body-md truncate text-[var(--ink-900)]">{title}</p>}
-        {campus.data && <Badge tone="neutral">{campus.data.name}</Badge>}
+        {campus.data && identity?.role !== 'VISITOR' && <Badge tone="neutral">{campus.data.name}</Badge>}
       </div>
 
       <DropdownMenu.Root>
