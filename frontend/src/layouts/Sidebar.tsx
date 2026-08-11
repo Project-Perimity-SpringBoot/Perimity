@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router';
-import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Avatar, Button, Tooltip } from '@ui/index';
 import { useAuth } from '@hooks/useAuth';
 import { useUiStore } from '@stores/uiStore';
 import { cn } from '@lib/utils/cn';
+import { PerimityLogoMark } from '../components/PerimityLogo';
 import { ROLE_LABEL, type NavItem } from './navigation';
 
 export interface SidebarProps {
@@ -37,7 +38,7 @@ export function Sidebar({ items, badges, variant }: SidebarProps) {
         )}
       >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--r-sm)] bg-[var(--brand-600)]">
-          <ShieldCheck className="size-5 text-white" aria-hidden />
+          <PerimityLogoMark className="size-5 text-white" aria-hidden />
         </span>
         {!rail && <span className="text-h3 truncate text-[var(--ink-900)]">Perimity</span>}
       </div>

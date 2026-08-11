@@ -8,6 +8,7 @@ import type { Role } from '@/types/enums';
 import { useAuth } from '@hooks/useAuth';
 import { LANDING_ROUTE } from '@lib/auth/permissions';
 import { ROLE_LABEL } from '@/layouts/navigation';
+import { PerimityLogoMark } from '@/components/PerimityLogo';
 
 interface RoleCard {
   role: Role;
@@ -117,7 +118,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-[var(--sp-3)] px-[var(--sp-6)] py-[var(--sp-2)]">
           <span className="text-small flex items-center gap-[var(--sp-4)] text-[var(--home-bar-ink)]">
             <span className="flex items-center gap-[var(--sp-2)]">
-              <ShieldCheck className="size-4" aria-hidden />
+              <PerimityLogoMark className="size-4" aria-hidden />
               Forgery-proof digital gate passes
             </span>
             <a href="mailto:perimity.info@gmail.com" className="hidden items-center gap-[var(--sp-2)] hover:text-white sm:flex">
@@ -137,7 +138,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-[var(--sp-4)] px-[var(--sp-6)] py-[var(--sp-4)]">
           <span className="flex items-center gap-[var(--sp-3)]">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-[var(--brand-600)]">
-              <ShieldCheck className="size-6 text-white" aria-hidden />
+              <PerimityLogoMark className="size-6 text-white" aria-hidden />
             </span>
             <span>
               <span className="text-h2 block leading-tight text-[var(--ink-900)]">Perimity</span>

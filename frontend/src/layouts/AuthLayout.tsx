@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router';
-import { ArrowLeft, ClipboardList, Layers, QrCode, ShieldCheck, Users } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Layers, QrCode, Users } from 'lucide-react';
+import { PerimityLogoMark } from '../components/PerimityLogo';
 
 /**
  * Every auth screen: one lit card on a dark field.
@@ -54,7 +55,7 @@ export function AuthLayout({ showBack = true }: { showBack?: boolean }) {
             the fold, and the form is the only reason anyone opens this page. */}
         <div className="hidden text-center lg:block">
           <span className="mx-auto flex size-28 items-center justify-center rounded-[var(--r-lg)] bg-[var(--brand-600)]">
-            <ShieldCheck className="size-14 text-white" aria-hidden />
+            <PerimityLogoMark className="size-14 text-white" aria-hidden />
           </span>
 
           <p className="mt-[var(--sp-6)] text-[length:34px] font-extrabold leading-tight tracking-tight text-white">
@@ -82,7 +83,7 @@ export function AuthLayout({ showBack = true }: { showBack?: boolean }) {
         <div className="mx-auto w-full max-w-md">
           <div className="surface-card p-[var(--sp-6)] sm:p-[var(--sp-8)] [&_h1]:text-center [&_h1+p]:text-center">
             <span className="mx-auto mb-[var(--sp-6)] flex size-16 items-center justify-center rounded-[var(--r-md)] bg-[var(--brand-600)]">
-              <ShieldCheck className="size-8 text-white" aria-hidden />
+              <PerimityLogoMark className="size-8 text-white" aria-hidden />
             </span>
 
             <Outlet />
